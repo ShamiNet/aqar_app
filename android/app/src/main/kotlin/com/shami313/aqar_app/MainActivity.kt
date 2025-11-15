@@ -1,4 +1,4 @@
-package com.example.aqar_app
+package com.shami313.aqar_app
 
 import io.flutter.embedding.android.FlutterActivity
 
