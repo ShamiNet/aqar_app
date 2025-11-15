@@ -5,8 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:uuid/uuid.dart';
+import 'package:aqar_app/config/cloudinary_config.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
+// import 'package:uuid/uuid.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -121,13 +122,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   Future<List<String>> _uploadImages() async {
     final List<String> imageUrls = [];
     for (final image in _selectedImages) {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('property_images')
-          .child('${const Uuid().v4()}.jpg');
-      await ref.putFile(File(image.path));
-      final downloadUrl = await ref.getDownloadURL();
-      imageUrls.add(downloadUrl);
+      final CloudinaryResponse res = await cloudinary.uploadFile(
+        CloudinaryFile.fromFile(
+          image.path,
+          resourceType: CloudinaryResourceType.Image,
+          folder: 'property_images',
+        ),
+      );
+      imageUrls.add(res.secureUrl);
     }
     return imageUrls;
   }

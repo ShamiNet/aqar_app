@@ -49,6 +49,7 @@ dependencies:
   geocoding: ^4.0.0
   url_launcher: ^6.3.2
   share_plus: ^10.0.0
+  cloudinary_public: ^0.23.1
   # تمت إزالة imagekit_io والاستعاضة عنها بـ Firebase Storage المباشر
 
 dev_dependencies:

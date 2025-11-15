@@ -2,8 +2,9 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:uuid/uuid.dart';
+import 'package:aqar_app/config/cloudinary_config.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
+// import 'package:uuid/uuid.dart';
 
 class EditPropertyScreen extends StatefulWidget {
   const EditPropertyScreen({super.key, required this.propertyId});
@@ -102,13 +103,14 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
       try {
         final List<String> newImageUrls = [];
         for (final image in _newImages) {
-          final ref = FirebaseStorage.instance
-              .ref()
-              .child('property_images')
-              .child('${const Uuid().v4()}.jpg');
-          await ref.putFile(File(image.path));
-          final downloadUrl = await ref.getDownloadURL();
-          newImageUrls.add(downloadUrl);
+          final CloudinaryResponse res = await cloudinary.uploadFile(
+            CloudinaryFile.fromFile(
+              image.path,
+              resourceType: CloudinaryResourceType.Image,
+              folder: 'property_images',
+            ),
+          );
+          newImageUrls.add(res.secureUrl);
         }
 
         // ملاحظة: حذف الصور من التخزين يتطلب الاحتفاظ بالمسار أو اسم الملف الأصلي.

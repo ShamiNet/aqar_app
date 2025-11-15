@@ -1,9 +1,10 @@
-import 'dart:io';
+// import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:aqar_app/config/cloudinary_config.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -21,12 +22,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       String? newImageUrl;
       if (newImage != null) {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('profile_pictures')
-            .child('${_user.uid}.jpg');
-        await ref.putFile(File(newImage.path));
-        newImageUrl = await ref.getDownloadURL();
+        final CloudinaryResponse res = await cloudinary.uploadFile(
+          CloudinaryFile.fromFile(
+            newImage.path,
+            resourceType: CloudinaryResourceType.Image,
+            folder: 'profile_pictures',
+          ),
+        );
+        newImageUrl = res.secureUrl;
       }
 
       final Map<String, dynamic> updatedData = {'username': newUsername};
