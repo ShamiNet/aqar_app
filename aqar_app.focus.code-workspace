@@ -1,0 +1,64 @@
+{
+  "folders": [
+    { "name": "lib", "path": "lib" },
+    { "name": "android", "path": "android" },
+    { "name": "ios", "path": "ios" },
+    { "name": "web", "path": "web" },
+    { "name": "test", "path": "test" }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.git": true,
+      "**/.svn": true,
+      "**/.hg": true,
+      "**/.DS_Store": true,
+
+      "**/.dart_tool": true,
+      "**/.idea": true,
+      "**/.metadata": true,
+      "**/.packages": true,
+      "**/.flutter-plugins": true,
+      "**/.flutter-plugins-dependencies": true,
+
+      "**/build": true,
+      "**/out": true,
+      "**/outputs": true,
+      "**/generated": true,
+      "**/intermediates": true,
+      "**/tmp": true,
+
+      "**/.gradle": true,
+      "**/android/**/build": true,
+      "**/android/**/.cxx": true,
+      "**/android/**/.externalNativeBuild": true,
+      "**/android/gradle/wrapper": true,
+
+      "**/ios/Flutter/ephemeral": true,
+      "**/ios/Flutter/Generated.xcconfig": true,
+      "**/ios/Flutter/Debug.xcconfig": true,
+      "**/ios/Flutter/Release.xcconfig": true,
+      "**/ios/Runner.xcodeproj": true,
+      "**/ios/Runner.xcworkspace": true,
+      "**/ios/RunnerTests": true,
+      "**/macos/Runner.xcodeproj": true,
+      "**/macos/Runner.xcworkspace": true,
+      "**/macos/RunnerTests": true,
+
+      "**/linux/flutter": true,
+      "**/linux/build": true,
+      "**/windows/flutter": true,
+      "**/windows/build": true,
+
+      "**/GeneratedPluginRegistrant.*": true
+    },
+    "search.exclude": {
+      "**/build": true,
+      "**/.dart_tool": true,
+      "**/.gradle": true,
+      "**/generated": true,
+      "**/intermediates": true,
+      "**/outputs": true,
+      "**/tmp": true
+    }
+  }
+}

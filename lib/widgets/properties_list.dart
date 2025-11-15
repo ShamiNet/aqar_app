@@ -1,4 +1,4 @@
-import 'package:aqar_app/features/properties/screens/property_details_screen.dart';
+import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 

@@ -48,7 +48,7 @@ class _FilterDialogState extends State<FilterDialog> {
           children: [
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: 'التصنيف'),
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               items: const [
                 DropdownMenuItem(value: null, child: Text('الكل')),
                 DropdownMenuItem(value: 'بيع', child: Text('بيع')),

@@ -1,4 +1,4 @@
-import 'package:aqar_app/features/home/widgets/property_card_skeleton.dart';
+import 'package:aqar_app/widgets/property_card_skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 

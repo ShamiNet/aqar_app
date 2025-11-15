@@ -5,7 +5,7 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:aqar_app/features/auth/screens/auth_gate.dart';
+import 'package:aqar_app/screens/auth_gate.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 

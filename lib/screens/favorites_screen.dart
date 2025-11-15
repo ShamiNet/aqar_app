@@ -1,5 +1,5 @@
-import 'package:aqar_app/features/home/widgets/properties_list.dart';
-import 'package:aqar_app/features/home/widgets/properties_list_skeleton.dart';
+import 'package:aqar_app/widgets/properties_list.dart';
+import 'package:aqar_app/widgets/properties_list_skeleton.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';

@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:aqar_app/features/map/screens/map_screen.dart';
+import 'package:aqar_app/screens/map_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -156,7 +156,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               ),
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: 'التصنيف'),
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 items: const [
                   DropdownMenuItem(value: 'بيع', child: Text('بيع')),
                   DropdownMenuItem(value: 'إيجار', child: Text('إيجار')),

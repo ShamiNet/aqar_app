@@ -174,7 +174,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                     ),
                     DropdownButtonFormField<String>(
                       decoration: const InputDecoration(labelText: 'التصنيف'),
-                      value: _selectedCategory,
+                      initialValue: _selectedCategory,
                       items: const [
                         DropdownMenuItem(value: 'بيع', child: Text('بيع')),
                         DropdownMenuItem(value: 'إيجار', child: Text('إيجار')),

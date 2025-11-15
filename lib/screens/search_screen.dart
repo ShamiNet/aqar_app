@@ -1,6 +1,6 @@
-import 'package:aqar_app/features/home/widgets/properties_list.dart';
-import 'package:aqar_app/features/home/widgets/properties_list_skeleton.dart';
-import 'package:aqar_app/features/search/widgets/filter_dialog.dart';
+import 'package:aqar_app/widgets/properties_list.dart';
+import 'package:aqar_app/widgets/properties_list_skeleton.dart';
+import 'package:aqar_app/filter_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 

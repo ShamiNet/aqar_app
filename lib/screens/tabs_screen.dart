@@ -1,9 +1,9 @@
-import 'package:aqar_app/features/favorites/screens/favorites_screen.dart';
-import 'package:aqar_app/features/home/screens/home_screen.dart';
-import 'package:aqar_app/features/profile/screens/profile_screen.dart';
-import 'package:aqar_app/features/properties/screens/add_property_screen.dart';
-import 'package:aqar_app/features/properties/screens/my_properties_screen.dart';
-import 'package:aqar_app/features/search/screens/search_screen.dart';
+import 'package:aqar_app/screens/favorites_screen.dart';
+import 'package:aqar_app/screens/home_screen.dart';
+import 'package:aqar_app/screens/profile_screen.dart';
+import 'package:aqar_app/screens/add_property_screen.dart';
+import 'package:aqar_app/screens/my_properties_screen.dart';
+import 'package:aqar_app/screens/search_screen.dart';
 import 'package:flutter/material.dart';
 
 class TabsScreen extends StatefulWidget {

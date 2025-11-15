@@ -1,9 +1,11 @@
-import 'package:aqar_app/features/properties/screens/edit_property_screen.dart';
+import 'package:aqar_app/screens/edit_property_screen.dart';
+import 'package:aqar_app/screens/chat_messages_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
@@ -134,6 +136,97 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
+  void _shareProperty(Map<String, dynamic> propertyData) {
+    final title = propertyData['title'] ?? 'بدون عنوان';
+    final description = propertyData['description'] ?? 'لا يوجد وصف.';
+    final price = propertyData['price'] ?? 0.0;
+
+    final shareText =
+        '''
+اطلع على هذا العقار: $title
+
+السعر: ${price.toStringAsFixed(2)} ر.س
+
+الوصف:
+$description
+''';
+    Share.share(shareText);
+  }
+
+  void _startOrOpenChat(Map<String, dynamic> propertyData) async {
+    final ownerId = propertyData['userId'];
+    if (_currentUser == null || _currentUser!.uid == ownerId) {
+      return;
+    }
+
+    final currentUser = _currentUser!;
+    final chatQuery = await FirebaseFirestore.instance
+        .collection('chats')
+        .where('participants', arrayContains: currentUser.uid)
+        .get();
+
+    DocumentSnapshot? existingChat;
+    final potentialChats = chatQuery.docs.where((doc) {
+      final participants = List<String>.from(doc['participants']);
+      return participants.contains(ownerId);
+    });
+    if (potentialChats.isNotEmpty) existingChat = potentialChats.first;
+
+    final chat = existingChat;
+    if (chat != null) {
+      final ownerData = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(ownerId)
+          .get();
+      final ownerName = ownerData.data()?['username'] ?? 'مستخدم';
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (ctx) => ChatMessagesScreen(
+            chatId: chat.id,
+            recipientId: ownerId,
+            recipientName: ownerName,
+          ),
+        ),
+      );
+    } else {
+      final ownerData = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(ownerId)
+          .get();
+      final ownerName = ownerData.data()?['username'] ?? 'مستخدم';
+      final currentUserData = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final currentUserName = currentUserData.data()?['username'] ?? 'مستخدم';
+
+      final newChatRef = await FirebaseFirestore.instance
+          .collection('chats')
+          .add({
+            'participants': [currentUser.uid, ownerId],
+            'participantNames': {
+              currentUser.uid: currentUserName,
+              ownerId: ownerName,
+            },
+            'lastMessage': '',
+            'lastMessageTimestamp': Timestamp.now(),
+          });
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (ctx) => ChatMessagesScreen(
+            chatId: newChatRef.id,
+            recipientId: ownerId,
+            recipientName: ownerName,
+          ),
+        ),
+      );
+    }
+  }
+
   void _launchMapsUrl(double lat, double lon) async {
     final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lon';
     if (await canLaunchUrl(Uri.parse(url))) {
@@ -220,6 +313,10 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                         ),
                 ),
                 actions: [
+                  IconButton(
+                    onPressed: () => _shareProperty(property),
+                    icon: const Icon(Icons.share),
+                  ),
                   if (_currentUser != null)
                     IconButton(
                       onPressed: _toggleFavorite,
@@ -348,6 +445,22 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                               ),
                               icon: const Icon(Icons.map),
                               label: const Text('فتح في الخرائط'),
+                            ),
+                          ),
+                        ],
+                        if (!_isOwner && _currentUser != null) ...[
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _startOrOpenChat(property),
+                              icon: const Icon(Icons.chat_bubble_outline),
+                              label: const Text('تواصل مع البائع'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
                             ),
                           ),
                         ],
