@@ -1,9 +1,13 @@
-// استيراد مكتبات فايربيز والمواد من فلاتر
+import 'dart:io';
+import 'package:aqar_app/features/map/screens/map_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
-// شاشة لإضافة عقار جديد
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
 
@@ -15,47 +19,117 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _formKey = GlobalKey<FormState>();
   var _enteredTitle = '';
   var _enteredPrice = 0.0;
+  var _enteredDescription = '';
+  String? _selectedCategory;
+  var _enteredFloor = 0;
+  var _enteredRooms = 0;
+  var _enteredArea = 0.0;
+  LatLng? _selectedLocation;
   var _isSaving = false;
+  final List<XFile> _selectedImages = [];
 
-  // دالة لحفظ بيانات العقار في Firestore
+  void _pickImages() async {
+    final imagePicker = ImagePicker();
+    final pickedImages = await imagePicker.pickMultiImage(imageQuality: 50);
+    if (pickedImages.isEmpty) {
+      return;
+    }
+    setState(() {
+      _selectedImages.addAll(pickedImages);
+    });
+  }
+
+  void _selectOnMap() async {
+    final pickedLocation = await Navigator.of(
+      context,
+    ).push<LatLng>(MaterialPageRoute(builder: (ctx) => const MapScreen()));
+    if (pickedLocation == null) {
+      return;
+    }
+    setState(() {
+      _selectedLocation = pickedLocation;
+    });
+  }
+
   void _saveProperty() async {
     if (_formKey.currentState!.validate()) {
+      if (_selectedImages.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('الرجاء اختيار صورة واحدة على الأقل.')),
+        );
+        return;
+      }
+      if (_selectedLocation == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('الرجاء تحديد موقع العقار على الخريطة.'),
+          ),
+        );
+        return;
+      }
+
       _formKey.currentState!.save();
       setState(() {
         _isSaving = true;
       });
 
       try {
-        // الحصول على المستخدم الحالي
         final user = FirebaseAuth.instance.currentUser;
         if (user == null) {
-          // يمكنك التعامل مع حالة عدم وجود مستخدم مسجل دخوله هنا
+          setState(() {
+            _isSaving = false;
+          });
           return;
         }
 
-        // إضافة مستند جديد إلى collection 'properties'
+        final imageUrls = await _uploadImages();
+
         await FirebaseFirestore.instance.collection('properties').add({
           'title': _enteredTitle,
           'price': _enteredPrice,
-          'userId': user.uid, // ربط العقار بالمستخدم الذي أضافه
-          'createdAt': Timestamp.now(), // إضافة تاريخ الإنشاء
+          'description': _enteredDescription,
+          'category': _selectedCategory,
+          'floor': _enteredFloor,
+          'rooms': _enteredRooms,
+          'area': _enteredArea,
+          'location': GeoPoint(
+            _selectedLocation!.latitude,
+            _selectedLocation!.longitude,
+          ),
+          'userId': user.uid,
+          'imageUrls': imageUrls,
+          'createdAt': Timestamp.now(),
         });
 
-        // عرض رسالة تأكيد والعودة للشاشة السابقة
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('تم حفظ العقار بنجاح!')));
-          Navigator.of(context).pop();
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم حفظ العقار بنجاح!')));
+        Navigator.of(context).pop();
       } catch (e) {
-        // التعامل مع الأخطاء
         setState(() {
           _isSaving = false;
         });
-        // يمكنك عرض رسالة خطأ هنا
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
       }
     }
+  }
+
+  Future<List<String>> _uploadImages() async {
+    final List<String> imageUrls = [];
+    for (final image in _selectedImages) {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('property_images')
+          .child('${const Uuid().v4()}.jpg');
+      await ref.putFile(File(image.path));
+      final url = await ref.getDownloadURL();
+      imageUrls.add(url);
+    }
+    return imageUrls;
   }
 
   @override
@@ -80,6 +154,25 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   _enteredTitle = value!;
                 },
               ),
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(labelText: 'التصنيف'),
+                value: _selectedCategory,
+                items: const [
+                  DropdownMenuItem(value: 'بيع', child: Text('بيع')),
+                  DropdownMenuItem(value: 'إيجار', child: Text('إيجار')),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedCategory = value;
+                  });
+                },
+                validator: (value) {
+                  if (value == null) {
+                    return 'الرجاء اختيار تصنيف.';
+                  }
+                  return null;
+                },
+              ),
               TextFormField(
                 decoration: const InputDecoration(labelText: 'السعر'),
                 keyboardType: TextInputType.number,
@@ -96,6 +189,70 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   _enteredPrice = double.parse(value!);
                 },
               ),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'المساحة (م²)'),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null ||
+                      value.isEmpty ||
+                      double.tryParse(value) == null ||
+                      double.parse(value) <= 0) {
+                    return 'الرجاء إدخال مساحة صحيحة.';
+                  }
+                  return null;
+                },
+                onSaved: (value) {
+                  _enteredArea = double.parse(value!);
+                },
+              ),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'عدد الغرف'),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null ||
+                      value.isEmpty ||
+                      int.tryParse(value) == null ||
+                      int.parse(value) <= 0) {
+                    return 'الرجاء إدخال عدد غرف صحيح.';
+                  }
+                  return null;
+                },
+                onSaved: (value) {
+                  _enteredRooms = int.parse(value!);
+                },
+              ),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'الطابق'),
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null ||
+                      value.isEmpty ||
+                      int.tryParse(value) == null) {
+                    return 'الرجاء إدخال رقم طابق صحيح.';
+                  }
+                  return null;
+                },
+                onSaved: (value) {
+                  _enteredFloor = int.parse(value!);
+                },
+              ),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'الوصف'),
+                maxLines: 3,
+                validator: (value) {
+                  if (value == null || value.trim().length < 10) {
+                    return 'الرجاء إدخال وصف لا يقل عن 10 أحرف.';
+                  }
+                  return null;
+                },
+                onSaved: (value) {
+                  _enteredDescription = value!;
+                },
+              ),
+              const SizedBox(height: 20),
+              _buildLocationPicker(),
+              const SizedBox(height: 20),
+              _buildImagePicker(),
               const SizedBox(height: 20),
               if (_isSaving)
                 const Center(child: CircularProgressIndicator())
@@ -108,6 +265,56 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLocationPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          onPressed: _selectOnMap,
+          icon: const Icon(Icons.map),
+          label: const Text('تحديد الموقع على الخريطة'),
+        ),
+        if (_selectedLocation != null)
+          Text(
+            'الموقع المحدد: ${_selectedLocation!.latitude.toStringAsFixed(5)}, ${_selectedLocation!.longitude.toStringAsFixed(5)}',
+          ),
+      ],
+    );
+  }
+
+  Widget _buildImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton.icon(
+          onPressed: _pickImages,
+          icon: const Icon(Icons.image),
+          label: const Text('اختر صور'),
+        ),
+        const SizedBox(height: 10),
+        if (_selectedImages.isNotEmpty)
+          SizedBox(
+            height: 100,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedImages.length,
+              itemBuilder: (ctx, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: Image.file(
+                    File(_selectedImages[index].path),
+                    fit: BoxFit.cover,
+                    width: 100,
+                    height: 100,
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }

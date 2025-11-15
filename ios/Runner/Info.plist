@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+    <string>نحتاج إلى الوصول إلى مكتبة الصور لاختيار صور للعقار.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>نحتاج إلى الوصول إلى الكاميرا لالتقاط صور للعقار.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>نحتاج إلى الوصول إلى الميكروفون لتسجيل فيديو مع صوت للعقار.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>نحتاج إلى الوصول إلى موقعك لتحديد موقع العقار على الخريطة.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>نحتاج إلى الوصول إلى موقعك لتحديد موقع العقار على الخريطة.</string>
 </dict>
 </plist>

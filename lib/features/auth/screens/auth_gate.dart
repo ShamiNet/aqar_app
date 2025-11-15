@@ -1,10 +1,9 @@
-// استيراد المكتبات اللازمة
+import 'package:aqar_app/features/tabs/screens/tabs_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 // استيراد الشاشات التي سننتقل إليها من مساراتها الجديدة
 import 'package:aqar_app/features/auth/screens/login_screen.dart';
-import 'package:aqar_app/features/home/screens/home_screen.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -23,7 +22,7 @@ class AuthGate extends StatelessWidget {
 
         // إذا كان هناك بيانات في الـ snapshot، فهذا يعني أن المستخدم مسجل دخوله
         if (snapshot.hasData) {
-          return const HomeScreen();
+          return const TabsScreen();
         }
 
         // إذا لم يكن هناك بيانات، اعرض شاشة تسجيل الدخول
