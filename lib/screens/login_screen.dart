@@ -18,10 +18,13 @@ class _LoginScreenState extends State<LoginScreen> {
   var _isLoading = false;
 
   void _submit() async {
+    debugPrint('[LoginScreen] _submit: Submit button pressed.');
     final isValid = _formKey.currentState!.validate();
     if (!isValid) {
+      debugPrint('[LoginScreen] _submit: Form is invalid.');
       return;
     }
+    debugPrint('[LoginScreen] _submit: Form is valid.');
     _formKey.currentState!.save();
 
     try {
@@ -30,11 +33,14 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       if (_isLoginMode) {
+        debugPrint('[LoginScreen] _submit: Attempting to sign in...');
         await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _enteredEmail,
           password: _enteredPassword,
         );
+        debugPrint('[LoginScreen] _submit: Sign in successful.');
       } else {
+        debugPrint('[LoginScreen] _submit: Attempting to create user...');
         final userCredentials = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
               email: _enteredEmail,
@@ -50,8 +56,12 @@ class _LoginScreenState extends State<LoginScreen> {
               'role': 'مشترك',
               'createdAt': Timestamp.now(),
             });
+        debugPrint('[LoginScreen] _submit: User created successfully.');
       }
     } on FirebaseAuthException catch (error) {
+      debugPrint(
+        '[LoginScreen] _submit: FirebaseAuthException: ${error.message}',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(

@@ -6,6 +6,8 @@ import 'package:aqar_app/screens/my_properties_screen.dart';
 import 'package:aqar_app/screens/search_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:aqar_app/config/theme_controller.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:curved_navigation_bar/curved_navigation_bar.dart';
 
 class TabsScreen extends StatefulWidget {
   const TabsScreen({super.key});
@@ -40,13 +42,16 @@ class _TabsScreenState extends State<TabsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true, // لجعل المحتوى يظهر خلف شريط التنقل
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
         actions: [
           PopupMenuButton<Color>(
             tooltip: 'لون العلامة',
             icon: const Icon(Icons.palette),
-            onSelected: ThemeController.setSeedColor,
+            onSelected: (color) {
+              ThemeController.setSeedColor(color);
+            },
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: Colors.teal,
@@ -93,13 +98,16 @@ class _TabsScreenState extends State<TabsScreen> {
           ValueListenableBuilder<ThemeMode>(
             valueListenable: ThemeController.themeMode,
             builder: (context, mode, _) => IconButton(
-              onPressed: ThemeController.toggle,
+              onPressed: () {
+                ThemeController.toggle();
+              },
               icon: Icon(ThemeController.iconFor(mode)),
               tooltip: 'تبديل النمط',
             ),
           ),
           IconButton(
             onPressed: () {
+              FirebaseAnalytics.instance.logEvent(name: 'view_search_screen');
               Navigator.of(
                 context,
               ).push(MaterialPageRoute(builder: (ctx) => const SearchScreen()));
@@ -131,19 +139,22 @@ class _TabsScreenState extends State<TabsScreen> {
               child: const Icon(Icons.add_home_work),
             )
           : null,
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed, // To allow more than 3 items
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'الرئيسية'),
-          BottomNavigationBarItem(icon: Icon(Icons.business), label: 'عقاراتي'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'المفضلة'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'ملفي الشخصي',
-          ),
-        ],
-        currentIndex: _selectedIndex,
+      bottomNavigationBar: CurvedNavigationBar(
+        index: _selectedIndex,
         onTap: _onItemTapped,
+        height: 60.0,
+        color: Theme.of(context).colorScheme.surface,
+        buttonBackgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: Colors.transparent,
+        animationCurve: Curves.easeInOut,
+        animationDuration: const Duration(milliseconds: 400),
+        letIndexChange: (index) => true,
+        items: const <Widget>[
+          Icon(Icons.home_outlined, size: 30),
+          Icon(Icons.business_outlined, size: 30),
+          Icon(Icons.favorite_border, size: 30),
+          Icon(Icons.person_outline, size: 30),
+        ],
       ),
     );
   }

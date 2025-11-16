@@ -1,9 +1,11 @@
 // import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:aqar_app/screens/admin_dashboard_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:aqar_app/config/cloudinary_config.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -17,11 +19,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _user = FirebaseAuth.instance.currentUser;
 
   Future<void> _updateProfile(String newUsername, XFile? newImage) async {
+    debugPrint('[ProfileScreen] _updateProfile: Starting profile update.');
     if (_user == null) return;
 
     try {
       String? newImageUrl;
       if (newImage != null) {
+        debugPrint(
+          '[ProfileScreen] _updateProfile: Uploading new profile image.',
+        );
         final CloudinaryResponse res = await cloudinary.uploadFile(
           CloudinaryFile.fromFile(
             newImage.path,
@@ -35,16 +41,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final Map<String, dynamic> updatedData = {'username': newUsername};
 
       if (newImageUrl != null) {
+        debugPrint(
+          '[ProfileScreen] _updateProfile: New image URL: $newImageUrl',
+        );
         updatedData['profileImageUrl'] = newImageUrl;
       }
 
+      debugPrint('[ProfileScreen] _updateProfile: Updating user in Firestore.');
       await FirebaseFirestore.instance
           .collection('users')
           .doc(_user.uid)
           .update(updatedData);
 
+      debugPrint('[ProfileScreen] _updateProfile: Update successful.');
       setState(() {}); // Re-fetch user data
     } catch (e) {
+      debugPrint('[ProfileScreen] _updateProfile: An error occurred: $e');
       // Handle error
     }
   }
@@ -55,6 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     XFile? newImage;
 
+    debugPrint('[ProfileScreen] _showEditProfileDialog: Showing dialog.');
     showDialog(
       context: context,
       builder: (ctx) {
@@ -137,6 +150,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final username = userData['username'] ?? 'لا يوجد اسم';
         final email = userData['email'] ?? 'لا يوجد بريد إلكتروني';
         final profileImageUrl = userData['profileImageUrl'];
+        final String userRole = userData['role'] ?? 'مشترك';
 
         return Padding(
           padding: const EdgeInsets.all(16.0),
@@ -147,8 +161,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 50,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceVariant,
                     backgroundImage: profileImageUrl != null
-                        ? NetworkImage(profileImageUrl)
+                        ? CachedNetworkImageProvider(profileImageUrl)
                         : null,
                     child: profileImageUrl == null
                         ? const Icon(Icons.person, size: 50)
@@ -196,9 +213,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   );
                 },
               ),
+              if (userRole == 'مدير' || userRole == 'admin') ...[
+                const SizedBox(height: 20),
+                ListTile(
+                  leading: const Icon(Icons.dashboard_customize_outlined),
+                  title: const Text('لوحة تحكم المدير'),
+                  trailing: const Icon(Icons.arrow_forward_ios),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (ctx) => const AdminDashboardScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
               const Spacer(),
               ElevatedButton.icon(
-                onPressed: () => FirebaseAuth.instance.signOut(),
+                onPressed: () {
+                  debugPrint('[ProfileScreen] Signing out user.');
+                  FirebaseAuth.instance.signOut();
+                },
                 icon: const Icon(Icons.logout),
                 label: const Text('تسجيل الخروج'),
               ),

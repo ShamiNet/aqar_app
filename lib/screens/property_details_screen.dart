@@ -2,10 +2,12 @@ import 'package:aqar_app/screens/edit_property_screen.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
@@ -26,6 +28,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint(
+      '[PropertyDetailsScreen] initState: Initializing for property ID: ${widget.propertyId}',
+    );
     _currentUser = FirebaseAuth.instance.currentUser;
     _propertyFuture = FirebaseFirestore.instance
         .collection('properties')
@@ -36,6 +41,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   void _checkOwnership() async {
+    debugPrint('[PropertyDetailsScreen] _checkOwnership: Checking ownership.');
     if (_currentUser == null) return;
     final property = await _propertyFuture;
     if (!property.exists) return;
@@ -46,6 +52,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   void _checkIfFavorited() async {
+    debugPrint(
+      '[PropertyDetailsScreen] _checkIfFavorited: Checking favorite status.',
+    );
     if (_currentUser == null) return;
     final favoriteDoc = await FirebaseFirestore.instance
         .collection('users')
@@ -59,6 +68,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   void _toggleFavorite() async {
+    debugPrint(
+      '[PropertyDetailsScreen] _toggleFavorite: Toggling favorite status.',
+    );
     if (_currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('الرجاء تسجيل الدخول أولاً.')),
@@ -78,12 +90,27 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 
     if (_isFavorited) {
       await favoriteRef.set({'favoritedAt': Timestamp.now()});
+      FirebaseAnalytics.instance.logEvent(
+        name: 'add_to_favorites',
+        parameters: {'property_id': widget.propertyId},
+      );
+      debugPrint(
+        '[PropertyDetailsScreen] _toggleFavorite: Property added to favorites.',
+      );
     } else {
       await favoriteRef.delete();
+      FirebaseAnalytics.instance.logEvent(
+        name: 'remove_from_favorites',
+        parameters: {'property_id': widget.propertyId},
+      );
+      debugPrint(
+        '[PropertyDetailsScreen] _toggleFavorite: Property removed from favorites.',
+      );
     }
   }
 
   void _deleteProperty() async {
+    debugPrint('[PropertyDetailsScreen] _deleteProperty: Delete dialog shown.');
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -103,15 +130,22 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     );
 
     if (shouldDelete == null || !shouldDelete) {
+      debugPrint(
+        '[PropertyDetailsScreen] _deleteProperty: Deletion cancelled.',
+      );
       return;
     }
 
+    debugPrint('[PropertyDetailsScreen] _deleteProperty: Deletion confirmed.');
     try {
       final property = await _propertyFuture;
       final imageUrls =
           (property.data() as Map<String, dynamic>)['imageUrls']
               as List<dynamic>?;
 
+      debugPrint(
+        '[PropertyDetailsScreen] _deleteProperty: Deleting images from storage.',
+      );
       if (imageUrls != null) {
         for (final url in imageUrls) {
           try {
@@ -123,17 +157,26 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         }
       }
 
+      debugPrint(
+        '[PropertyDetailsScreen] _deleteProperty: Deleting document from Firestore.',
+      );
       await FirebaseFirestore.instance
           .collection('properties')
           .doc(widget.propertyId)
           .delete();
 
       if (!mounted) return;
+      debugPrint(
+        '[PropertyDetailsScreen] _deleteProperty: Deletion successful. Navigating back.',
+      );
       Navigator.of(context).pop();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تم حذف العقار بنجاح.')));
     } catch (e) {
+      debugPrint(
+        '[PropertyDetailsScreen] _deleteProperty: An error occurred: $e',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ أثناء الحذف: ${e.toString()}')),
@@ -142,6 +185,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   void _shareProperty(Map<String, dynamic> propertyData) {
+    debugPrint('[PropertyDetailsScreen] _shareProperty: Sharing property.');
     final title = propertyData['title'] ?? 'بدون عنوان';
     final description = propertyData['description'] ?? 'لا يوجد وصف.';
     final price = propertyData['price'] ?? 0.0;
@@ -157,9 +201,16 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 $description
 ''';
     Share.share(shareText);
+    FirebaseAnalytics.instance.logEvent(
+      name: 'share',
+      parameters: {'content_type': 'property', 'item_id': widget.propertyId},
+    );
   }
 
   void _startOrOpenChat(Map<String, dynamic> propertyData) async {
+    debugPrint(
+      '[PropertyDetailsScreen] _startOrOpenChat: Initiating chat with owner.',
+    );
     final ownerId = propertyData['userId'];
     if (_currentUser == null || _currentUser!.uid == ownerId) {
       return;
@@ -180,6 +231,9 @@ $description
 
     final chat = existingChat;
     if (chat != null) {
+      debugPrint(
+        '[PropertyDetailsScreen] _startOrOpenChat: Existing chat found: ${chat.id}.',
+      );
       final ownerData = await FirebaseFirestore.instance
           .collection('users')
           .doc(ownerId)
@@ -197,6 +251,9 @@ $description
         ),
       );
     } else {
+      debugPrint(
+        '[PropertyDetailsScreen] _startOrOpenChat: No existing chat. Creating new one.',
+      );
       final ownerData = await FirebaseFirestore.instance
           .collection('users')
           .doc(ownerId)
@@ -234,6 +291,7 @@ $description
   }
 
   void _launchMapsUrl(double lat, double lon) async {
+    debugPrint('[PropertyDetailsScreen] _launchMapsUrl: Opening maps app.');
     final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lon';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
@@ -271,6 +329,14 @@ $description
           final rooms = property['rooms'] ?? 0;
           final area = property['area'] ?? 0.0;
           final location = property['location'] as GeoPoint?;
+          final String? addressCountry = property['addressCountry'];
+          final String? addressCity = property['addressCity'];
+          final String? addressStreet = property['addressStreet'];
+          final fullAddress = [
+            addressStreet,
+            addressCity,
+            addressCountry,
+          ].where((s) => s != null && s.isNotEmpty).join(', ');
 
           return CustomScrollView(
             slivers: [
@@ -282,31 +348,17 @@ $description
                       ? PageView.builder(
                           itemCount: imageUrls.length,
                           itemBuilder: (ctx, index) {
-                            return Image.network(
-                              imageUrls[index],
+                            return CachedNetworkImage(
+                              imageUrl: imageUrls[index],
                               fit: BoxFit.cover,
-                              loadingBuilder:
-                                  (
-                                    BuildContext context,
-                                    Widget child,
-                                    ImageChunkEvent? loadingProgress,
-                                  ) {
-                                    if (loadingProgress == null) return child;
-                                    return const Center(
-                                      child: CircularProgressIndicator(),
-                                    );
-                                  },
-                              errorBuilder:
-                                  (
-                                    BuildContext context,
-                                    Object exception,
-                                    StackTrace? stackTrace,
-                                  ) {
-                                    return const Icon(
-                                      Icons.broken_image,
-                                      size: 48,
-                                    );
-                                  },
+                              placeholder: (context, url) => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                              errorWidget: (context, url, error) => const Icon(
+                                Icons.broken_image,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
                             );
                           },
                         )
@@ -415,6 +467,29 @@ $description
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           const SizedBox(height: 8),
+                          if (fullAddress.isNotEmpty) ...[
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.pin_drop_outlined,
+                                  size: 18,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    fullAddress,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           SizedBox(
                             height: 200,
                             child: ClipRRect(

@@ -2,6 +2,7 @@ import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class PropertiesList extends StatelessWidget {
   const PropertiesList({super.key, required this.properties});
@@ -20,6 +21,8 @@ class PropertiesList extends StatelessWidget {
         final price = property['price'] ?? 0.0;
         final currency = property['currency'] ?? 'ر.س';
         final imageUrls = property['imageUrls'] as List<dynamic>?;
+        final bool hasMultipleImages =
+            imageUrls != null && imageUrls.length > 1;
         final String? category =
             property['category'] as String?; // 'بيع' أو 'إيجار'
         final bool isFeatured = property['isFeatured'] == true;
@@ -49,38 +52,23 @@ class PropertiesList extends StatelessWidget {
                       children: [
                         // Image
                         if (imageUrls != null && imageUrls.isNotEmpty)
-                          Image.network(
-                            imageUrls.first,
+                          CachedNetworkImage(
+                            imageUrl: imageUrls.first,
                             height: 220,
                             width: double.infinity,
                             fit: BoxFit.cover,
-                            loadingBuilder:
-                                (
-                                  BuildContext context,
-                                  Widget child,
-                                  ImageChunkEvent? loadingProgress,
-                                ) {
-                                  if (loadingProgress == null) return child;
-                                  return const Center(
-                                    child: CircularProgressIndicator(),
-                                  );
-                                },
-                            errorBuilder:
-                                (
-                                  BuildContext context,
-                                  Object exception,
-                                  StackTrace? stackTrace,
-                                ) {
-                                  return Container(
-                                    height: 220,
-                                    color: Colors.grey[300],
-                                    child: const Icon(
-                                      Icons.broken_image,
-                                      size: 48,
-                                      color: Colors.grey,
-                                    ),
-                                  );
-                                },
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              height: 220,
+                              color: Colors.grey[300],
+                              child: const Icon(
+                                Icons.broken_image,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                            ),
                           )
                         else
                           Container(
@@ -118,6 +106,13 @@ class PropertiesList extends StatelessWidget {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
+                              if (hasMultipleImages)
+                                _Badge(
+                                  icon: Icons.photo_library_outlined,
+                                  label: imageUrls.length.toString(),
+                                  background: Colors.black.withOpacity(0.6),
+                                  foreground: Colors.white,
+                                ),
                               if (category != null)
                                 _Badge(
                                   icon: category == 'بيع'

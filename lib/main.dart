@@ -10,6 +10,7 @@ import 'package:aqar_app/config/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ThemeController.initialize();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const AqarApp());
 }
