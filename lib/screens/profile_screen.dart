@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:aqar_app/config/cloudinary_config.dart';
+import 'package:about/about.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 
@@ -228,6 +229,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                 ),
               ],
+              const SizedBox(height: 10),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('حول التطبيق'),
+                trailing: const Icon(Icons.arrow_forward_ios),
+                onTap: () {
+                  showAboutPage(
+                    context: context,
+                    applicationName: 'تطبيق عقار',
+                    applicationVersion: '1.0.0+1',
+                    applicationIcon: const Icon(Icons.house_rounded, size: 64),
+                    applicationLegalese: '© 2024 فريق التطوير',
+                  );
+                },
+              ),
               const Spacer(),
               ElevatedButton.icon(
                 onPressed: () {

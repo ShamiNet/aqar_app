@@ -57,6 +57,8 @@ dependencies:
   shared_preferences: ^2.3.2
   curved_navigation_bar: ^1.0.3
   cached_network_image: ^3.3.1
+  about: ^2.2.0
+  flutter_polyline_points: ^2.0.0
    
 
 dev_dependencies:

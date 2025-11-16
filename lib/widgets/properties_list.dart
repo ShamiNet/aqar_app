@@ -1,4 +1,5 @@
 import 'package:aqar_app/screens/property_details_screen.dart';
+import 'package:aqar_app/screens/filtered_properties_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -106,55 +107,90 @@ class PropertiesList extends StatelessWidget {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              if (hasMultipleImages)
-                                _Badge(
-                                  icon: Icons.photo_library_outlined,
-                                  label: imageUrls.length.toString(),
-                                  background: Colors.black.withOpacity(0.6),
-                                  foreground: Colors.white,
-                                ),
                               if (category != null)
-                                _Badge(
-                                  icon: category == 'بيع'
-                                      ? Icons.sell_outlined
-                                      : Icons.key,
-                                  label: category,
-                                  background: category == 'بيع'
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.errorContainer
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.primaryContainer,
-                                  foreground: category == 'بيع'
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.onErrorContainer
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onPrimaryContainer,
+                                _ClickableBadge(
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (ctx) =>
+                                            FilteredPropertiesScreen(
+                                              filterTitle: 'عقارات $category',
+                                              filterType: 'category',
+                                              filterValue: category,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                  child: _Badge(
+                                    icon: category == 'بيع'
+                                        ? Icons.sell_outlined
+                                        : Icons.key,
+                                    label: category,
+                                    background: category == 'بيع'
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.errorContainer
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.primaryContainer,
+                                    foreground: category == 'بيع'
+                                        ? Theme.of(
+                                            context,
+                                          ).colorScheme.onErrorContainer
+                                        : Theme.of(
+                                            context,
+                                          ).colorScheme.onPrimaryContainer,
+                                  ),
                                 ),
                               if (discountPercent > 0)
-                                _Badge(
-                                  icon: Icons.local_offer_outlined,
-                                  label: '-$discountPercent%',
-                                  background: Theme.of(
-                                    context,
-                                  ).colorScheme.secondaryContainer,
-                                  foreground: Theme.of(
-                                    context,
-                                  ).colorScheme.onSecondaryContainer,
+                                _ClickableBadge(
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (ctx) =>
+                                            const FilteredPropertiesScreen(
+                                              filterTitle: 'عقارات عليها خصم',
+                                              filterType: 'hasDiscount',
+                                              filterValue: true,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                  child: _Badge(
+                                    icon: Icons.local_offer_outlined,
+                                    label: '-$discountPercent%',
+                                    background: Theme.of(
+                                      context,
+                                    ).colorScheme.secondaryContainer,
+                                    foreground: Theme.of(
+                                      context,
+                                    ).colorScheme.onSecondaryContainer,
+                                  ),
                                 ),
                               if (isFeatured)
-                                _Badge(
-                                  icon: Icons.star,
-                                  label: 'مميز',
-                                  background: Theme.of(
-                                    context,
-                                  ).colorScheme.tertiaryContainer,
-                                  foreground: Theme.of(
-                                    context,
-                                  ).colorScheme.onTertiaryContainer,
+                                _ClickableBadge(
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (ctx) =>
+                                            const FilteredPropertiesScreen(
+                                              filterTitle: 'عقارات مميزة',
+                                              filterType: 'isFeatured',
+                                              filterValue: true,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                  child: _Badge(
+                                    icon: Icons.star,
+                                    label: 'مميز',
+                                    background: Theme.of(
+                                      context,
+                                    ).colorScheme.tertiaryContainer,
+                                    foreground: Theme.of(
+                                      context,
+                                    ).colorScheme.onTertiaryContainer,
+                                  ),
                                 ),
                             ],
                           ),
@@ -199,6 +235,22 @@ class PropertiesList extends StatelessWidget {
                   .slideY(begin: 0.3, duration: 400.ms, curve: Curves.easeOut),
         );
       },
+    );
+  }
+}
+
+class _ClickableBadge extends StatelessWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const _ClickableBadge({required this.child, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: child,
     );
   }
 }

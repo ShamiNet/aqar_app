@@ -3,6 +3,7 @@ import 'package:aqar_app/screens/home_screen.dart';
 import 'package:aqar_app/screens/profile_screen.dart';
 import 'package:aqar_app/screens/add_property_screen.dart';
 import 'package:aqar_app/screens/my_properties_screen.dart';
+import 'package:aqar_app/screens/properties_map_screen.dart';
 import 'package:aqar_app/screens/search_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:aqar_app/config/theme_controller.dart';
@@ -21,6 +22,7 @@ class _TabsScreenState extends State<TabsScreen> {
 
   final List<Widget> _pages = [
     const HomeScreen(),
+    const PropertiesMapScreen(),
     const MyPropertiesScreen(),
     const FavoritesScreen(),
     const ProfileScreen(),
@@ -28,6 +30,7 @@ class _TabsScreenState extends State<TabsScreen> {
 
   final List<String> _titles = [
     'العقارات المتاحة',
+    'الخريطة',
     'عقاراتي',
     'المفضلة',
     'ملفي الشخصي',
@@ -118,8 +121,9 @@ class _TabsScreenState extends State<TabsScreen> {
       ),
       body: _pages[_selectedIndex],
       floatingActionButton:
-          _selectedIndex <
-              2 // Show FAB for Home and My Properties
+          _selectedIndex == 0 ||
+              _selectedIndex ==
+                  2 // Show FAB for Home and My Properties
           ? FloatingActionButton(
               onPressed: () {
                 Navigator.of(context)
@@ -151,6 +155,7 @@ class _TabsScreenState extends State<TabsScreen> {
         letIndexChange: (index) => true,
         items: const <Widget>[
           Icon(Icons.home_outlined, size: 30),
+          Icon(Icons.map_outlined, size: 30),
           Icon(Icons.business_outlined, size: 30),
           Icon(Icons.favorite_border, size: 30),
           Icon(Icons.person_outline, size: 30),
