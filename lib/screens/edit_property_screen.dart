@@ -23,9 +23,13 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   late TextEditingController _areaController;
   late TextEditingController _roomsController;
   late TextEditingController _floorController;
+  late TextEditingController _discountController;
   String? _selectedCategory;
+  String? _selectedPropertyType;
+  String? _selectedCurrency;
   var _isSaving = false;
   var _isLoading = true;
+  bool _isFeatured = false;
 
   final List<dynamic> _existingImageUrls = [];
   final List<XFile> _newImages = [];
@@ -40,6 +44,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     _areaController = TextEditingController();
     _roomsController = TextEditingController();
     _floorController = TextEditingController();
+    _discountController = TextEditingController();
     _loadPropertyData();
   }
 
@@ -51,6 +56,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     _areaController.dispose();
     _roomsController.dispose();
     _floorController.dispose();
+    _discountController.dispose();
     super.dispose();
   }
 
@@ -69,8 +75,12 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         _areaController.text = data['area'].toString();
         _roomsController.text = data['rooms'].toString();
         _floorController.text = data['floor'].toString();
+        _discountController.text = (data['discountPercent'] ?? 0).toString();
         setState(() {
           _selectedCategory = data['category'];
+          _selectedPropertyType = data['propertyType'];
+          _selectedCurrency = data['currency'] ?? 'ر.س';
+          _isFeatured = data['isFeatured'] == true;
           _existingImageUrls.addAll(data['imageUrls'] ?? []);
           _isLoading = false;
         });
@@ -126,6 +136,10 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
               'price': double.parse(_priceController.text),
               'description': _descriptionController.text,
               'category': _selectedCategory,
+              'propertyType': _selectedPropertyType,
+              'currency': _selectedCurrency,
+              'isFeatured': _isFeatured,
+              'discountPercent': int.tryParse(_discountController.text) ?? 0,
               'area': double.parse(_areaController.text),
               'rooms': int.parse(_roomsController.text),
               'floor': int.parse(_floorController.text),
@@ -192,6 +206,29 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                         return null;
                       },
                     ),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'نوع العقار',
+                      ),
+                      initialValue: _selectedPropertyType,
+                      items: const [
+                        DropdownMenuItem(value: 'بيت', child: Text('بيت')),
+                        DropdownMenuItem(value: 'فيلا', child: Text('فيلا')),
+                        DropdownMenuItem(value: 'بناية', child: Text('بناية')),
+                        DropdownMenuItem(value: 'ارض', child: Text('ارض')),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedPropertyType = value;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null) {
+                          return 'الرجاء اختيار نوع العقار.';
+                        }
+                        return null;
+                      },
+                    ),
                     TextFormField(
                       controller: _priceController,
                       decoration: const InputDecoration(labelText: 'السعر'),
@@ -203,6 +240,57 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                             double.parse(value) <= 0) {
                           return 'الرجاء إدخال سعر صحيح.';
                         }
+                        return null;
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('عرض مميز'),
+                      value: _isFeatured,
+                      onChanged: (v) => setState(() => _isFeatured = v),
+                    ),
+                    TextFormField(
+                      controller: _discountController,
+                      decoration: const InputDecoration(
+                        labelText: 'نسبة التخفيض (%) — اختياري',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) return null;
+                        final n = int.tryParse(value);
+                        if (n == null || n < 0 || n > 100) {
+                          return 'الرجاء إدخال نسبة بين 0 و 100';
+                        }
+                        return null;
+                      },
+                    ),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: 'العملة'),
+                      initialValue: _selectedCurrency,
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'ر.س',
+                          child: Text('ريال سعودي'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'ل.ت',
+                          child: Text('ليرة تركية'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'ل.س',
+                          child: Text('ليرة سورية'),
+                        ),
+                        DropdownMenuItem(
+                          value: '\$',
+                          child: Text('دولار أمريكي'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCurrency = value;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null) return 'الرجاء اختيار العملة.';
                         return null;
                       },
                     ),

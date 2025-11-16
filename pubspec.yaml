@@ -50,6 +50,11 @@ dependencies:
   url_launcher: ^6.3.2
   share_plus: ^10.0.0
   cloudinary_public: ^0.23.1
+  flutter_animate: ^4.5.0
+  google_fonts: ^6.2.1
+  flex_color_scheme: ^8.3.1
+  shared_preferences: ^2.3.2
+  
   # تمت إزالة imagekit_io والاستعاضة عنها بـ Firebase Storage المباشر
 
 dev_dependencies:

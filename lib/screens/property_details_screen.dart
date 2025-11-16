@@ -114,7 +114,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 
       if (imageUrls != null) {
         for (final url in imageUrls) {
-          await FirebaseStorage.instance.refFromURL(url).delete();
+          try {
+            await FirebaseStorage.instance.refFromURL(url).delete();
+          } catch (e) {
+            // Log the error but continue. The file might already be deleted.
+            debugPrint('Failed to delete image from storage: $url, error: $e');
+          }
         }
       }
 
@@ -140,12 +145,13 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     final title = propertyData['title'] ?? 'بدون عنوان';
     final description = propertyData['description'] ?? 'لا يوجد وصف.';
     final price = propertyData['price'] ?? 0.0;
+    final currency = propertyData['currency'] ?? 'ر.س';
 
     final shareText =
         '''
 اطلع على هذا العقار: $title
 
-السعر: ${price.toStringAsFixed(2)} ر.س
+السعر: ${price.toStringAsFixed(2)} $currency
 
 الوصف:
 $description
@@ -257,6 +263,7 @@ $description
           final property = snapshot.data!.data() as Map<String, dynamic>;
           final title = property['title'] ?? 'بدون عنوان';
           final price = property['price'] ?? 0.0;
+          final currency = property['currency'] ?? 'ر.س';
           final description = property['description'] ?? 'لا يوجد وصف.';
           final imageUrls = property['imageUrls'] as List<dynamic>? ?? [];
           final category = property['category'] ?? 'غير محدد';
@@ -358,7 +365,7 @@ $description
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${price.toStringAsFixed(2)} ر.س',
+                          '${price.toStringAsFixed(2)} $currency',
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(
                                 color: Theme.of(context).colorScheme.primary,

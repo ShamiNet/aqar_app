@@ -11,21 +11,12 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   static const _initialCameraPosition = CameraPosition(
-    target: LatLng(24.7136, 46.6753), // Riyadh
-    zoom: 11.5,
+    target: LatLng(35.9293, 36.6331), // إدلب, سوريا
+    zoom: 12,
   );
 
   GoogleMapController? _mapController;
-  Marker? _selectedLocationMarker;
-
-  void _selectLocation(LatLng position) {
-    setState(() {
-      _selectedLocationMarker = Marker(
-        markerId: const MarkerId('selectedLocation'),
-        position: position,
-      );
-    });
-  }
+  LatLng? _currentMapCenter;
 
   void _getCurrentLocation() async {
     try {
@@ -38,7 +29,6 @@ class _MapScreenState extends State<MapScreen> {
           15,
         ),
       );
-      _selectLocation(LatLng(position.latitude, position.longitude));
     } catch (e) {
       // Handle error
     }
@@ -47,27 +37,20 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('اختر موقع العقار'),
-        actions: [
-          if (_selectedLocationMarker != null)
-            IconButton(
-              icon: const Icon(Icons.check),
-              onPressed: () {
-                Navigator.of(context).pop(_selectedLocationMarker!.position);
-              },
-            ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('حدد موقع العقار')),
       body: Stack(
         children: [
           GoogleMap(
             initialCameraPosition: _initialCameraPosition,
-            onMapCreated: (controller) => _mapController = controller,
-            onLongPress: _selectLocation,
-            markers: _selectedLocationMarker != null
-                ? {_selectedLocationMarker!}
-                : {},
+            onMapCreated: (controller) {
+              _mapController = controller;
+            },
+            onCameraMove: (position) {
+              _currentMapCenter = position.target;
+            },
+          ),
+          const Center(
+            child: Icon(Icons.location_pin, size: 50, color: Colors.red),
           ),
           Positioned(
             bottom: 20,
@@ -75,6 +58,24 @@ class _MapScreenState extends State<MapScreen> {
             child: FloatingActionButton(
               onPressed: _getCurrentLocation,
               child: const Icon(Icons.my_location),
+            ),
+          ),
+          Positioned(
+            bottom: 20,
+            left: 80,
+            right: 20,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.check),
+              label: const Text('تأكيد الموقع'),
+              onPressed: () {
+                // If the map hasn't been moved, use the initial position
+                final locationToReturn =
+                    _currentMapCenter ?? _initialCameraPosition.target;
+                Navigator.of(context).pop(locationToReturn);
+              },
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.all(12),
+              ),
             ),
           ),
         ],
