@@ -300,6 +300,21 @@ $description
     }
   }
 
+  IconData _getIconForPropertyType(String? type) {
+    switch (type) {
+      case 'بيت':
+        return Icons.house_rounded;
+      case 'فيلا':
+        return Icons.villa_rounded;
+      case 'بناية':
+        return Icons.apartment_rounded;
+      case 'ارض':
+        return Icons.landscape_rounded;
+      default:
+        return Icons.home_rounded;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -328,6 +343,7 @@ $description
           final floor = property['floor'] ?? 0;
           final rooms = property['rooms'] ?? 0;
           final area = property['area'] ?? 0.0;
+          final String? propertyType = property['propertyType'] as String?;
           final location = property['location'] as GeoPoint?;
           final String? addressCountry = property['addressCountry'];
           final String? addressCity = property['addressCity'];
@@ -411,136 +427,306 @@ $description
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          title,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${price.toStringAsFixed(2)} $currency',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
+                        // بطاقة عنوان + سعر بتدرج جميل
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.primaryContainer,
+                                Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withOpacity(0.25),
+                                blurRadius: 18,
+                                offset: const Offset(0, 6),
                               ),
+                            ],
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(
+                                  _getIconForPropertyType(propertyType),
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
+                                  size: 32,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onPrimaryContainer,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${price.toStringAsFixed(2)} $currency',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 16),
+
+                        const SizedBox(height: 20),
+
+                        // بطاقات معلومات (نوع، طابق، غرف، مساحة)
                         Wrap(
-                          spacing: 16,
-                          runSpacing: 8,
+                          spacing: 12,
+                          runSpacing: 12,
                           children: [
-                            _buildDetailItem(context, Icons.category, category),
-                            _buildDetailItem(
+                            _buildInfoCard(
+                              context,
+                              Icons.category_rounded,
+                              'النوع',
+                              category,
+                              Colors.blue,
+                            ),
+                            _buildInfoCard(
                               context,
                               Icons.stairs,
-                              'الطابق $floor',
+                              'الطابق',
+                              '$floor',
+                              Colors.purple,
                             ),
-                            _buildDetailItem(
+                            _buildInfoCard(
                               context,
                               Icons.meeting_room,
-                              '$rooms غرف',
+                              'الغرف',
+                              '$rooms',
+                              Colors.teal,
                             ),
-                            _buildDetailItem(
+                            _buildInfoCard(
                               context,
                               Icons.area_chart,
+                              'المساحة',
                               '$area م²',
+                              Colors.orange,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        Text(
-                          'الوصف',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          description,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        if (location != null) ...[
-                          const SizedBox(height: 16),
-                          const Divider(),
-                          const SizedBox(height: 16),
-                          Text(
-                            'الموقع',
-                            style: Theme.of(context).textTheme.titleMedium,
+
+                        const SizedBox(height: 20),
+
+                        // وصف داخل بطاقة جميلة
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          const SizedBox(height: 8),
-                          if (fullAddress.isNotEmpty) ...[
-                            Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.description_rounded,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'الوصف',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                description,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        if (location != null) ...[
+                          const SizedBox(height: 20),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  Icons.pin_drop_outlined,
-                                  size: 18,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.secondary,
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.place_rounded,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.secondary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'الموقع',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
+                                const SizedBox(height: 8),
+                                if (fullAddress.isNotEmpty)
+                                  Text(
                                     fullAddress,
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodyLarge,
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                          SizedBox(
-                            height: 200,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(15),
-                              child: GoogleMap(
-                                initialCameraPosition: CameraPosition(
-                                  target: LatLng(
-                                    location.latitude,
-                                    location.longitude,
-                                  ),
-                                  zoom: 15,
-                                ),
-                                markers: {
-                                  Marker(
-                                    markerId: const MarkerId(
-                                      'propertyLocation',
+                                const SizedBox(height: 12),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(15),
+                                  child: SizedBox(
+                                    height: 200,
+                                    child: GoogleMap(
+                                      initialCameraPosition: CameraPosition(
+                                        target: LatLng(
+                                          location.latitude,
+                                          location.longitude,
+                                        ),
+                                        zoom: 15,
+                                      ),
+                                      markers: {
+                                        Marker(
+                                          markerId: const MarkerId(
+                                            'propertyLocation',
+                                          ),
+                                          position: LatLng(
+                                            location.latitude,
+                                            location.longitude,
+                                          ),
+                                        ),
+                                      },
+                                      scrollGesturesEnabled: false,
+                                      zoomGesturesEnabled: false,
                                     ),
-                                    position: LatLng(
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.center,
+                                  child: TextButton.icon(
+                                    onPressed: () => _launchMapsUrl(
                                       location.latitude,
                                       location.longitude,
                                     ),
+                                    icon: const Icon(Icons.map_rounded),
+                                    label: const Text('فتح في الخرائط'),
                                   ),
-                                },
-                                scrollGesturesEnabled: false,
-                                zoomGesturesEnabled: false,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Center(
-                            child: TextButton.icon(
-                              onPressed: () => _launchMapsUrl(
-                                location.latitude,
-                                location.longitude,
-                              ),
-                              icon: const Icon(Icons.map),
-                              label: const Text('فتح في الخرائط'),
+                                ),
+                              ],
                             ),
                           ),
                         ],
+
                         if (!_isOwner && _currentUser != null) ...[
                           const SizedBox(height: 24),
+                          // زر تواصل بتدرج جميل
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _startOrOpenChat(property),
-                              icon: const Icon(Icons.chat_bubble_outline),
-                              label: const Text('تواصل مع البائع'),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
+                            height: 56,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Theme.of(context).colorScheme.primary,
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.85),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary.withOpacity(0.35),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(16),
+                                  onTap: () => _startOrOpenChat(property),
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.chat_bubble_outline,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'تواصل مع البائع',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -558,14 +744,54 @@ $description
     );
   }
 
-  Widget _buildDetailItem(BuildContext context, IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(text, style: Theme.of(context).textTheme.titleSmall),
-      ],
+  Widget _buildInfoCard(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+    Color accentColor,
+  ) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 140),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accentColor.withOpacity(0.25), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: accentColor, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Text(
+                value,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -24,11 +24,10 @@ class PropertiesMapScreen extends StatefulWidget {
 }
 
 class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
-  // الإحداثيات الأولية لوسط الخريطة (مثلاً: الرياض)
-  static const LatLng _initialPosition = LatLng(24.7136, 46.6753);
+  // الإحداثيات الأولية لوسط الخريطة (إدلب، سوريا)
+  static const LatLng _initialPosition = LatLng(35.9333, 36.6333);
   Position? _currentUserPosition;
   final Set<Polyline> _polylines = {};
-  String? _distance;
   GoogleMapController? _mapController;
   MarkerId? _selectedMarkerId;
   StreamSubscription<QuerySnapshot>? _propertiesSubscription;
@@ -138,40 +137,23 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
             _currentUserPosition!.latitude,
             _currentUserPosition!.longitude,
           ),
-          zoom: 14,
+          zoom: 12,
         ),
       ),
     );
   }
 
-  Future<void> _onMarkerTapped(
-    LatLng propertyPosition,
-    MarkerId markerId,
-  ) async {
-    if (_currentUserPosition == null) return;
+  Future<void> _drawRoute(LatLng propertyPosition) async {
+    if (_currentUserPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لم يتم تحديد موقعك الحالي بعد.')),
+      );
+      return;
+    }
 
-    debugPrint('[MapScreen] _onMarkerTapped: Marker ${markerId.value} tapped.');
-    debugPrint(
-      '[MapScreen] _onMarkerTapped: User Position: ${_currentUserPosition!.latitude}, ${_currentUserPosition!.longitude}',
-    );
-    debugPrint(
-      '[MapScreen] _onMarkerTapped: Property Position: ${propertyPosition.latitude}, ${propertyPosition.longitude}',
-    );
-
-    final distanceInMeters = Geolocator.distanceBetween(
-      _currentUserPosition!.latitude,
-      _currentUserPosition!.longitude,
-      propertyPosition.latitude,
-      propertyPosition.longitude,
-    );
-
-    debugPrint(
-      '[MapScreen] _onMarkerTapped: Calculated distance: $distanceInMeters meters.',
-    );
-
-    // Get polyline points before setState (guard errors and fall back)
     final polylinePoints = PolylinePoints();
     List<LatLng> polyPoints = [];
+
     try {
       final apiKey = (kDirectionsKey.isNotEmpty)
           ? kDirectionsKey
@@ -200,97 +182,397 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
       polyPoints = result.points
           .map((p) => LatLng(p.latitude, p.longitude))
           .toList();
-      debugPrint(
-        '[MapScreen] _onMarkerTapped: Directions status: ${result.status}, points: ${polyPoints.length}',
-      );
     } catch (e) {
-      debugPrint('[MapScreen] _onMarkerTapped: Directions failed: $e');
+      debugPrint('[MapScreen] _drawRoute: Directions API failed: $e');
     }
 
-    setState(() {
-      _selectedMarkerId = markerId;
-      _distance = '${(distanceInMeters / 1000).toStringAsFixed(2)} كم';
-      debugPrint(
-        '[MapScreen] _onMarkerTapped: Updating state with distance: $_distance. Rebuilding markers.',
-      );
-
-      // Rebuild markers to update the InfoWindow snippet
-      _buildMarkers();
-
-      _polylines.clear();
-      if (polyPoints.isNotEmpty) {
+    if (mounted) {
+      setState(() {
+        _polylines.clear();
         _polylines.add(
           Polyline(
             polylineId: const PolylineId('route'),
-            points: polyPoints,
+            points: polyPoints.isNotEmpty
+                ? polyPoints
+                : [
+                    LatLng(
+                      _currentUserPosition!.latitude,
+                      _currentUserPosition!.longitude,
+                    ),
+                    propertyPosition,
+                  ],
             color: Colors.blue,
             width: 5,
           ),
         );
-        debugPrint(
-          '[MapScreen] _onMarkerTapped: Polyline with ${polyPoints.length} points added.',
-        );
-      } else {
-        // Fallback: draw straight line if Directions API fails
-        _polylines.add(
-          Polyline(
-            polylineId: const PolylineId('route_fallback'),
-            points: [
-              LatLng(
-                _currentUserPosition!.latitude,
-                _currentUserPosition!.longitude,
-              ),
-              propertyPosition,
-            ],
-            color: Colors.blue,
-            width: 5,
-          ),
-        );
-        debugPrint(
-          '[MapScreen] _onMarkerTapped: Directions empty, added fallback straight polyline.',
-        );
-      }
-    });
+      });
 
-    // بعد تحديث الحالة، نطلب من الخريطة إعادة عرض نافذة المعلومات للعلامة المحددة
-    // هذا يضمن ظهور المسافة المحدثة
-    if (_mapController != null) {
-      await _mapController!.showMarkerInfoWindow(markerId);
-    }
-    debugPrint('[MapScreen] _onMarkerTapped: showMarkerInfoWindow called.');
-
-    // Fit camera to show entire route
-    if (_mapController != null) {
-      final allPoints = _polylines.isNotEmpty
-          ? _polylines.first.points
-          : [
-              LatLng(
-                _currentUserPosition!.latitude,
-                _currentUserPosition!.longitude,
-              ),
-              propertyPosition,
-            ];
-      double minLat = allPoints.first.latitude;
-      double maxLat = allPoints.first.latitude;
-      double minLng = allPoints.first.longitude;
-      double maxLng = allPoints.first.longitude;
-      for (final p in allPoints) {
-        if (p.latitude < minLat) minLat = p.latitude;
-        if (p.latitude > maxLat) maxLat = p.latitude;
-        if (p.longitude < minLng) minLng = p.longitude;
-        if (p.longitude > maxLng) maxLng = p.longitude;
-      }
-      final bounds = LatLngBounds(
-        southwest: LatLng(minLat, minLng),
-        northeast: LatLng(maxLat, maxLng),
-      );
+      // Animate camera to fit the route
+      final bounds = _boundsFromLatLngList(_polylines.first.points);
       await _mapController!.animateCamera(
         CameraUpdate.newLatLngBounds(bounds, 64),
       );
-      debugPrint(
-        '[MapScreen] _onMarkerTapped: Camera animated to route bounds.',
-      );
     }
+  }
+
+  LatLngBounds _boundsFromLatLngList(List<LatLng> list) {
+    double? minLat, maxLat, minLng, maxLng;
+    for (final latLng in list) {
+      if (minLat == null || latLng.latitude < minLat) minLat = latLng.latitude;
+      if (maxLat == null || latLng.latitude > maxLat) maxLat = latLng.latitude;
+      if (minLng == null || latLng.longitude < minLng)
+        minLng = latLng.longitude;
+      if (maxLng == null || latLng.longitude > maxLng)
+        maxLng = latLng.longitude;
+    }
+    return LatLngBounds(
+      southwest: LatLng(minLat!, minLng!),
+      northeast: LatLng(maxLat!, maxLng!),
+    );
+  }
+
+  void _onMarkerTapped(MarkerId markerId, LatLng propertyPosition) {
+    // حساب المسافة إذا كان موقع المستخدم متاحاً
+    String? distanceText;
+    if (_currentUserPosition != null) {
+      final distanceInMeters = Geolocator.distanceBetween(
+        _currentUserPosition!.latitude,
+        _currentUserPosition!.longitude,
+        propertyPosition.latitude,
+        propertyPosition.longitude,
+      );
+      distanceText = '${(distanceInMeters / 1000).toStringAsFixed(2)} كم';
+    }
+
+    // البحث عن بيانات العقار
+    final propertyDoc = _propertyDocs.firstWhere(
+      (doc) => doc.id == markerId.value,
+      orElse: () => throw Exception('Property not found'),
+    );
+    final data = propertyDoc.data() as Map<String, dynamic>;
+    final title = data['title'] ?? 'عقار غير مسمى';
+    final price = data['price'];
+    final currency = data['currency'] ?? '';
+    final category = data['category'] ?? '';
+    String priceStr = '';
+    if (price is num) {
+      priceStr = '${price.toStringAsFixed(0)} $currency';
+    }
+
+    // إخفاء أي مسارات قديمة
+    setState(() {
+      _selectedMarkerId = markerId;
+      _polylines.clear();
+    });
+
+    // عرض BottomSheet جميلة بالمعلومات والخيارات
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.surface.withOpacity(0.95),
+            ],
+          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // مقبض السحب
+            Container(
+              width: 50,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurfaceVariant.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // بطاقة العنوان مع خلفية ملونة
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primaryContainer,
+                    Theme.of(context).colorScheme.secondaryContainer,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Icon(
+                      Icons.home_rounded,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onPrimaryContainer,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // بطاقات المعلومات
+            if (priceStr.isNotEmpty)
+              _buildInfoCard(
+                context,
+                Icons.payments_rounded,
+                'السعر',
+                priceStr,
+                Colors.green,
+              ),
+            if (category.isNotEmpty)
+              _buildInfoCard(
+                context,
+                Icons.category_rounded,
+                'النوع',
+                category,
+                Colors.blue,
+              ),
+            if (distanceText != null)
+              _buildInfoCard(
+                context,
+                Icons.location_on_rounded,
+                'المسافة',
+                distanceText,
+                Colors.orange,
+              ),
+
+            const SizedBox(height: 24),
+
+            // الأزرار بتصميم جذاب
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          _drawRoute(propertyPosition);
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.directions_rounded,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'رسم المسار',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.secondary,
+                          Theme.of(
+                            context,
+                          ).colorScheme.secondary.withOpacity(0.8),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.secondary.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (ctx) => PropertyDetailsScreen(
+                                propertyId: propertyDoc.id,
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.info_rounded,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'التفاصيل',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSecondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+    Color accentColor,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accentColor.withOpacity(0.3), width: 1),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 24, color: accentColor),
+          ),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -343,30 +625,9 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
           Marker(
             markerId: markerId,
             position: propertyPosition,
-            onTap: () => _onMarkerTapped(propertyPosition, markerId),
-            infoWindow: InfoWindow(
-              title: data['title'] ?? 'عقار غير مسمى',
-              snippet: () {
-                final price = data['price'];
-                final currency = data['currency'] ?? '';
-                final category = data['category'] ?? '';
-                String priceStr = '';
-                if (price is num) {
-                  priceStr = '${price.toStringAsFixed(0)} $currency';
-                }
-                if (_selectedMarkerId == markerId && _distance != null) {
-                  return 'المسافة: $_distance • $priceStr • $category';
-                }
-                return '$priceStr • $category';
-              }(),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (ctx) => PropertyDetailsScreen(propertyId: doc.id),
-                  ),
-                );
-              },
-            ),
+            onTap: () {
+              _onMarkerTapped(markerId, propertyPosition);
+            },
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueViolet,
             ),

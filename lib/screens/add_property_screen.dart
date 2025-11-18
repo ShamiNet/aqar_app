@@ -20,6 +20,7 @@ class AddPropertyScreen extends StatefulWidget {
 class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _formKey = GlobalKey<FormState>();
   var _isSaving = false;
+  VoidCallback? _submitForm;
 
   static const _draftPrefix = 'add_property_';
 
@@ -68,6 +69,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         'description': data['description'],
         'category': data['category'],
         'propertyType': data['propertyType'],
+        'subscriptionPeriod': data['subscriptionPeriod'],
         'floor': data['floor'],
         'rooms': data['rooms'],
         'area': data['area'],
@@ -134,6 +136,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               child: PropertyForm(
                 formKey: _formKey,
                 onSave: (data) => _saveProperty(data),
+                bindSubmit: (fn) => _submitForm = fn,
               ),
             ),
             const SizedBox(height: 20),
@@ -145,13 +148,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        // Access the form's onSave method via a GlobalKey if needed
-                        // or pass the save function down. Here we trigger validation
-                        // and saving from the parent.
                         final form = _formKey.currentState;
                         if (form != null && form.validate()) {
-                          form.save();
-                          // The onSave callback in PropertyForm will be triggered
+                          _submitForm?.call();
                         }
                       },
                       child: const Text('حفظ العقار'),

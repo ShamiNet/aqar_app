@@ -12,7 +12,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   static const _initialCameraPosition = CameraPosition(
     target: LatLng(35.9293, 36.6331), // إدلب, سوريا
-    zoom: 12,
+    zoom: 10,
   );
 
   GoogleMapController? _mapController;
@@ -26,7 +26,7 @@ class _MapScreenState extends State<MapScreen> {
       _mapController?.animateCamera(
         CameraUpdate.newLatLngZoom(
           LatLng(position.latitude, position.longitude),
-          15,
+          10,
         ),
       );
     } catch (e) {

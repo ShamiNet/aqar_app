@@ -20,6 +20,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   var _isSaving = false;
   var _isLoading = true;
   Map<String, dynamic> _propertyData = {};
+  VoidCallback? _submitForm;
 
   @override
   void initState() {
@@ -84,6 +85,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
             'description': data['description'],
             'category': data['category'],
             'propertyType': data['propertyType'],
+            'subscriptionPeriod': data['subscriptionPeriod'],
             'currency': data['currency'],
             'isFeatured': data['isFeatured'],
             'discountPercent': data['discountPercent'],
@@ -137,6 +139,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                     child: PropertyForm(
                       formKey: _formKey,
                       onSave: (data) => _updateProperty(data),
+                      bindSubmit: (fn) => _submitForm = fn,
                       initialData: _propertyData,
                       isEditMode: true,
                     ),
@@ -149,7 +152,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                       onPressed: () {
                         final form = _formKey.currentState;
                         if (form != null && form.validate()) {
-                          form.save();
+                          _submitForm?.call();
                         }
                       },
                       child: const Text('حفظ التعديلات'),

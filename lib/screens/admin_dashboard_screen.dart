@@ -60,12 +60,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           final propertyCount = stats['properties'] ?? 0;
 
           return RefreshIndicator(
-            onRefresh: () async {
+            onRefresh: () {
               setState(() {
-                // Re-fetch the stats and update the future
-                // This will cause the FutureBuilder to re-run with the new future
                 _statsFuture = _fetchStats();
               });
+              return _statsFuture;
             },
             child: ListView(
               padding: const EdgeInsets.all(16.0),

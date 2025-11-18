@@ -12,11 +12,13 @@ class PropertyForm extends StatefulWidget {
   final Map<String, dynamic> initialData;
   final Function(Map<String, dynamic> data) onSave;
   final bool isEditMode;
+  final void Function(VoidCallback submit) bindSubmit;
 
   const PropertyForm({
     super.key,
     required this.formKey,
     required this.onSave,
+    required this.bindSubmit,
     this.initialData = const {},
     this.isEditMode = false,
   });
@@ -36,6 +38,7 @@ class _PropertyFormState extends State<PropertyForm> {
 
   String? _selectedCategory;
   String? _selectedPropertyType;
+  String? _selectedSubscriptionPeriod;
   String? _selectedCurrency;
   bool _isFeatured = false;
   LatLng? _selectedLocation;
@@ -56,6 +59,10 @@ class _PropertyFormState extends State<PropertyForm> {
     if (!widget.isEditMode) {
       _loadDraft();
     }
+    // Expose submit function to parent so it can trigger save
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.bindSubmit(_onSave);
+    });
   }
 
   void _initializeControllers() {
@@ -80,6 +87,7 @@ class _PropertyFormState extends State<PropertyForm> {
           .toString();
       _selectedCategory = widget.initialData['category'];
       _selectedPropertyType = widget.initialData['propertyType'];
+      _selectedSubscriptionPeriod = widget.initialData['subscriptionPeriod'];
       _selectedCurrency = widget.initialData['currency'] ?? 'ر.س';
       _isFeatured = widget.initialData['isFeatured'] ?? false;
       if (widget.initialData['location'] != null) {
@@ -127,6 +135,9 @@ class _PropertyFormState extends State<PropertyForm> {
           (prefs.getInt('${_draftPrefix}discountPercent') ?? 0).toString();
       _selectedCategory = prefs.getString('${_draftPrefix}category');
       _selectedPropertyType = prefs.getString('${_draftPrefix}propertyType');
+      _selectedSubscriptionPeriod = prefs.getString(
+        '${_draftPrefix}subscriptionPeriod',
+      );
       _selectedCurrency = prefs.getString('${_draftPrefix}currency') ?? 'ر.س';
       _isFeatured = prefs.getBool('${_draftPrefix}isFeatured') ?? false;
       final lat = prefs.getDouble('${_draftPrefix}lat');
@@ -160,6 +171,11 @@ class _PropertyFormState extends State<PropertyForm> {
       await prefs.setString(
         '${_draftPrefix}propertyType',
         _selectedPropertyType!,
+      );
+    if (_selectedSubscriptionPeriod != null)
+      await prefs.setString(
+        '${_draftPrefix}subscriptionPeriod',
+        _selectedSubscriptionPeriod!,
       );
     if (_selectedCurrency != null)
       await prefs.setString('${_draftPrefix}currency', _selectedCurrency!);
@@ -203,6 +219,9 @@ class _PropertyFormState extends State<PropertyForm> {
         'discountPercent': int.tryParse(_discountController.text) ?? 0,
         'category': _selectedCategory,
         'propertyType': _selectedPropertyType,
+        'subscriptionPeriod': _selectedCategory == 'إيجار'
+            ? _selectedSubscriptionPeriod
+            : null,
         'currency': _selectedCurrency,
         'isFeatured': _isFeatured,
         'location': _selectedLocation,
@@ -284,11 +303,33 @@ class _PropertyFormState extends State<PropertyForm> {
               DropdownMenuItem(value: 'إيجار', child: Text('إيجار')),
             ],
             onChanged: (value) {
-              setState(() => _selectedCategory = value);
+              setState(() {
+                _selectedCategory = value;
+                if (_selectedCategory != 'إيجار') {
+                  _selectedSubscriptionPeriod = null;
+                }
+              });
               _saveDraft();
             },
             validator: (value) => value == null ? 'الرجاء اختيار تصنيف.' : null,
           ),
+          if (_selectedCategory == 'إيجار')
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'مدة الإيجار'),
+              value: _selectedSubscriptionPeriod,
+              items: const [
+                DropdownMenuItem(value: 'يومي', child: Text('يومي')),
+                DropdownMenuItem(value: 'شهري', child: Text('شهري')),
+                DropdownMenuItem(value: '3 شهور', child: Text('3 شهور')),
+                DropdownMenuItem(value: 'سنوي', child: Text('سنوي')),
+              ],
+              onChanged: (value) {
+                setState(() => _selectedSubscriptionPeriod = value);
+                _saveDraft();
+              },
+              validator: (value) =>
+                  value == null ? 'الرجاء اختيار مدة الإيجار.' : null,
+            ),
           DropdownButtonFormField<String>(
             decoration: const InputDecoration(labelText: 'نوع العقار'),
             value: _selectedPropertyType,
