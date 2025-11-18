@@ -23,19 +23,39 @@ class PropertiesList extends StatelessWidget {
         if (title.trim().isEmpty) {
           title = propertyType ?? 'بدون عنوان';
         }
-        final price = property['price'] ?? 0.0;
+        int _toInt(dynamic v) {
+          if (v == null) return 0;
+          if (v is int) return v;
+          if (v is num) return v.toInt();
+          if (v is String) {
+            final asInt = int.tryParse(v);
+            if (asInt != null) return asInt;
+            final asDouble = double.tryParse(v);
+            return asDouble?.toInt() ?? 0;
+          }
+          return 0;
+        }
+
+        num _toNum(dynamic v) {
+          if (v == null) return 0;
+          if (v is num) return v;
+          if (v is String) return num.tryParse(v) ?? 0;
+          return 0;
+        }
+
+        final num price = _toNum(property['price']);
         final currency = property['currency'] ?? 'ر.س';
         final imageUrls = property['imageUrls'] as List<dynamic>?;
         final bool hasMultipleImages =
             imageUrls != null && imageUrls.length > 1;
-        final String? category =
-            property['category'] as String?; // 'بيع' أو 'إيجار'
+        final String? category = property['category'] as String?;
         final bool isFeatured = property['isFeatured'] == true;
-        final int discountPercent =
-            (property['discountPercent'] as num?)?.toInt() ?? 0;
-        final int rooms = (property['rooms'] as num?)?.toInt() ?? 0;
-        final num area = (property['area'] as num?) ?? 0;
-        final int? floor = (property['floor'] as num?)?.toInt();
+        final int discountPercent = _toInt(property['discountPercent']);
+        final int rooms = _toInt(property['rooms']);
+        final num area = _toNum(property['area']);
+        final int? floor = property['floor'] != null
+            ? _toInt(property['floor'])
+            : null;
         final String? subscriptionPeriod =
             property['subscriptionPeriod'] as String?;
 
@@ -64,14 +84,14 @@ class PropertiesList extends StatelessWidget {
                         imageUrls != null && imageUrls.isNotEmpty
                             ? CachedNetworkImage(
                                 imageUrl: imageUrls.first,
-                                height: 220,
+                                height: 230,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
                                 placeholder: (context, url) => const Center(
                                   child: CircularProgressIndicator(),
                                 ),
                                 errorWidget: (context, url, error) => Container(
-                                  height: 220,
+                                  height: 230,
                                   color: Colors.grey[300],
                                   child: const Icon(
                                     Icons.broken_image,
@@ -81,7 +101,7 @@ class PropertiesList extends StatelessWidget {
                                 ),
                               )
                             : Container(
-                                height: 220,
+                                height: 200,
                                 color: Colors.grey[300],
                                 child: const Icon(
                                   Icons.house,
@@ -297,7 +317,7 @@ class PropertiesList extends StatelessWidget {
                         ),
                         // price bubble overlay (top-left)
                         Positioned(
-                          top: 12,
+                          top: 8,
                           left: 12,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -329,7 +349,7 @@ class PropertiesList extends StatelessWidget {
                               children: [
                                 const Icon(
                                   Icons.currency_exchange_outlined,
-                                  size: 16,
+                                  size: 19,
                                   color: Colors.white,
                                 ),
                                 const SizedBox(width: 8),

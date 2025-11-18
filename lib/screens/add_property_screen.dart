@@ -1,6 +1,7 @@
 import 'package:aqar_app/screens/property_form.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -18,7 +19,7 @@ class AddPropertyScreen extends StatefulWidget {
 }
 
 class _AddPropertyScreenState extends State<AddPropertyScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormBuilderState>();
   var _isSaving = false;
   VoidCallback? _submitForm;
 
@@ -79,9 +80,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         'userId': user.uid,
         'imageUrls': imageUrls,
         'createdAt': Timestamp.now(),
-        'addressCountry': data['addressCountry'],
-        'addressCity': data['addressCity'],
-        'addressStreet': data['addressStreet'],
+        'address': data['address'],
       });
 
       FirebaseAnalytics.instance.logEvent(
@@ -147,12 +146,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
-                        final form = _formKey.currentState;
-                        if (form != null && form.validate()) {
-                          _submitForm?.call();
-                        }
-                      },
+                      onPressed: () => _submitForm?.call(),
                       child: const Text('حفظ العقار'),
                     ),
                   ),

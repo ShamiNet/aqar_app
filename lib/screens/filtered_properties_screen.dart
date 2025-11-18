@@ -24,6 +24,8 @@ class FilteredPropertiesScreen extends StatelessWidget {
         return collection.where('isFeatured', isEqualTo: true);
       case 'category':
         return collection.where('category', isEqualTo: filterValue);
+      case 'propertyType':
+        return collection.where('propertyType', isEqualTo: filterValue);
       default:
         // Return a query for no results if filter is unknown
         return collection.where('__unknown__', isEqualTo: true);

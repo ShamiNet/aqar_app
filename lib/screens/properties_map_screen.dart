@@ -3,9 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'dart:ui' as ui;
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:aqar_app/firebase_options.dart';
+import 'package:aqar_app/screens/map_legend_screen.dart';
 
 // Google Directions API key
 // Method 1: Use dart-define (recommended, secure):
@@ -33,6 +35,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   StreamSubscription<QuerySnapshot>? _propertiesSubscription;
   final Set<Marker> _markers = {};
   List<QueryDocumentSnapshot> _propertyDocs = [];
+  final Map<String, BitmapDescriptor> _markerIcons = {};
 
   @override
   void initState() {
@@ -63,7 +66,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
             if (mounted) {
               setState(() {
                 _propertyDocs = snapshot.docs;
-                _buildMarkers();
+                _buildMarkersWithCustomIcons();
               });
             }
           },
@@ -73,6 +76,42 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
             );
           },
         );
+  }
+
+  Future<BitmapDescriptor> _createMarkerBitmap(
+    IconData iconData,
+    Color color,
+  ) async {
+    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(pictureRecorder);
+    const double size = 120.0; // حجم الأيقونة
+
+    // رسم الدائرة الخارجية
+    final Paint circlePaint = Paint()..color = color;
+    canvas.drawCircle(const Offset(size / 2, size / 2), size / 2, circlePaint);
+
+    // رسم أيقونة بداخل الدائرة
+    TextPainter textPainter = TextPainter(textDirection: TextDirection.rtl);
+    textPainter.text = TextSpan(
+      text: String.fromCharCode(iconData.codePoint),
+      style: TextStyle(
+        fontSize: size * 0.6,
+        fontFamily: iconData.fontFamily,
+        color: Colors.white,
+      ),
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset((size - textPainter.width) / 2, (size - textPainter.height) / 2),
+    );
+
+    final img = await pictureRecorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
   }
 
   Future<void> _determinePosition() async {
@@ -577,63 +616,123 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GoogleMap(
-      initialCameraPosition: const CameraPosition(
-        target: _initialPosition,
-        zoom: 6,
-      ),
-      onMapCreated: (controller) {
-        debugPrint('[MapScreen] onMapCreated: GoogleMapController is ready.');
-        _mapController = controller;
-        _animateToUserLocation();
-      },
-      onTap: (_) {
-        // إخفاء الخط عند النقر على الخريطة
-        setState(() {
-          debugPrint('[MapScreen] onMapTap: Map tapped, clearing polylines.');
-          _polylines.clear();
-          if (_selectedMarkerId != null && _mapController != null) {
-            // Rebuild markers to reset the snippet before hiding
-            final idToHide = _selectedMarkerId!;
-            _selectedMarkerId = null;
-            _buildMarkers();
-            _mapController!.hideMarkerInfoWindow(idToHide);
-          }
-          _selectedMarkerId = null;
-        });
-      },
-      markers: _markers,
-      polylines: _polylines,
-      mapType: MapType.normal,
-      myLocationButtonEnabled: true,
-      myLocationEnabled: true, // يعرض النقطة الزرقاء لموقع المستخدم
-      trafficEnabled: true,
+    return Stack(
+      children: [
+        GoogleMap(
+          initialCameraPosition: const CameraPosition(
+            target: _initialPosition,
+            zoom: 6,
+          ),
+          onMapCreated: (controller) {
+            debugPrint(
+              '[MapScreen] onMapCreated: GoogleMapController is ready.',
+            );
+            _mapController = controller;
+            _animateToUserLocation();
+          },
+          onTap: (_) {
+            // إخفاء الخط عند النقر على الخريطة
+            setState(() {
+              debugPrint(
+                '[MapScreen] onMapTap: Map tapped, clearing polylines.',
+              );
+              _polylines.clear();
+              if (_selectedMarkerId != null && _mapController != null) {
+                // Rebuild markers to reset the snippet before hiding
+                final idToHide = _selectedMarkerId!;
+                _selectedMarkerId =
+                    null; // Important to set this before rebuild
+                _buildMarkersWithCustomIcons();
+                _mapController!.hideMarkerInfoWindow(idToHide);
+              }
+              _selectedMarkerId = null;
+            });
+          },
+          markers: _markers,
+          polylines: _polylines,
+          mapType: MapType.normal,
+          myLocationButtonEnabled: true,
+          myLocationEnabled: true, // يعرض النقطة الزرقاء لموقع المستخدم
+          trafficEnabled: true,
+        ),
+        Positioned(
+          top: 16,
+          left: 16,
+          child: FloatingActionButton(
+            heroTag: 'map_legend_fab', // لتجنب التعارض مع أزرار أخرى
+            mini: true,
+            tooltip: 'دليل الخريطة',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (ctx) => const MapLegendScreen()),
+              );
+            },
+            child: const Icon(Icons.info_outline),
+          ),
+        ),
+      ],
     );
   }
 
-  void _buildMarkers() {
+  Future<void> _buildMarkersWithCustomIcons() async {
     _markers.clear();
     for (var doc in _propertyDocs) {
       final data = doc.data() as Map<String, dynamic>;
       final location = data['location'];
+      final propertyType = data['propertyType'] as String?;
+      final category = data['category'] as String?;
 
       if (location is GeoPoint) {
         final propertyPosition = LatLng(location.latitude, location.longitude);
         final markerId = MarkerId(doc.id);
 
+        final iconData = getIconForPropertyType(propertyType);
+        final color = getColorForCategory(category);
+        final iconKey = '${propertyType}_${category}';
+
+        if (!_markerIcons.containsKey(iconKey)) {
+          _markerIcons[iconKey] = await _createMarkerBitmap(iconData, color);
+        }
+
         _markers.add(
           Marker(
             markerId: markerId,
             position: propertyPosition,
-            onTap: () {
-              _onMarkerTapped(markerId, propertyPosition);
-            },
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueViolet,
-            ),
+            icon: _markerIcons[iconKey] ?? BitmapDescriptor.defaultMarker,
+            infoWindow: InfoWindow(title: data['title'] ?? 'عقار'),
+            onTap: () => _onMarkerTapped(markerId, propertyPosition),
           ),
         );
       }
     }
+    if (mounted) setState(() {});
+  }
+}
+
+IconData getIconForPropertyType(String? type) {
+  switch (type) {
+    case 'بيت':
+      return Icons.house_rounded;
+    case 'فيلا':
+      return Icons.villa_rounded;
+    case 'بناية':
+      return Icons.apartment_rounded;
+    case 'ارض':
+      return Icons.landscape_rounded;
+    case 'دكان':
+      return Icons.store_rounded;
+    default:
+      return Icons.location_pin;
+  }
+}
+
+Color getColorForCategory(String? category) {
+  switch (category) {
+    case 'بيع':
+      return Colors.red.shade700;
+    case 'إيجار':
+      return Colors.blue.shade700;
+    default:
+      return Colors.purple;
   }
 }

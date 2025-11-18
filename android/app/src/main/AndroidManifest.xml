@@ -8,7 +8,7 @@
      <application
         android:label="aqar_app"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
         <meta-data android:name="com.google.android.geo.API_KEY"
                android:value="AIzaSyAEvvC4kDaVUBF8FVIBENzlBS4xcN_DBZ0"/>
                <!-- android:value="AIzaSyANwoPIkdtRGU7JUQeG8wFvpQvgjqhczzs"/> -->

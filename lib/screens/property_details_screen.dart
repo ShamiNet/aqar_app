@@ -335,7 +335,15 @@ $description
 
           final property = snapshot.data!.data() as Map<String, dynamic>;
           final title = property['title'] ?? 'بدون عنوان';
-          final price = property['price'] ?? 0.0;
+          final priceRaw = property['price'] ?? 0.0;
+          num price;
+          if (priceRaw is num) {
+            price = priceRaw;
+          } else if (priceRaw is String) {
+            price = num.tryParse(priceRaw) ?? 0.0;
+          } else {
+            price = 0.0;
+          }
           final currency = property['currency'] ?? 'ر.س';
           final description = property['description'] ?? 'لا يوجد وصف.';
           final imageUrls = property['imageUrls'] as List<dynamic>? ?? [];

@@ -5,6 +5,7 @@ import 'package:aqar_app/screens/add_property_screen.dart';
 import 'package:aqar_app/screens/my_properties_screen.dart';
 import 'package:aqar_app/screens/properties_map_screen.dart';
 import 'package:aqar_app/screens/search_screen.dart';
+import 'package:aqar_app/screens/map_legend_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:aqar_app/config/theme_controller.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -30,7 +31,7 @@ class _TabsScreenState extends State<TabsScreen> {
 
   final List<String> _titles = [
     'العقارات المتاحة',
-    'الخريطة',
+    'الخريطة العقارية',
     'عقاراتي',
     'المفضلة',
     'ملفي الشخصي',

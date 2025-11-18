@@ -60,6 +60,9 @@ dependencies:
   about: ^2.2.0
   flutter_polyline_points: ^2.0.0
   firebase_app_check: ^0.2.2+7
+  flutter_login: ^6.0.0
+  form_builder_validators: ^11.2.0
+  form_builder_extra_fields: ^12.1.0
    
 
 dev_dependencies:
@@ -87,8 +90,11 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
+  assets:
+    - assets/logo.png
+    - images/aqar_plus_b.jpg
+    - images/aqar_plus_gr.jpg
+    - images/aqar_gr_log.jpg
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -120,5 +126,5 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icon/icon.png"
+  image_path: "assets/logo.png"
   min_sdk_android: 21 # optional

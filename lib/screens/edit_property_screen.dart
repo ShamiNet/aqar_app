@@ -1,5 +1,6 @@
 import 'package:aqar_app/screens/property_form.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:aqar_app/config/cloudinary_config.dart';
@@ -16,7 +17,7 @@ class EditPropertyScreen extends StatefulWidget {
 }
 
 class _EditPropertyScreenState extends State<EditPropertyScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _formKey = GlobalKey<FormBuilderState>();
   var _isSaving = false;
   var _isLoading = true;
   Map<String, dynamic> _propertyData = {};
@@ -149,12 +150,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                     const Center(child: CircularProgressIndicator())
                   else
                     ElevatedButton(
-                      onPressed: () {
-                        final form = _formKey.currentState;
-                        if (form != null && form.validate()) {
-                          _submitForm?.call();
-                        }
-                      },
+                      onPressed: () => _submitForm?.call(),
                       child: const Text('حفظ التعديلات'),
                     ),
                 ],

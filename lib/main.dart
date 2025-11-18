@@ -41,7 +41,7 @@ class AqarApp extends StatelessWidget {
             );
             return MaterialApp(
               debugShowCheckedModeBanner: false,
-              title: 'تطبيق عقار',
+              title: 'عقار بلص',
               themeMode: mode,
               theme: FlexThemeData.light(
                 useMaterial3: true,
