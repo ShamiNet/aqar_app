@@ -9,7 +9,6 @@ import 'package:aqar_app/config/cloudinary_config.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-// import 'package:uuid/uuid.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -32,9 +31,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   }
 
   Future<void> _clearDraft() async {
-    debugPrint(
-      '[AddPropertyScreen] _clearDraft: Clearing draft from SharedPreferences.',
-    );
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys().where((key) => key.startsWith(_draftPrefix));
     for (final key in keys) {
@@ -53,16 +49,24 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        debugPrint(
-          '[AddPropertyScreen] _saveProperty: Error - User is not logged in.',
-        );
         setState(() => _isSaving = false);
         return;
       }
 
+      // 1. رفع الصور
       final imageUrls = await _uploadImages(data['newImages']);
 
+      // 2. رفع الفيديو (إذا وجد)
+      String? videoUrl;
+      if (data['newVideo'] != null) {
+        debugPrint('Starting video upload...');
+        videoUrl = await _uploadVideo(data['newVideo']);
+        debugPrint('Video uploaded: $videoUrl');
+      }
+
       final LatLng location = data['location'];
+
+      // 3. حفظ البيانات في Firestore
       await FirebaseFirestore.instance.collection('properties').add({
         'title': data['title'],
         'price': data['price'],
@@ -79,6 +83,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         'location': GeoPoint(location.latitude, location.longitude),
         'userId': user.uid,
         'imageUrls': imageUrls,
+        'videoUrl': videoUrl, // حقل الفيديو الجديد
         'createdAt': Timestamp.now(),
         'address': data['address'],
       });
@@ -88,7 +93,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         parameters: {
           'category': data['category'],
           'property_type': data['propertyType'],
-          'price': data['price'],
+          'has_video': videoUrl != null ? 'yes' : 'no',
         },
       );
 
@@ -97,7 +102,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       if (!mounted) return;
       Navigator.of(context).pop('تم حفظ العقار بنجاح!');
     } catch (e) {
-      debugPrint('[AddPropertyScreen] _saveProperty: An error occurred: $e');
+      debugPrint('[AddPropertyScreen] Error: $e');
       setState(() => _isSaving = false);
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -108,19 +113,33 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   Future<List<String>> _uploadImages(List<XFile> images) async {
     final List<String> imageUrls = [];
-    final uploadTasks = images.map((image) async {
-      final CloudinaryResponse res = await cloudinary.uploadFile(
-        CloudinaryFile.fromFile(
-          image.path,
-          resourceType: CloudinaryResourceType.Image,
-          folder: 'property_images',
-        ),
-      );
-      return res.secureUrl;
-    }).toList();
-
-    imageUrls.addAll(await Future.wait(uploadTasks));
+    for (final image in images) {
+      try {
+        final CloudinaryResponse res = await cloudinary.uploadFile(
+          CloudinaryFile.fromFile(
+            image.path,
+            resourceType: CloudinaryResourceType.Image,
+            folder: 'property_images',
+          ),
+        );
+        imageUrls.add(res.secureUrl);
+      } catch (e) {
+        debugPrint('Error uploading image: $e');
+      }
+    }
     return imageUrls;
+  }
+
+  // دالة رفع الفيديو
+  Future<String> _uploadVideo(XFile video) async {
+    final CloudinaryResponse res = await cloudinary.uploadFile(
+      CloudinaryFile.fromFile(
+        video.path,
+        resourceType: CloudinaryResourceType.Video, // تحديد النوع فيديو
+        folder: 'property_videos',
+      ),
+    );
+    return res.secureUrl;
   }
 
   @override
@@ -140,7 +159,15 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             ),
             const SizedBox(height: 20),
             if (_isSaving)
-              const Center(child: CircularProgressIndicator())
+              const Center(
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 8),
+                    Text('جاري رفع الملفات... قد يستغرق الفيديو وقتاً'),
+                  ],
+                ),
+              )
             else
               Row(
                 children: [
@@ -153,16 +180,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   const SizedBox(width: 12),
                   TextButton(
                     onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
                       await _clearDraft();
-                      // A better way would be to reset the form state via its own key/controller
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
                           builder: (_) => const AddPropertyScreen(),
                         ),
-                      );
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('تم مسح المسودة.')),
                       );
                     },
                     child: const Text('مسح المسودة'),

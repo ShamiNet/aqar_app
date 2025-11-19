@@ -1,5 +1,6 @@
 import 'package:aqar_app/screens/edit_property_screen.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
+import 'package:aqar_app/widgets/full_screen_gallery.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -9,6 +10,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// استيراد الفيديو
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
   const PropertyDetailsScreen({super.key, required this.propertyId});
@@ -24,6 +29,37 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   bool _isOwner = false;
   bool _isFavorited = false;
   User? _currentUser;
+
+  // متغيرات الفيديو
+  VideoPlayerController? _videoPlayerController;
+  ChewieController? _chewieController;
+
+  // دالة تهيئة الفيديو (تستدعى عند تحميل البيانات)
+  Future<void> _initializeVideoPlayer(String videoUrl) async {
+    if (_videoPlayerController != null) return; // تم التهيئة مسبقاً
+
+    _videoPlayerController = VideoPlayerController.networkUrl(
+      Uri.parse(videoUrl),
+    );
+    await _videoPlayerController!.initialize();
+
+    setState(() {
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController!,
+        autoPlay: false,
+        looping: false,
+        aspectRatio: _videoPlayerController!.value.aspectRatio,
+        errorBuilder: (context, errorMessage) {
+          return const Center(
+            child: Text(
+              'فشل تحميل الفيديو',
+              style: TextStyle(color: Colors.white),
+            ),
+          );
+        },
+      );
+    });
+  }
 
   @override
   void initState() {
@@ -386,6 +422,12 @@ $description
           final currency = property['currency'] ?? 'ر.س';
           final description = property['description'] ?? 'لا يوجد وصف.';
           final imageUrls = property['imageUrls'] as List<dynamic>? ?? [];
+          // تهيئة الفيديو إذا وجد
+          final videoUrl = property['videoUrl'] as String?;
+          if (videoUrl != null && _chewieController == null) {
+            _initializeVideoPlayer(videoUrl);
+          }
+
           final category = property['category'] ?? 'غير محدد';
           final floor = property['floor'];
           final rooms = property['rooms'];
@@ -411,27 +453,50 @@ $description
                       ? PageView.builder(
                           itemCount: imageUrls.length,
                           itemBuilder: (ctx, index) {
-                            return CachedNetworkImage(
-                              imageUrl: imageUrls[index],
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                              errorWidget: (context, url, error) => const Icon(
-                                Icons.broken_image,
-                                size: 48,
-                                color: Colors.grey,
+                            return GestureDetector(
+                              onTap: () {
+                                // فتح المعرض عند الضغط
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => FullScreenGallery(
+                                      imageUrls: imageUrls,
+                                      initialIndex: index,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  CachedNetworkImage(
+                                    imageUrl: imageUrls[index],
+                                    fit: BoxFit.cover,
+                                  ),
+                                  // تلميح للمستخدم أن الصورة قابلة للتكبير
+                                  Positioned(
+                                    bottom: 10,
+                                    right: 10,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(
+                                        Icons.fullscreen,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             );
                           },
                         )
                       : Container(
                           color: Colors.grey[300],
-                          child: const Icon(
-                            Icons.house,
-                            size: 48,
-                            color: Colors.grey,
-                          ),
+                          child: const Icon(Icons.house, size: 48),
                         ),
                 ),
                 actions: [
@@ -565,6 +630,60 @@ $description
                         ),
 
                         const SizedBox(height: 20),
+
+                        // --- قسم الفيديو ---
+                        if (videoUrl != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.videocam_rounded,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.secondary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'جولة فيديو',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    height: 250,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: _chewieController != null
+                                        ? Chewie(controller: _chewieController!)
+                                        : const Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
 
                         // بطاقات المعلومات
                         Wrap(
