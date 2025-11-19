@@ -8,15 +8,23 @@ import 'firebase_options.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:aqar_app/config/theme_controller.dart';
+// --- استيراد مكتبات التعريب ---
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:form_builder_validators/localization/l10n.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.initialize();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // تفعيل AppCheck (تأكد من أن المفتاح صحيح في Console)
   await FirebaseAppCheck.instance.activate(
-    webProvider: ReCaptchaV3Provider('recaptcha-v3-site-key'),
-    androidProvider: AndroidProvider.playIntegrity,
+    // استخدم debugProvider أثناء التطوير لتجنب المشاكل في المحاكي
+    androidProvider: AndroidProvider.debug,
+    appleProvider: AppleProvider.debug,
+    // عند الرفع للإنتاج غيرها إلى: AndroidProvider.playIntegrity
   );
+
   runApp(const AqarApp());
 }
 
@@ -43,10 +51,24 @@ class AqarApp extends StatelessWidget {
               debugShowCheckedModeBanner: false,
               title: 'عقار بلص',
               themeMode: mode,
+
+              // --- إعدادات اللغة العربية ---
+              locale: const Locale('ar'), // إجبار التطبيق على البدء بالعربية
+              supportedLocales: const [Locale('ar'), Locale('en')],
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+                FormBuilderLocalizations
+                    .delegate, // تعريب رسائل التحقق في النماذج
+              ],
+
+              // ---------------------------
               theme: FlexThemeData.light(
                 useMaterial3: true,
                 colorScheme: lightScheme,
-                textTheme: GoogleFonts.cairoTextTheme(),
+                textTheme:
+                    GoogleFonts.cairoTextTheme(), // خط القاهرة الممتاز للعربية
                 visualDensity: VisualDensity.standard,
               ),
               darkTheme: FlexThemeData.dark(

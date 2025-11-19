@@ -25,11 +25,11 @@ class MyPropertiesScreen extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const PropertiesListSkeleton();
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('لم تقم بإضافة أي عقارات بعد.'));
-        }
         if (snapshot.hasError) {
           return const Center(child: Text('حدث خطأ ما!'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('لم تقم بإضافة أي عقارات بعد.'));
         }
         final properties = snapshot.data!.docs;
         return PropertiesList(properties: properties);

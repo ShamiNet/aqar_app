@@ -13,69 +13,28 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
-  Stream<QuerySnapshot>? _resultsStream;
 
-  // Filter state
+  // القيم الافتراضية للفلاتر
   String? _selectedCategory;
-  RangeValues _priceRange = const RangeValues(0, 5000000);
+  RangeValues _priceRange = const RangeValues(
+    0,
+    10000000,
+  ); // رفعنا الحد الأعلى لضمان شمول العقارات الغالية
   int _minRooms = 0;
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_updateQuery);
+    // الاستماع لتغييرات النص لتحديث الواجهة فوراً
+    _searchController.addListener(() {
+      setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  void _updateQuery() {
-    final searchQuery = _searchController.text;
-
-    if (searchQuery.isEmpty &&
-        _selectedCategory == null &&
-        _minRooms == 0 &&
-        _priceRange.start == 0 &&
-        _priceRange.end == 5000000) {
-      setState(() {
-        _resultsStream = null;
-      });
-      return;
-    }
-
-    Query query = FirebaseFirestore.instance.collection('properties');
-
-    if (searchQuery.isNotEmpty) {
-      query = query
-          .where('title', isGreaterThanOrEqualTo: searchQuery)
-          .where('title', isLessThanOrEqualTo: '$searchQuery\uf8ff');
-    }
-
-    if (_selectedCategory != null) {
-      query = query.where('category', isEqualTo: _selectedCategory);
-    }
-
-    if (_minRooms > 0) {
-      query = query.where('rooms', isGreaterThanOrEqualTo: _minRooms);
-    }
-
-    // Price range query - can only be on one field
-    query = query.where('price', isGreaterThanOrEqualTo: _priceRange.start);
-    query = query.where('price', isLessThanOrEqualTo: _priceRange.end);
-
-    // Order by price when a price range is active, otherwise by title
-    if (_priceRange.start > 0 || _priceRange.end < 5000000) {
-      query = query.orderBy('price');
-    } else if (searchQuery.isNotEmpty) {
-      query = query.orderBy('title');
-    }
-
-    setState(() {
-      _resultsStream = query.snapshots();
-    });
   }
 
   void _showFilterDialog() async {
@@ -93,20 +52,34 @@ class _SearchScreenState extends State<SearchScreen> {
         _selectedCategory = result['category'];
         _priceRange = result['priceRange'];
         _minRooms = result['rooms'];
-        _updateQuery();
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 1. بناء الاستعلام الأساسي (Server-Side Filtering)
+    // نفلتر بالسعر والتصنيف على السيرفر لأنها بيانات مهيكلة
+    Query query = FirebaseFirestore.instance.collection('properties');
+
+    if (_selectedCategory != null) {
+      query = query.where('category', isEqualTo: _selectedCategory);
+    }
+
+    // تصفية السعر على السيرفر
+    // ملاحظة: عند استخدام فلترة بالنطاق، يجب الترتيب بنفس الحقل
+    query = query
+        .where('price', isGreaterThanOrEqualTo: _priceRange.start)
+        .where('price', isLessThanOrEqualTo: _priceRange.end)
+        .orderBy('price');
+
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _searchController,
           autofocus: true,
           decoration: InputDecoration(
-            hintText: 'ابحث عن عقار...',
+            hintText: 'ابحث عن عقار (العنوان)...',
             border: InputBorder.none,
             hintStyle: TextStyle(
               color: Colors.white.withAlpha((255 * 0.8).round()),
@@ -118,40 +91,87 @@ class _SearchScreenState extends State<SearchScreen> {
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: _showFilterDialog,
+            tooltip: 'تصفية النتائج',
           ),
           if (_searchController.text.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.clear),
               onPressed: () {
                 _searchController.clear();
+                // يمكن أيضاً إعادة تعيين الفلاتر هنا إذا أردت
               },
             ),
         ],
       ),
-      body: _resultsStream == null
-          ? const Center(child: Text('ابدأ بالكتابة أو استخدم الفلتر للبحث.'))
-          : StreamBuilder<QuerySnapshot>(
-              stream: _resultsStream,
-              builder: (ctx, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const PropertiesListSkeleton();
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'حدث خطأ. قد تحتاج إلى إنشاء فهارس Firestore.\n${snapshot.error}',
-                    ),
-                  );
-                }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
-                    child: Text('لا توجد عقارات مطابقة للبحث.'),
-                  );
-                }
-                final properties = snapshot.data!.docs;
-                return PropertiesList(properties: properties);
-              },
-            ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: query.snapshots(),
+        builder: (ctx, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const PropertiesListSkeleton();
+          }
+
+          if (snapshot.hasError) {
+            debugPrint('Search Error: ${snapshot.error}');
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'حدث خطأ في البحث.\nتأكد من وجود الفهارس (Indexes) في Firebase Console إذا ظهر رابط في السجلات.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text('لا توجد عقارات ضمن نطاق السعر والتصنيف المحددين.'),
+            );
+          }
+
+          // 2. التصفية المتقدمة (Client-Side Filtering)
+          // نقوم بتصفية العنوان وعدد الغرف هنا لتجنب قيود Firestore
+          final searchQuery = _searchController.text.trim().toLowerCase();
+
+          final filteredProperties = snapshot.data!.docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+
+            // تصفية العنوان (بحث ذكي يحتوي على النص)
+            final title = (data['title'] ?? '').toString().toLowerCase();
+            final matchesSearch =
+                searchQuery.isEmpty || title.contains(searchQuery);
+
+            // تصفية عدد الغرف
+            // نحول القيمة لرقم للتأكد من المقارنة الصحيحة
+            final rooms = int.tryParse(data['rooms'].toString()) ?? 0;
+            final matchesRooms = _minRooms == 0 || rooms >= _minRooms;
+
+            return matchesSearch && matchesRooms;
+          }).toList();
+
+          if (filteredProperties.isEmpty) {
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.search_off, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  'لا توجد نتائج مطابقة لـ "$searchQuery"',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                if (_minRooms > 0)
+                  Text(
+                    'مع حد أدنى $_minRooms غرف',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+              ],
+            );
+          }
+
+          return PropertiesList(properties: filteredProperties);
+        },
+      ),
     );
   }
 }

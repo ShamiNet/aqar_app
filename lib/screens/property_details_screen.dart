@@ -3,7 +3,7 @@ import 'package:aqar_app/screens/chat_messages_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+// تم إزالة مكتبة Firebase Storage لأننا نستخدم Cloudinary
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -45,10 +45,15 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     if (_currentUser == null) return;
     final property = await _propertyFuture;
     if (!property.exists) return;
-    final propertyUserId = (property.data() as Map<String, dynamic>)['userId'];
-    setState(() {
-      _isOwner = _currentUser!.uid == propertyUserId;
-    });
+    final data = property.data();
+    if (data != null &&
+        data is Map<String, dynamic> &&
+        data.containsKey('userId')) {
+      final propertyUserId = data['userId'];
+      setState(() {
+        _isOwner = _currentUser!.uid == propertyUserId;
+      });
+    }
   }
 
   void _checkIfFavorited() async {
@@ -124,6 +129,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('حذف'),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
           ),
         ],
       ),
@@ -138,24 +144,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 
     debugPrint('[PropertyDetailsScreen] _deleteProperty: Deletion confirmed.');
     try {
-      final property = await _propertyFuture;
-      final imageUrls =
-          (property.data() as Map<String, dynamic>)['imageUrls']
-              as List<dynamic>?;
-
-      debugPrint(
-        '[PropertyDetailsScreen] _deleteProperty: Deleting images from storage.',
-      );
-      if (imageUrls != null) {
-        for (final url in imageUrls) {
-          try {
-            await FirebaseStorage.instance.refFromURL(url).delete();
-          } catch (e) {
-            // Log the error but continue. The file might already be deleted.
-            debugPrint('Failed to delete image from storage: $url, error: $e');
-          }
-        }
-      }
+      // ملاحظة: تم إزالة كود حذف الصور لأن الروابط من Cloudinary
+      // ومحاولة حذفها باستخدام Firebase SDK تسبب انهيار التطبيق.
+      // سنكتفي بحذف وثيقة العقار من Firestore.
 
       debugPrint(
         '[PropertyDetailsScreen] _deleteProperty: Deleting document from Firestore.',
@@ -169,7 +160,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       debugPrint(
         '[PropertyDetailsScreen] _deleteProperty: Deletion successful. Navigating back.',
       );
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(); // العودة للصفحة السابقة
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تم حذف العقار بنجاح.')));
@@ -212,39 +203,60 @@ $description
       '[PropertyDetailsScreen] _startOrOpenChat: Initiating chat with owner.',
     );
     final ownerId = propertyData['userId'];
+    // تأكد من تغيير معرف الأدمن هذا بمعرف حقيقي إذا لزم الأمر
+    const adminId = 'QzX6w0qA8vflx5oGM3jW4GgW2BC2';
+
     if (_currentUser == null || _currentUser!.uid == ownerId) {
       return;
     }
 
     final currentUser = _currentUser!;
+
+    final requiredParticipants = [currentUser.uid, ownerId, adminId];
+    final uniqueParticipants = requiredParticipants.toSet().toList();
+
+    // تحسين: البحث عن المحادثة بدقة أكبر
     final chatQuery = await FirebaseFirestore.instance
         .collection('chats')
+        .where('propertyId', isEqualTo: widget.propertyId)
         .where('participants', arrayContains: currentUser.uid)
         .get();
 
     DocumentSnapshot? existingChat;
-    final potentialChats = chatQuery.docs.where((doc) {
-      final participants = List<String>.from(doc['participants']);
-      return participants.contains(ownerId);
-    });
-    if (potentialChats.isNotEmpty) existingChat = potentialChats.first;
 
-    final chat = existingChat;
-    if (chat != null) {
+    for (final doc in chatQuery.docs) {
+      final participants = List<String>.from(doc['participants']);
+      // نتأكد أن المالك موجود أيضاً في المحادثة
+      if (participants.contains(ownerId)) {
+        existingChat = doc;
+        break;
+      }
+    }
+
+    if (existingChat != null) {
       debugPrint(
-        '[PropertyDetailsScreen] _startOrOpenChat: Existing chat found: ${chat.id}.',
+        '[PropertyDetailsScreen] _startOrOpenChat: Existing chat found: ${existingChat.id}.',
       );
-      final ownerData = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(ownerId)
-          .get();
-      final ownerName = ownerData.data()?['username'] ?? 'مستخدم';
+
+      // جلب اسم المالك لعرضه في المحادثة
+      String ownerName = 'المعلن';
+      try {
+        final ownerData = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(ownerId)
+            .get();
+        if (ownerData.exists) {
+          ownerName = ownerData.data()?['username'] ?? 'المعلن';
+        }
+      } catch (e) {
+        debugPrint('Error fetching owner name: $e');
+      }
 
       if (!mounted) return;
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (ctx) => ChatMessagesScreen(
-            chatId: chat.id,
+            chatId: existingChat!.id,
             recipientId: ownerId,
             recipientName: ownerName,
           ),
@@ -254,27 +266,50 @@ $description
       debugPrint(
         '[PropertyDetailsScreen] _startOrOpenChat: No existing chat. Creating new one.',
       );
-      final ownerData = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(ownerId)
-          .get();
-      final ownerName = ownerData.data()?['username'] ?? 'مستخدم';
-      final currentUserData = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final currentUserName = currentUserData.data()?['username'] ?? 'مستخدم';
+
+      // جلب الأسماء لإنشاء المحادثة
+      String ownerName = 'المعلن';
+      String currentUserName = currentUser.displayName ?? 'مستخدم';
+      String adminName = 'الإدارة';
+
+      try {
+        final ownerDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(ownerId)
+            .get();
+        if (ownerDoc.exists)
+          ownerName = ownerDoc.data()?['username'] ?? 'المعلن';
+
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        if (userDoc.exists)
+          currentUserName = userDoc.data()?['username'] ?? currentUserName;
+
+        // (اختياري) جلب اسم الأدمن
+      } catch (e) {
+        debugPrint('Error fetching names: $e');
+      }
+
+      final imageUrls = propertyData['imageUrls'] as List<dynamic>? ?? [];
+      final propertyImageUrl = imageUrls.isNotEmpty ? imageUrls.first : null;
 
       final newChatRef = await FirebaseFirestore.instance
           .collection('chats')
           .add({
-            'participants': [currentUser.uid, ownerId],
+            'participants': uniqueParticipants,
             'participantNames': {
               currentUser.uid: currentUserName,
               ownerId: ownerName,
+              if (![currentUser.uid, ownerId].contains(adminId))
+                adminId: adminName,
             },
             'lastMessage': '',
             'lastMessageTimestamp': Timestamp.now(),
+            'propertyId': widget.propertyId,
+            'propertyTitle': propertyData['title'] ?? 'بدون عنوان',
+            'propertyImageUrl': propertyImageUrl,
           });
 
       if (!mounted) return;
@@ -294,9 +329,11 @@ $description
     debugPrint('[PropertyDetailsScreen] _launchMapsUrl: Opening maps app.');
     final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lon';
     if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } else {
-      throw 'Could not launch $url';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('لا يمكن فتح الخرائط.')));
     }
   }
 
@@ -310,6 +347,8 @@ $description
         return Icons.apartment_rounded;
       case 'ارض':
         return Icons.landscape_rounded;
+      case 'دكان':
+        return Icons.store_rounded;
       default:
         return Icons.home_rounded;
     }
@@ -348,8 +387,8 @@ $description
           final description = property['description'] ?? 'لا يوجد وصف.';
           final imageUrls = property['imageUrls'] as List<dynamic>? ?? [];
           final category = property['category'] ?? 'غير محدد';
-          final floor = property['floor'] ?? 0;
-          final rooms = property['rooms'] ?? 0;
+          final floor = property['floor'];
+          final rooms = property['rooms'];
           final area = property['area'] ?? 0.0;
           final String? propertyType = property['propertyType'] as String?;
           final location = property['location'] as GeoPoint?;
@@ -411,13 +450,23 @@ $description
                   if (_isOwner)
                     IconButton(
                       onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (ctx) => EditPropertyScreen(
-                              propertyId: widget.propertyId,
-                            ),
-                          ),
-                        );
+                        Navigator.of(context)
+                            .push(
+                              MaterialPageRoute(
+                                builder: (ctx) => EditPropertyScreen(
+                                  propertyId: widget.propertyId,
+                                ),
+                              ),
+                            )
+                            .then((_) {
+                              // تحديث الصفحة بعد العودة من التعديل
+                              setState(() {
+                                _propertyFuture = FirebaseFirestore.instance
+                                    .collection('properties')
+                                    .doc(widget.propertyId)
+                                    .get();
+                              });
+                            });
                       },
                       icon: const Icon(Icons.edit),
                     ),
@@ -435,7 +484,7 @@ $description
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // بطاقة عنوان + سعر بتدرج جميل
+                        // بطاقة العنوان والسعر
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(20),
@@ -497,7 +546,7 @@ $description
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      '${price.toStringAsFixed(2)} $currency',
+                                      '${price.toStringAsFixed(0)} $currency',
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleLarge
@@ -517,7 +566,7 @@ $description
 
                         const SizedBox(height: 20),
 
-                        // بطاقات معلومات (نوع، طابق، غرف، مساحة)
+                        // بطاقات المعلومات
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,
@@ -529,33 +578,36 @@ $description
                               category,
                               Colors.blue,
                             ),
-                            _buildInfoCard(
-                              context,
-                              Icons.stairs,
-                              'الطابق',
-                              '$floor',
-                              Colors.purple,
-                            ),
-                            _buildInfoCard(
-                              context,
-                              Icons.meeting_room,
-                              'الغرف',
-                              '$rooms',
-                              Colors.teal,
-                            ),
-                            _buildInfoCard(
-                              context,
-                              Icons.area_chart,
-                              'المساحة',
-                              '$area م²',
-                              Colors.orange,
-                            ),
+                            if (floor != null && floor != 0)
+                              _buildInfoCard(
+                                context,
+                                Icons.stairs,
+                                'الطابق',
+                                '$floor',
+                                Colors.purple,
+                              ),
+                            if (rooms != null && rooms != 0)
+                              _buildInfoCard(
+                                context,
+                                Icons.meeting_room,
+                                'الغرف',
+                                '$rooms',
+                                Colors.teal,
+                              ),
+                            if (area > 0)
+                              _buildInfoCard(
+                                context,
+                                Icons.area_chart,
+                                'المساحة',
+                                '$area م²',
+                                Colors.orange,
+                              ),
                           ],
                         ),
 
                         const SizedBox(height: 20),
 
-                        // وصف داخل بطاقة جميلة
+                        // الوصف
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
@@ -595,6 +647,7 @@ $description
                           ),
                         ),
 
+                        // الموقع
                         if (location != null) ...[
                           const SizedBox(height: 20),
                           Container(
@@ -681,9 +734,9 @@ $description
                           ),
                         ],
 
+                        // زر التواصل
                         if (!_isOwner && _currentUser != null) ...[
                           const SizedBox(height: 24),
-                          // زر تواصل بتدرج جميل
                           SizedBox(
                             width: double.infinity,
                             height: 56,
