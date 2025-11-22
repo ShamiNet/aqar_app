@@ -1,10 +1,11 @@
 import 'package:aqar_app/screens/edit_property_screen.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
+import 'package:aqar_app/screens/public_profile_screen.dart';
 import 'package:aqar_app/widgets/full_screen_gallery.dart';
+import 'package:aqar_app/widgets/verified_badge.dart'; // <--- 1. استيراد الشارة
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-// تم إزالة مكتبة Firebase Storage لأننا نستخدم Cloudinary
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -34,9 +35,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
 
-  // دالة تهيئة الفيديو (تستدعى عند تحميل البيانات)
+  // دالة تهيئة الفيديو
   Future<void> _initializeVideoPlayer(String videoUrl) async {
-    if (_videoPlayerController != null) return; // تم التهيئة مسبقاً
+    if (_videoPlayerController != null) return;
 
     _videoPlayerController = VideoPlayerController.networkUrl(
       Uri.parse(videoUrl),
@@ -64,9 +65,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    debugPrint(
-      '[PropertyDetailsScreen] initState: Initializing for property ID: ${widget.propertyId}',
-    );
     _currentUser = FirebaseAuth.instance.currentUser;
     _propertyFuture = FirebaseFirestore.instance
         .collection('properties')
@@ -76,8 +74,14 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     _checkIfFavorited();
   }
 
+  @override
+  void dispose() {
+    _videoPlayerController?.dispose();
+    _chewieController?.dispose();
+    super.dispose();
+  }
+
   void _checkOwnership() async {
-    debugPrint('[PropertyDetailsScreen] _checkOwnership: Checking ownership.');
     if (_currentUser == null) return;
     final property = await _propertyFuture;
     if (!property.exists) return;
@@ -93,9 +97,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   void _checkIfFavorited() async {
-    debugPrint(
-      '[PropertyDetailsScreen] _checkIfFavorited: Checking favorite status.',
-    );
     if (_currentUser == null) return;
     final favoriteDoc = await FirebaseFirestore.instance
         .collection('users')
@@ -109,9 +110,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   void _toggleFavorite() async {
-    debugPrint(
-      '[PropertyDetailsScreen] _toggleFavorite: Toggling favorite status.',
-    );
     if (_currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('الرجاء تسجيل الدخول أولاً.')),
@@ -135,23 +133,16 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         name: 'add_to_favorites',
         parameters: {'property_id': widget.propertyId},
       );
-      debugPrint(
-        '[PropertyDetailsScreen] _toggleFavorite: Property added to favorites.',
-      );
     } else {
       await favoriteRef.delete();
       FirebaseAnalytics.instance.logEvent(
         name: 'remove_from_favorites',
         parameters: {'property_id': widget.propertyId},
       );
-      debugPrint(
-        '[PropertyDetailsScreen] _toggleFavorite: Property removed from favorites.',
-      );
     }
   }
 
   void _deleteProperty() async {
-    debugPrint('[PropertyDetailsScreen] _deleteProperty: Delete dialog shown.');
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -171,39 +162,20 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       ),
     );
 
-    if (shouldDelete == null || !shouldDelete) {
-      debugPrint(
-        '[PropertyDetailsScreen] _deleteProperty: Deletion cancelled.',
-      );
-      return;
-    }
+    if (shouldDelete == null || !shouldDelete) return;
 
-    debugPrint('[PropertyDetailsScreen] _deleteProperty: Deletion confirmed.');
     try {
-      // ملاحظة: تم إزالة كود حذف الصور لأن الروابط من Cloudinary
-      // ومحاولة حذفها باستخدام Firebase SDK تسبب انهيار التطبيق.
-      // سنكتفي بحذف وثيقة العقار من Firestore.
-
-      debugPrint(
-        '[PropertyDetailsScreen] _deleteProperty: Deleting document from Firestore.',
-      );
       await FirebaseFirestore.instance
           .collection('properties')
           .doc(widget.propertyId)
           .delete();
 
       if (!mounted) return;
-      debugPrint(
-        '[PropertyDetailsScreen] _deleteProperty: Deletion successful. Navigating back.',
-      );
-      Navigator.of(context).pop(); // العودة للصفحة السابقة
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تم حذف العقار بنجاح.')));
     } catch (e) {
-      debugPrint(
-        '[PropertyDetailsScreen] _deleteProperty: An error occurred: $e',
-      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ أثناء الحذف: ${e.toString()}')),
@@ -212,22 +184,36 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   void _shareProperty(Map<String, dynamic> propertyData) {
-    debugPrint('[PropertyDetailsScreen] _shareProperty: Sharing property.');
     final title = propertyData['title'] ?? 'بدون عنوان';
-    final description = propertyData['description'] ?? 'لا يوجد وصف.';
-    final price = propertyData['price'] ?? 0.0;
+    final priceRaw = propertyData['price'] ?? 0.0;
+    num price = (priceRaw is num)
+        ? priceRaw
+        : (num.tryParse(priceRaw.toString()) ?? 0.0);
     final currency = propertyData['currency'] ?? 'ر.س';
+
+    // 👇👇👇 التعديل هنا: استخدمنا https بدلاً من aqarapp 👇👇👇
+    // هذا الرابط سيظهر باللون الأزرق في واتساب، والأندرويد سيلتقطه ويفتح تطبيقك
+    final String deepLink = 'https://n4yo.com/property/${widget.propertyId}';
+
+    const String storeLink =
+        'https://play.google.com/store/apps/details?id=com.shami313.aqar_app';
 
     final shareText =
         '''
-اطلع على هذا العقار: $title
+🏠 *فرصة عقارية مميزة في عقار بلص*
 
-السعر: ${price.toStringAsFixed(2)} $currency
+📌 *$title*
+💰 *السعر:* ${price.toStringAsFixed(0)} $currency
 
-الوصف:
-$description
+📲 *لفتح العقار في التطبيق مباشرة:*
+$deepLink
+
+📥 *ليس لديك التطبيق؟ حمله من هنا:*
+$storeLink
 ''';
+
     Share.share(shareText);
+
     FirebaseAnalytics.instance.logEvent(
       name: 'share',
       parameters: {'content_type': 'property', 'item_id': widget.propertyId},
@@ -235,23 +221,15 @@ $description
   }
 
   void _startOrOpenChat(Map<String, dynamic> propertyData) async {
-    debugPrint(
-      '[PropertyDetailsScreen] _startOrOpenChat: Initiating chat with owner.',
-    );
     final ownerId = propertyData['userId'];
-    // تأكد من تغيير معرف الأدمن هذا بمعرف حقيقي إذا لزم الأمر
     const adminId = 'QzX6w0qA8vflx5oGM3jW4GgW2BC2';
 
-    if (_currentUser == null || _currentUser!.uid == ownerId) {
-      return;
-    }
+    if (_currentUser == null || _currentUser!.uid == ownerId) return;
 
     final currentUser = _currentUser!;
-
     final requiredParticipants = [currentUser.uid, ownerId, adminId];
     final uniqueParticipants = requiredParticipants.toSet().toList();
 
-    // تحسين: البحث عن المحادثة بدقة أكبر
     final chatQuery = await FirebaseFirestore.instance
         .collection('chats')
         .where('propertyId', isEqualTo: widget.propertyId)
@@ -262,7 +240,6 @@ $description
 
     for (final doc in chatQuery.docs) {
       final participants = List<String>.from(doc['participants']);
-      // نتأكد أن المالك موجود أيضاً في المحادثة
       if (participants.contains(ownerId)) {
         existingChat = doc;
         break;
@@ -270,11 +247,6 @@ $description
     }
 
     if (existingChat != null) {
-      debugPrint(
-        '[PropertyDetailsScreen] _startOrOpenChat: Existing chat found: ${existingChat.id}.',
-      );
-
-      // جلب اسم المالك لعرضه في المحادثة
       String ownerName = 'المعلن';
       try {
         final ownerData = await FirebaseFirestore.instance
@@ -285,7 +257,7 @@ $description
           ownerName = ownerData.data()?['username'] ?? 'المعلن';
         }
       } catch (e) {
-        debugPrint('Error fetching owner name: $e');
+        /* ignore */
       }
 
       if (!mounted) return;
@@ -299,11 +271,6 @@ $description
         ),
       );
     } else {
-      debugPrint(
-        '[PropertyDetailsScreen] _startOrOpenChat: No existing chat. Creating new one.',
-      );
-
-      // جلب الأسماء لإنشاء المحادثة
       String ownerName = 'المعلن';
       String currentUserName = currentUser.displayName ?? 'مستخدم';
       String adminName = 'الإدارة';
@@ -322,10 +289,8 @@ $description
             .get();
         if (userDoc.exists)
           currentUserName = userDoc.data()?['username'] ?? currentUserName;
-
-        // (اختياري) جلب اسم الأدمن
       } catch (e) {
-        debugPrint('Error fetching names: $e');
+        /* ignore */
       }
 
       final imageUrls = propertyData['imageUrls'] as List<dynamic>? ?? [];
@@ -362,7 +327,6 @@ $description
   }
 
   void _launchMapsUrl(double lat, double lon) async {
-    debugPrint('[PropertyDetailsScreen] _launchMapsUrl: Opening maps app.');
     final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lon';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
@@ -390,6 +354,119 @@ $description
     }
   }
 
+  // --- 2. دالة جديدة لبناء بطاقة معلومات البائع ---
+  Widget _buildSellerInfo(
+    BuildContext context,
+    String ownerId,
+    Map<String, dynamic> propertyData,
+  ) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('users').doc(ownerId).get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        final userData = snapshot.data!.data() as Map<String, dynamic>?;
+        final username = userData?['username'] ?? 'المعلن';
+        final userImage = userData?['profileImageUrl'];
+        final isVerified =
+            (userData?['isVerified'] == true) || (userData?['role'] == 'admin');
+
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withOpacity(0.5),
+            ),
+          ),
+          child: Row(
+            children: [
+              // --- جعل الصورة والاسم قابلين للنقر ---
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    // الانتقال للبروفايل العام
+                    // تأكد من استيراد public_profile_screen.dart في الأعلى
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PublicProfileScreen(
+                          userId: ownerId,
+                          userName: username,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: userImage != null
+                            ? CachedNetworkImageProvider(userImage)
+                            : null,
+                        child: userImage == null
+                            ? Text(
+                                username.isNotEmpty
+                                    ? username[0].toUpperCase()
+                                    : '?',
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    username,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isVerified) ...[
+                                  const SizedBox(width: 6),
+                                  const VerifiedBadge(size: 16),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'انقر لعرض الملف الشخصي',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              if (!_isOwner)
+                IconButton.filledTonal(
+                  onPressed: () => _startOrOpenChat(propertyData),
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  tooltip: 'مراسلة',
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -411,18 +488,13 @@ $description
           final property = snapshot.data!.data() as Map<String, dynamic>;
           final title = property['title'] ?? 'بدون عنوان';
           final priceRaw = property['price'] ?? 0.0;
-          num price;
-          if (priceRaw is num) {
-            price = priceRaw;
-          } else if (priceRaw is String) {
-            price = num.tryParse(priceRaw) ?? 0.0;
-          } else {
-            price = 0.0;
-          }
+          num price = (priceRaw is num)
+              ? priceRaw
+              : (num.tryParse(priceRaw.toString()) ?? 0.0);
           final currency = property['currency'] ?? 'ر.س';
           final description = property['description'] ?? 'لا يوجد وصف.';
           final imageUrls = property['imageUrls'] as List<dynamic>? ?? [];
-          // تهيئة الفيديو إذا وجد
+
           final videoUrl = property['videoUrl'] as String?;
           if (videoUrl != null && _chewieController == null) {
             _initializeVideoPlayer(videoUrl);
@@ -445,6 +517,7 @@ $description
 
           return CustomScrollView(
             slivers: [
+              // --- شريط العنوان والصور ---
               SliverAppBar(
                 expandedHeight: 300,
                 pinned: true,
@@ -455,7 +528,6 @@ $description
                           itemBuilder: (ctx, index) {
                             return GestureDetector(
                               onTap: () {
-                                // فتح المعرض عند الضغط
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -473,7 +545,6 @@ $description
                                     imageUrl: imageUrls[index],
                                     fit: BoxFit.cover,
                                   ),
-                                  // تلميح للمستخدم أن الصورة قابلة للتكبير
                                   Positioned(
                                     bottom: 10,
                                     right: 10,
@@ -514,25 +585,22 @@ $description
                     ),
                   if (_isOwner)
                     IconButton(
-                      onPressed: () {
-                        Navigator.of(context)
-                            .push(
-                              MaterialPageRoute(
-                                builder: (ctx) => EditPropertyScreen(
-                                  propertyId: widget.propertyId,
-                                ),
+                      onPressed: () => Navigator.of(context)
+                          .push(
+                            MaterialPageRoute(
+                              builder: (ctx) => EditPropertyScreen(
+                                propertyId: widget.propertyId,
                               ),
-                            )
-                            .then((_) {
-                              // تحديث الصفحة بعد العودة من التعديل
-                              setState(() {
-                                _propertyFuture = FirebaseFirestore.instance
-                                    .collection('properties')
-                                    .doc(widget.propertyId)
-                                    .get();
-                              });
-                            });
-                      },
+                            ),
+                          )
+                          .then(
+                            (_) => setState(() {
+                              _propertyFuture = FirebaseFirestore.instance
+                                  .collection('properties')
+                                  .doc(widget.propertyId)
+                                  .get();
+                            }),
+                          ),
                       icon: const Icon(Icons.edit),
                     ),
                   if (_isOwner)
@@ -542,6 +610,8 @@ $description
                     ),
                 ],
               ),
+
+              // --- محتوى الصفحة ---
               SliverList(
                 delegate: SliverChildListDelegate([
                   Padding(
@@ -631,7 +701,7 @@ $description
 
                         const SizedBox(height: 20),
 
-                        // --- قسم الفيديو ---
+                        // فيديو
                         if (videoUrl != null) ...[
                           Container(
                             width: double.infinity,
@@ -766,9 +836,12 @@ $description
                           ),
                         ),
 
+                        // --- 3. عرض بطاقة البائع الجديدة هنا ---
+                        _buildSellerInfo(context, property['userId'], property),
+
                         // الموقع
                         if (location != null) ...[
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 10),
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(16),
@@ -853,7 +926,7 @@ $description
                           ),
                         ],
 
-                        // زر التواصل
+                        // زر التواصل السفلي الكبير (إبقاءه كخيار إضافي بارز)
                         if (!_isOwner && _currentUser != null) ...[
                           const SizedBox(height: 24),
                           SizedBox(

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.shami313.aqar_app",
+      "sha256_cert_fingerprints": [
+        "3F:B7:B4:73:6C:79:42:82:0E:E3:D8:FB:B2:6D:F4:08:B5:C4:89:00:68:A6:7B:D7:9E:DF:84:C5:57:81:2E:93"
+      ]
+    }
+  }
+]

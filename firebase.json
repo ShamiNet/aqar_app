@@ -1,1 +1,56 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"aqar-app-aca19","appId":"1:405624752300:android:21e936cf52815c67d3f709","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"aqar-app-aca19","configurations":{"android":"1:405624752300:android:21e936cf52815c67d3f709","web":"1:405624752300:web:01b64ff138d2b020d3f709","windows":"1:405624752300:web:5cb6a6f04ee40c3fd3f709"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "aqar-app-aca19",
+          "appId": "1:405624752300:android:21e936cf52815c67d3f709",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "aqar-app-aca19",
+          "configurations": {
+            "android": "1:405624752300:android:21e936cf52815c67d3f709",
+            "web": "1:405624752300:web:01b64ff138d2b020d3f709",
+            "windows": "1:405624752300:web:5cb6a6f04ee40c3fd3f709"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      {
+        "source": "/.well-known/apple-app-site-association",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

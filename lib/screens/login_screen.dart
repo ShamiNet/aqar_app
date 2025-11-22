@@ -187,9 +187,12 @@ class LoginScreen extends StatelessWidget {
       onSignup: _signupUser,
       onRecoverPassword: _recoverPassword,
       onSubmitAnimationCompleted: () {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const TabsScreen()),
-        );
+        // ننتظر نهاية أي إطار رسم حالي
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const TabsScreen()),
+          );
+        });
       },
       userValidator: (value) {
         if (value == null || !value.contains('@')) {

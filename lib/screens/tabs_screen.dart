@@ -5,11 +5,13 @@ import 'package:aqar_app/screens/add_property_screen.dart';
 import 'package:aqar_app/screens/my_properties_screen.dart';
 import 'package:aqar_app/screens/properties_map_screen.dart';
 import 'package:aqar_app/screens/search_screen.dart';
+import 'package:aqar_app/services/notification_service.dart';
 // import 'package:aqar_app/screens/map_legend_screen.dart'; // غير مستخدم هنا مباشرة
 import 'package:flutter/material.dart';
 import 'package:aqar_app/config/theme_controller.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
+import 'package:aqar_app/screens/chats_screen.dart';
 
 class TabsScreen extends StatefulWidget {
   const TabsScreen({super.key});
@@ -26,6 +28,7 @@ class _TabsScreenState extends State<TabsScreen> {
     const HomeScreen(),
     const PropertiesMapScreen(),
     const MyPropertiesScreen(),
+    const ChatsScreen(),
     const FavoritesScreen(),
     const ProfileScreen(),
   ];
@@ -34,6 +37,7 @@ class _TabsScreenState extends State<TabsScreen> {
     'العقارات المتاحة',
     'الخريطة العقارية',
     'عقاراتي',
+    'المحادثات',
     'المفضلة',
     'ملفي الشخصي',
   ];
@@ -80,6 +84,13 @@ class _TabsScreenState extends State<TabsScreen> {
         _selectedIndex = 2; // الانتقال لصفحة "عقاراتي"
       });
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // حفظ التوكن عند بدء الشاشة الرئيسية لضمان استلام الإشعارات
+    NotificationService.saveTokenToFirestore();
   }
 
   @override
@@ -180,6 +191,11 @@ class _TabsScreenState extends State<TabsScreen> {
             Icons.business_outlined,
             size: 30,
             color: _selectedIndex == 2 ? Colors.white : null,
+          ),
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 30,
+            color: _selectedIndex == 3 ? Colors.white : null,
           ),
           Icon(
             Icons.favorite_border,

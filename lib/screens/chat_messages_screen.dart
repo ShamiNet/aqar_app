@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:aqar_app/screens/public_profile_screen.dart';
+import 'package:aqar_app/widgets/full_screen_gallery.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -66,12 +68,10 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
       return;
     }
 
-    // Stop the typing indicator immediately on send
     _typingTimer?.cancel();
     _isTyping = false;
     _updateTypingStatus(false);
     FocusScope.of(context).unfocus();
-    // Clear the controller optimistically. We can restore the text on failure.
     _messageController.clear();
 
     try {
@@ -81,10 +81,9 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
         'senderId': _currentUser!.uid,
       };
 
-      // Use a batch write to ensure atomicity
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. Add message to the messages subcollection
+      // 1. إضافة الرسالة للمجموعة الفرعية
       final messageRef = FirebaseFirestore.instance
           .collection('chats')
           .doc(widget.chatId)
@@ -92,27 +91,29 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
           .doc();
       batch.set(messageRef, messageData);
 
-      // 2. Update the last message in the chat document
+      // 2. تحديث وثيقة المحادثة الرئيسية (هام جداً للإشعارات والقائمة)
       final chatRef = FirebaseFirestore.instance
           .collection('chats')
           .doc(widget.chatId);
+
       batch.update(chatRef, {
         'lastMessage': messageText,
         'lastMessageTimestamp': Timestamp.now(),
+        'lastSenderId': _currentUser!.uid, // <--- 🚨 هذا السطر هو الحل! 🚨
+        // نقوم أيضاً بتحديث مصفوفة المشاركين لضمان ظهور المحادثة للطرفين
+        'participants': FieldValue.arrayUnion([
+          widget.recipientId,
+          _currentUser!.uid,
+        ]),
       });
 
       await batch.commit();
     } catch (e) {
-      debugPrint(
-        '[ChatMessagesScreen] _sendMessage: Error sending message: $e',
-      );
+      debugPrint('Error sending message: $e');
       if (mounted) {
-        _messageController.text = messageText; // Restore text
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('فشل إرسال الرسالة. الرجاء المحاولة مرة أخرى.'),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('فشل إرسال الرسالة.')));
       }
     }
   }
@@ -151,25 +152,71 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
             appBar: AppBar(
               title: Row(
                 children: [
-                  if (propertyImageUrl != null)
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundImage: CachedNetworkImageProvider(
-                        propertyImageUrl,
-                      ),
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                    )
-                  else
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Theme.of(context).colorScheme.surface,
-                      child: Icon(
-                        Icons.house_rounded,
-                        color: Theme.of(context).colorScheme.onSurface,
+                  // 1. معالجة الصورة (فتح بملء الشاشة)
+                  GestureDetector(
+                    onTap: propertyImageUrl != null
+                        ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => FullScreenGallery(
+                                  imageUrls: [propertyImageUrl],
+                                  initialIndex: 0,
+                                ),
+                              ),
+                            );
+                          }
+                        : null,
+                    child: propertyImageUrl != null
+                        ? CircleAvatar(
+                            radius: 20,
+                            backgroundImage: CachedNetworkImageProvider(
+                              propertyImageUrl,
+                            ),
+                          )
+                        : CircleAvatar(
+                            radius: 20,
+                            child: Icon(
+                              Icons.home,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // 2. معالجة الاسم (فتح البروفايل)
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PublicProfileScreen(
+                              userId: widget.recipientId,
+                              userName: widget.recipientName,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.recipientName,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          if (isRecipientTyping)
+                            const Text(
+                              'يكتب...',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  const SizedBox(width: 12),
-                  Text(widget.recipientName),
+                  ),
                 ],
               ),
             ),

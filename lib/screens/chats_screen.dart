@@ -19,7 +19,7 @@ class ChatsScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('المحادثات'), centerTitle: true),
+      // appBar: AppBar(title: const Text('المحادثات'), centerTitle: true),
       body: StreamBuilder<QuerySnapshot>(
         // جلب المحادثات التي يكون المستخدم الحالي أحد المشاركين فيها
         stream: FirebaseFirestore.instance
