@@ -59,288 +59,333 @@ class PropertiesList extends StatelessWidget {
         final String? subscriptionPeriod =
             property['subscriptionPeriod'] as String?;
 
-        return InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (ctx) => PropertyDetailsScreen(propertyId: propertyId),
+        return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
               ),
-            );
-          },
-          child:
-              Card(
-                    margin: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 8,
+              elevation: 5,
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) =>
+                          PropertyDetailsScreen(propertyId: propertyId),
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    elevation: 5,
-                    child: Stack(
-                      children: [
-                        // Image
-                        imageUrls != null && imageUrls.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: imageUrls.first,
-                                height: 230,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  height: 230,
-                                  color: Colors.grey[300],
-                                  child: const Icon(
-                                    Icons.broken_image,
-                                    size: 48,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                height: 200,
-                                color: Colors.grey[300],
-                                child: const Icon(
-                                  Icons.house,
-                                  size: 48,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                        // Gradient Overlay
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.black.withAlpha((255 * 0.6).round()),
-                                  Colors.transparent,
-                                  Colors.transparent,
-                                  Colors.black.withAlpha((255 * 0.8).round()),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: const [0, 0.2, 0.6, 1.0],
+                  );
+                },
+                child: Stack(
+                  children: [
+                    // Image
+                    imageUrls != null && imageUrls.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: imageUrls.first,
+                            height: 230,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              height: 230,
+                              color: Colors.grey[300],
+                              child: const Icon(
+                                Icons.broken_image,
+                                size: 48,
+                                color: Colors.grey,
                               ),
                             ),
+                          )
+                        : Container(
+                            height: 200,
+                            color: Colors.grey[300],
+                            child: const Icon(
+                              Icons.house,
+                              size: 48,
+                              color: Colors.grey,
+                            ),
                           ),
-                        ),
-                        // Badges Row (Category, Discount, Featured)
-                        Positioned(
-                          top: 12,
-                          right: 12,
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (category != null)
-                                _ClickableBadge(
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (ctx) =>
-                                            FilteredPropertiesScreen(
-                                              filterTitle: 'عقارات $category',
-                                              filterType: 'category',
-                                              filterValue: category,
-                                            ),
-                                      ),
-                                    );
-                                  },
-                                  child: _Badge(
-                                    icon: category == 'بيع'
-                                        ? Icons.sell_outlined
-                                        : Icons.key,
-                                    label: category,
-                                    background: category == 'بيع'
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.errorContainer
-                                        : Theme.of(
-                                            context,
-                                          ).colorScheme.primaryContainer,
-                                    foreground: category == 'بيع'
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.onErrorContainer
-                                        : Theme.of(
-                                            context,
-                                          ).colorScheme.onPrimaryContainer,
-                                  ),
-                                ),
-                              if (discountPercent > 0)
-                                _ClickableBadge(
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (ctx) =>
-                                            const FilteredPropertiesScreen(
-                                              filterTitle: 'عقارات عليها خصم',
-                                              filterType: 'hasDiscount',
-                                              filterValue: true,
-                                            ),
-                                      ),
-                                    );
-                                  },
-                                  child: _Badge(
-                                    icon: Icons.local_offer_outlined,
-                                    label: '-$discountPercent%',
-                                    background: Theme.of(
-                                      context,
-                                    ).colorScheme.secondaryContainer,
-                                    foreground: Theme.of(
-                                      context,
-                                    ).colorScheme.onSecondaryContainer,
-                                  ),
-                                ),
-                              if (isFeatured)
-                                _ClickableBadge(
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (ctx) =>
-                                            const FilteredPropertiesScreen(
-                                              filterTitle: 'عقارات مميزة',
-                                              filterType: 'isFeatured',
-                                              filterValue: true,
-                                            ),
-                                      ),
-                                    );
-                                  },
-                                  child: _Badge(
-                                    icon: Icons.star,
-                                    label: 'مميز',
-                                    background: Theme.of(
-                                      context,
-                                    ).colorScheme.tertiaryContainer,
-                                    foreground: Theme.of(
-                                      context,
-                                    ).colorScheme.onTertiaryContainer,
-                                  ),
-                                ),
+                    // Gradient Overlay
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.black.withAlpha((255 * 0.6).round()),
+                              Colors.transparent,
+                              Colors.transparent,
+                              Colors.black.withAlpha((255 * 0.8).round()),
                             ],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0, 0.2, 0.6, 1.0],
                           ),
                         ),
-                        // Text Content + Info Chips within a fancy glass container
-                        Positioned(
-                          bottom: 16,
-                          right: 16,
-                          left: 16,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                      ),
+                    ),
+                    // Badges Row (Category, Discount, Featured)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (category != null)
+                            _ClickableBadge(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (ctx) => FilteredPropertiesScreen(
+                                      filterTitle: 'عقارات $category',
+                                      filterType: 'category',
+                                      filterValue: category,
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: _Badge(
+                                icon: category == 'بيع'
+                                    ? Icons.sell_outlined
+                                    : Icons.key,
+                                label: category,
+                                background: category == 'بيع'
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.errorContainer
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.primaryContainer,
+                                foreground: category == 'بيع'
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.onErrorContainer
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimaryContainer,
+                              ),
                             ),
-                            decoration: BoxDecoration(
+                          if (discountPercent > 0)
+                            _ClickableBadge(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (ctx) =>
+                                        const FilteredPropertiesScreen(
+                                          filterTitle: 'عقارات عليها خصم',
+                                          filterType: 'hasDiscount',
+                                          filterValue: true,
+                                        ),
+                                  ),
+                                );
+                              },
+                              child: _Badge(
+                                icon: Icons.local_offer_outlined,
+                                label: '-$discountPercent%',
+                                background: Theme.of(
+                                  context,
+                                ).colorScheme.secondaryContainer,
+                                foreground: Theme.of(
+                                  context,
+                                ).colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                          if (isFeatured)
+                            _ClickableBadge(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (ctx) =>
+                                        const FilteredPropertiesScreen(
+                                          filterTitle: 'عقارات مميزة',
+                                          filterType: 'isFeatured',
+                                          filterValue: true,
+                                        ),
+                                  ),
+                                );
+                              },
+                              child: _Badge(
+                                icon: Icons.star,
+                                label: 'مميز',
+                                background: Theme.of(
+                                  context,
+                                ).colorScheme.tertiaryContainer,
+                                foreground: Theme.of(
+                                  context,
+                                ).colorScheme.onTertiaryContainer,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Text Content + Info Chips within a fancy glass container
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      left: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surface.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withOpacity(0.06),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.22),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            // The price is already shown in the top-left bubble, so this can be removed to avoid redundancy.
+                            // Text(
+                            //   '${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} $currency',
+                            //   style: Theme.of(context).textTheme.titleMedium
+                            //       ?.copyWith(
+                            //         color: Theme.of(
+                            //           context,
+                            //         ).colorScheme.primary,
+                            //         fontWeight: FontWeight.bold,
+                            //       ),
+                            // ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (rooms > 0)
+                                  _InfoChip(
+                                    icon: Icons.timer_outlined,
+                                    label: '$subscriptionPeriod',
+                                    accent: Colors.cyan,
+                                  ),
+                                if (rooms > 0)
+                                  _InfoChip(
+                                    icon: Icons.meeting_room,
+                                    label: '$rooms غرفة',
+                                    accent: Colors.teal,
+                                  ),
+                                if (area > 0)
+                                  _InfoChip(
+                                    icon: Icons.area_chart,
+                                    label: '${area.toString()} م²',
+                                    accent: Colors.orange,
+                                  ),
+                                if (floor != null && propertyType != 'ارض')
+                                  _InfoChip(
+                                    icon: Icons.stairs,
+                                    label: 'طابق $floor',
+                                    accent: Colors.purple,
+                                  ),
+                                if (hasMultipleImages)
+                                  _InfoChip(
+                                    icon: Icons.collections,
+                                    label: '${imageUrls.length} صور',
+                                    accent: Colors.blue,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // price bubble overlay (top-left)
+                    Positioned(
+                      top: 8,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Theme.of(context).colorScheme.primary,
+                              Theme.of(context).colorScheme.secondary,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
                               color: Theme.of(
                                 context,
-                              ).colorScheme.surface.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withOpacity(0.06),
-                                width: 1.2,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.22),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
+                              ).colorScheme.primary.withOpacity(0.28),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 6),
-                                // The price is already shown in the top-left bubble, so this can be removed to avoid redundancy.
-                                // Text(
-                                //   '${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} $currency',
-                                //   style: Theme.of(context).textTheme.titleMedium
-                                //       ?.copyWith(
-                                //         color: Theme.of(
-                                //           context,
-                                //         ).colorScheme.primary,
-                                //         fontWeight: FontWeight.bold,
-                                //       ),
-                                // ),
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    if (rooms > 0)
-                                      _InfoChip(
-                                        icon: Icons.timer_outlined,
-                                        label: '$subscriptionPeriod',
-                                        accent: Colors.cyan,
-                                      ),
-                                    if (rooms > 0)
-                                      _InfoChip(
-                                        icon: Icons.meeting_room,
-                                        label: '$rooms غرفة',
-                                        accent: Colors.teal,
-                                      ),
-                                    if (area > 0)
-                                      _InfoChip(
-                                        icon: Icons.area_chart,
-                                        label: '${area.toString()} م²',
-                                        accent: Colors.orange,
-                                      ),
-                                    if (floor != null && propertyType != 'ارض')
-                                      _InfoChip(
-                                        icon: Icons.stairs,
-                                        label: 'طابق $floor',
-                                        accent: Colors.purple,
-                                      ),
-                                    if (hasMultipleImages)
-                                      _InfoChip(
-                                        icon: Icons.collections,
-                                        label: '${imageUrls.length} صور',
-                                        accent: Colors.blue,
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
+                          ],
                         ),
-                        // price bubble overlay (top-left)
-                        Positioned(
-                          top: 8,
-                          left: 12,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.currency_exchange_outlined,
+                              size: 19,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} $currency',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // featured ribbon
+                    if (isFeatured)
+                      Positioned(
+                        bottom: 12,
+                        right: -32,
+                        child: Transform.rotate(
+                          angle: -0.90, // -45 degrees
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                              horizontal: 26,
+                              vertical: 6,
                             ),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  Theme.of(context).colorScheme.primary,
-                                  Theme.of(context).colorScheme.secondary,
+                                  Colors.amber.shade700,
+                                  Colors.orange.shade800,
                                 ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withOpacity(0.28),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
+                                  color: Colors.amber.withOpacity(0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
                                 ),
                               ],
                             ),
@@ -348,13 +393,13 @@ class PropertiesList extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(
-                                  Icons.currency_exchange_outlined,
-                                  size: 19,
+                                  Icons.star,
+                                  size: 14,
                                   color: Colors.white,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  '${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} $currency',
+                                  'مميز',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -364,69 +409,20 @@ class PropertiesList extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // featured ribbon
-                        if (isFeatured)
-                          Positioned(
-                            bottom: 12,
-                            right: -32,
-                            child: Transform.rotate(
-                              angle: -0.90, // -45 degrees
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 26,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.amber.shade700,
-                                      Colors.orange.shade800,
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.amber.withOpacity(0.3),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.star,
-                                      size: 14,
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'مميز',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  )
-                  .animate()
-                  .scaleXY(
-                    begin: 0.98,
-                    end: 1.0,
-                    duration: 420.ms,
-                    curve: Curves.easeOut,
-                  )
-                  .fade(duration: 500.ms)
-                  .slideY(begin: 0.26, duration: 400.ms, curve: Curves.easeOut),
-        );
+                      ),
+                  ],
+                ),
+              ),
+            )
+            .animate()
+            .scaleXY(
+              begin: 0.98,
+              end: 1.0,
+              duration: 420.ms,
+              curve: Curves.easeOut,
+            )
+            .fade(duration: 500.ms)
+            .slideY(begin: 0.26, duration: 400.ms, curve: Curves.easeOut);
       },
     );
   }

@@ -1,4 +1,6 @@
 import 'package:aqar_app/screens/auth_gate.dart';
+import 'package:aqar_app/screens/property_details_screen.dart'; // لعرض العقار
+import 'package:aqar_app/screens/archived_property_details_screen.dart'; // <-- استيراد
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,7 +20,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    // 👇 جعلنا العدد 4 لإضافة تبويب الأرشيف
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -67,6 +70,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           tabs: const [
             Tab(text: 'نظرة عامة', icon: Icon(Icons.dashboard)),
             Tab(text: 'المستخدمين', icon: Icon(Icons.people)),
+            // 👇 التبويب الجديد
+            Tab(text: 'البلاغات', icon: Icon(Icons.report_problem_outlined)),
+            Tab(text: 'الأرشيف', icon: Icon(Icons.archive_outlined)),
           ],
         ),
         actions: [
@@ -79,11 +85,352 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [_OverviewTab(), _UsersTab()],
+        children: const [
+          _OverviewTab(),
+          _UsersTab(),
+          _ReportsTab(),
+          _ArchiveTab(), // 👇 ويدجت الأرشيف الجديدة
+        ],
       ),
     );
   }
 }
+
+// --- دالة مساعدة لتنسيق الوقت ---
+// تم نقلها هنا لتكون متاحة لكل التبويبات
+String _formatTimestamp(Timestamp? timestamp) {
+  if (timestamp == null) return '';
+  final now = DateTime.now();
+  final date = timestamp.toDate();
+  final diff = now.difference(date);
+
+  if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
+  if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
+  if (diff.inDays < 30) return 'منذ ${diff.inDays} يوم';
+  return '${date.day}/${date.month}/${date.year}';
+}
+
+// --- تبويب البلاغات (جديد) ---
+class _ReportsTab extends StatelessWidget {
+  const _ReportsTab();
+
+  void _dismissReport(String reportId) {
+    FirebaseFirestore.instance.collection('reports').doc(reportId).delete();
+  }
+
+  void _deletePropertyAndReport(
+    BuildContext context,
+    String propertyId,
+    String reportId,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف العقار'),
+        content: const Text(
+          'هل أنت متأكد؟ سيتم حذف العقار نهائياً وإغلاق البلاغ.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('حذف العقار'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final propRef = FirebaseFirestore.instance
+          .collection('properties')
+          .doc(propertyId);
+      final propDoc = await propRef.get();
+
+      if (propDoc.exists) {
+        // --- جلب اسم المدير الحالي ---
+        final adminUser = FirebaseAuth.instance.currentUser;
+        String adminName = 'مدير';
+        if (adminUser != null) {
+          final adminDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(adminUser.uid)
+              .get();
+          if (adminDoc.exists) {
+            adminName = adminDoc.data()?['username'] ?? 'مدير';
+          }
+        }
+        // أرشفة العقار قبل حذفه
+        await FirebaseFirestore.instance.collection('archived_properties').add({
+          ...propDoc.data()!,
+          'originalId': propertyId,
+          'archivedAt': FieldValue.serverTimestamp(),
+          'archiveReason': 'حذف بواسطة المدير بسبب بلاغ',
+          'archivedByUserId': adminUser?.uid, // هوية من قام بالأرشفة
+          'archivedByUserName': adminName, // اسم من قام بالأرشفة
+        });
+        // حذف العقار
+        await propRef.delete();
+      }
+
+      // حذف البلاغ بعد التعامل معه
+      await FirebaseFirestore.instance
+          .collection('reports')
+          .doc(reportId)
+          .delete();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم حذف العقار وإغلاق البلاغ.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('reports')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
+                SizedBox(height: 16),
+                Text('لا توجد بلاغات جديدة!'),
+              ],
+            ),
+          );
+        }
+
+        final reports = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: reports.length,
+          itemBuilder: (ctx, index) {
+            final reportDoc = reports[index];
+            final report = reportDoc.data() as Map<String, dynamic>;
+            final propertyId = report['propertyId'];
+            final reporterId = report['reporterId'] as String?;
+
+            return Card(
+              elevation: 3,
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // رأس البطاقة: السبب
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            report['reason'] ?? 'سبب غير محدد',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          _formatTimestamp(report['timestamp']),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (report['details'] != null &&
+                        report['details'].toString().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '📝 "${report['details']}"',
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ],
+                    const Divider(),
+
+                    // -- معلومات المُبلّغ --
+                    if (reporterId != null && reporterId != 'anonymous')
+                      FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(reporterId)
+                            .get(),
+                        builder: (context, userSnapshot) {
+                          if (!userSnapshot.hasData) {
+                            return const SizedBox(); // لا تظهر شيئاً أثناء التحميل
+                          }
+                          if (!userSnapshot.data!.exists) {
+                            return const Text('المستخدم غير موجود');
+                          }
+                          final userData =
+                              userSnapshot.data!.data() as Map<String, dynamic>;
+                          final username =
+                              userData['username'] ?? 'مستخدم مجهول';
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4.0),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.person_pin_circle_outlined,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'مُقدّم من: ',
+                                  style: TextStyle(color: Colors.grey[700]),
+                                ),
+                                Text(
+                                  username,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    // جلب معلومات العقار المبلغ عنه
+                    FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection('properties')
+                          .doc(propertyId)
+                          .get(),
+                      builder: (context, propSnapshot) {
+                        if (!propSnapshot.hasData) {
+                          return const LinearProgressIndicator();
+                        }
+
+                        if (!propSnapshot.data!.exists) {
+                          return const ListTile(
+                            leading: Icon(
+                              Icons.delete_outline,
+                              color: Colors.grey,
+                            ),
+                            title: Text('العقار محذوف بالفعل'),
+                          );
+                        }
+
+                        final propData =
+                            propSnapshot.data!.data() as Map<String, dynamic>;
+                        final title = propData['title'] ?? 'بدون عنوان';
+                        final img =
+                            (propData['imageUrls'] as List?)?.firstOrNull;
+
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: img != null
+                                ? CachedNetworkImage(
+                                    imageUrl: img,
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    width: 50,
+                                    height: 50,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.home),
+                                  ),
+                          ),
+                          title: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            'ID: $propertyId',
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.visibility,
+                              color: Colors.blue,
+                            ),
+                            tooltip: 'معاينة العقار',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PropertyDetailsScreen(
+                                    propertyId: propertyId,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 8),
+                    // أزرار التحكم
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _dismissReport(reportDoc.id),
+                          icon: const Icon(Icons.close, size: 18),
+                          label: const Text('تجاهل البلاغ'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () => _deletePropertyAndReport(
+                            context,
+                            propertyId,
+                            reportDoc.id,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade50,
+                            foregroundColor: Colors.red,
+                          ),
+                          icon: const Icon(Icons.delete_forever, size: 18),
+                          label: const Text('حذف العقار'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// --- التبويبات القديمة (كما هي) ---
 
 class _OverviewTab extends StatefulWidget {
   const _OverviewTab();
@@ -104,8 +451,6 @@ class _OverviewTabState extends State<_OverviewTab> {
         .collection('properties')
         .count()
         .get();
-
-    // مثال: إحصائيات إضافية (عقارات البيع vs الإيجار)
     final sellPropertiesFuture = FirebaseFirestore.instance
         .collection('properties')
         .where('category', isEqualTo: 'بيع')
@@ -257,6 +602,234 @@ class _OverviewTabState extends State<_OverviewTab> {
   }
 }
 
+// --- تبويب الأرشيف (جديد) ---
+class _ArchiveTab extends StatelessWidget {
+  const _ArchiveTab();
+
+  // --- دالة جديدة لاستعادة العقار ---
+  Future<void> _restoreProperty(
+    BuildContext context,
+    String docId,
+    Map<String, dynamic> data,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('استعادة عقار'),
+        content: Text(
+          'هل أنت متأكد من استعادة "${data['title'] ?? 'عقار'}"؟ سيتم إعادته للقائمة العامة وحذفه من الأرشيف.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('استعادة'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      // إزالة البيانات الخاصة بالأرشفة قبل الاستعادة
+      data.remove('originalId');
+      data.remove('archivedAt');
+      data.remove('archiveReason');
+      data.remove('archivedByUserId');
+      data.remove('archivedByUserName');
+
+      // إضافة العقار مجدداً لمجموعة properties
+      await FirebaseFirestore.instance.collection('properties').add(data);
+      // حذف العقار من الأرشيف
+      await FirebaseFirestore.instance
+          .collection('archived_properties')
+          .doc(docId)
+          .delete();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم استعادة العقار بنجاح.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+    }
+  }
+
+  Future<void> _permanentlyDelete(
+    BuildContext context,
+    String docId,
+    String title,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف نهائي'),
+        content: Text('هل أنت متأكد من حذف "$title" نهائياً من الأرشيف؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await FirebaseFirestore.instance
+          .collection('archived_properties')
+          .doc(docId)
+          .delete();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم حذف العقار نهائياً من الأرشيف.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('archived_properties')
+          .orderBy('archivedAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.archive_outlined, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('الأرشيف فارغ حالياً.'),
+              ],
+            ),
+          );
+        }
+
+        final archivedDocs = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(8),
+          itemCount: archivedDocs.length,
+          itemBuilder: (ctx, index) {
+            final doc = archivedDocs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final title = data['title'] ?? 'بدون عنوان';
+            final imageUrl = (data['imageUrls'] as List?)?.firstOrNull;
+            final reason = data['archiveReason'] ?? 'سبب غير معروف';
+            final timestamp = data['archivedAt'] as Timestamp?;
+            final archiverName = data['archivedByUserName'] as String?;
+
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              child: ListTile(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ArchivedPropertyDetailsScreen(propertyData: data),
+                    ),
+                  );
+                },
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: imageUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          width: 50,
+                          height: 50,
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.house_siding),
+                        ),
+                ),
+                title: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'السبب: $reason',
+                      style: TextStyle(color: Colors.grey[700], fontSize: 13),
+                    ),
+                    if (archiverName != null)
+                      Text(
+                        'بواسطة: $archiverName',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
+                    if (timestamp != null)
+                      Text(
+                        'تاريخ الأرشفة: ${_formatTimestamp(timestamp)}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                  ],
+                ),
+                trailing: PopupMenuButton<String>(
+                  onSelected: (value) {
+                    if (value == 'restore') {
+                      _restoreProperty(context, doc.id, data);
+                    } else if (value == 'delete') {
+                      _permanentlyDelete(context, doc.id, title);
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'restore',
+                      child: ListTile(
+                        leading: Icon(Icons.restore_from_trash),
+                        title: Text('استعادة'),
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(Icons.delete_forever, color: Colors.red),
+                        title: Text(
+                          'حذف نهائي',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                isThreeLine: true,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
 class _UsersTab extends StatelessWidget {
   const _UsersTab();
 
@@ -288,8 +861,6 @@ class _UsersTab extends StatelessWidget {
             .collection('users')
             .doc(userId)
             .delete();
-        // ملاحظة: لحذف المستخدم من Authentication أيضاً، يتطلب الأمر Cloud Functions
-        // أو تسجيل الدخول بحسابه، لذا نكتفي بحذفه من قاعدة البيانات حالياً.
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('تم حذف المستخدم من قاعدة البيانات.')),
@@ -435,7 +1006,7 @@ class _UsersTab extends StatelessWidget {
                 ),
                 subtitle: Text(email),
                 trailing: isMe
-                    ? const Chip(label: Text('أنت')) // لا يمكن للمدير حذف نفسه
+                    ? const Chip(label: Text('أنت'))
                     : PopupMenuButton<String>(
                         onSelected: (value) {
                           if (value == 'delete') {

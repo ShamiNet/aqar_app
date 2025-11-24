@@ -1,99 +1,38 @@
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>عقار بلص - Aqar App</title>
-    <style>
-      body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        margin: 0;
-        padding: 20px;
-      }
-      .container {
-        background: white;
-        border-radius: 20px;
-        padding: 40px;
-        text-align: center;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        max-width: 500px;
-        width: 100%;
-      }
-      .icon {
-        font-size: 80px;
-        margin-bottom: 20px;
-      }
-      h1 {
-        color: #333;
-        margin-bottom: 15px;
-        font-size: 28px;
-      }
-      p {
-        color: #666;
-        line-height: 1.6;
-        margin-bottom: 25px;
-        font-size: 16px;
-      }
-      .btn {
-        display: inline-block;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 15px 40px;
-        border-radius: 50px;
-        text-decoration: none;
-        font-weight: bold;
-        font-size: 16px;
-        margin: 10px;
-        transition: transform 0.2s;
-      }
-      .btn:hover {
-        transform: scale(1.05);
-      }
-      .loading {
-        margin-top: 20px;
-        color: #667eea;
-        font-size: 14px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="icon">🏠</div>
-      <h1>مرحباً بك في عقار بلص</h1>
-      <p>للحصول على أفضل تجربة، يرجى فتح هذا الرابط من تطبيق عقار بلص</p>
-      <a href="https://play.google.com/store/apps/details?id=com.shami313.aqar_app" class="btn">
-        تحميل التطبيق
-      </a>
-      <div class="loading" id="status">جاري محاولة فتح التطبيق...</div>
-    </div>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
 
-    <script>
-      // محاولة فتح التطبيق تلقائياً
-      const currentUrl = window.location.href;
-      const pathMatch = currentUrl.match(/https:\/\/n4yo\.com\/(.+)/);
-      
-      if (pathMatch) {
-        const deepPath = pathMatch[1];
-        // محاولة فتح التطبيق باستخدام Custom Scheme
-        const appUrl = 'aqarapp://' + deepPath;
-        
-        // محاولة فتح التطبيق
-        window.location.href = appUrl;
-        
-        // بعد ثانيتين، إذا لم يتم فتح التطبيق، نعرض رسالة
-        setTimeout(() => {
-          document.getElementById('status').innerHTML = 
-            'إذا لم يتم فتح التطبيق تلقائياً، يرجى تحميله من المتجر';
-        }, 2000);
-      } else {
-        document.getElementById('status').innerHTML = 
-          'للاستفادة من جميع المزايا، حمل التطبيق الآن';
-      }
-    </script>
-  </body>
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="aqar_app">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>aqar_app</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
 </html>

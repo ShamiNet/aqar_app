@@ -1,392 +1,253 @@
-import 'package:aqar_app/screens/filtered_properties_screen.dart';
-import 'package:aqar_app/screens/property_details_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class PropertyCard extends StatelessWidget {
-  final Map<String, dynamic> property;
-  final String propertyId;
-
-  const PropertyCard({
-    super.key,
-    required this.property,
-    required this.propertyId,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    int _toInt(dynamic v) {
-      if (v == null) return 0;
-      if (v is int) return v;
-      if (v is num) return v.toInt();
-      if (v is String) {
-        final asInt = int.tryParse(v);
-        if (asInt != null) return asInt;
-        final asDouble = double.tryParse(v);
-        return asDouble?.toInt() ?? 0;
-      }
-      return 0;
-    }
-
-    num _toNum(dynamic v) {
-      if (v == null) return 0;
-      if (v is num) return v;
-      if (v is String) return num.tryParse(v) ?? 0;
-      return 0;
-    }
-
-    final String? propertyType = property['propertyType'] as String?;
-    String title = property['title'] ?? '';
-    if (title.trim().isEmpty) {
-      title = propertyType ?? 'بدون عنوان';
-    }
-    final num price = _toNum(property['price']);
-    final currency = property['currency'] ?? 'ر.س';
-    final imageUrls = property['imageUrls'] as List<dynamic>?;
-    final String? category =
-        property['category'] as String?; // 'بيع' أو 'إيجار'
-    final int discountPercent = _toInt(property['discountPercent']);
-    final int rooms = _toInt(property['rooms']);
-    final num area = _toNum(property['area']);
-    final String? subscriptionPeriod =
-        property['subscriptionPeriod'] as String?;
-
-    return InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (ctx) => PropertyDetailsScreen(propertyId: propertyId),
-              ),
-            );
-          },
-          child: Card(
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            elevation: 5,
-            child: Stack(
-              children: [
-                // Image
-                imageUrls != null && imageUrls.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrls.first,
-                        height: double.infinity,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) =>
-                            const Center(child: CircularProgressIndicator()),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[300],
-                          child: const Icon(
-                            Icons.broken_image,
-                            size: 48,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      )
-                    : Container(
-                        color: Colors.grey[300],
-                        child: const Icon(
-                          Icons.house,
-                          size: 48,
-                          color: Colors.grey,
-                        ),
-                      ),
-                // Gradient Overlay
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black.withAlpha((255 * 0.6).round()),
-                          Colors.transparent,
-                          Colors.transparent,
-                          Colors.black.withAlpha((255 * 0.8).round()),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: const [0, 0.2, 0.6, 1.0],
-                      ),
-                    ),
-                  ),
-                ),
-                // Badges Row (Category, Discount, Featured)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.end,
-                    children: [
-                      if (category != null)
-                        _ClickableBadge(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (ctx) => FilteredPropertiesScreen(
-                                  filterTitle: 'عقارات $category',
-                                  filterType: 'category',
-                                  filterValue: category,
-                                ),
-                              ),
-                            );
-                          },
-                          child: _Badge(
-                            icon: category == 'بيع'
-                                ? Icons.sell_outlined
-                                : Icons.key,
-                            label: category,
-                            background: category == 'بيع'
-                                ? Theme.of(context).colorScheme.errorContainer
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.primaryContainer,
-                            foreground: category == 'بيع'
-                                ? Theme.of(context).colorScheme.onErrorContainer
-                                : Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                      if (discountPercent > 0)
-                        _ClickableBadge(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (ctx) =>
-                                    const FilteredPropertiesScreen(
-                                      filterTitle: 'عقارات عليها خصم',
-                                      filterType: 'hasDiscount',
-                                      filterValue: true,
-                                    ),
-                              ),
-                            );
-                          },
-                          child: _Badge(
-                            icon: Icons.local_offer_outlined,
-                            label: '-$discountPercent%',
-                            background: Theme.of(
-                              context,
-                            ).colorScheme.secondaryContainer,
-                            foreground: Theme.of(
-                              context,
-                            ).colorScheme.onSecondaryContainer,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                // Text Content + Info Chips
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  left: 16,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          if (subscriptionPeriod != null)
-                            _InfoChip(
-                              icon: Icons.timer_outlined,
-                              label: subscriptionPeriod,
-                              accent: Colors.cyan,
-                            ),
-                          if (rooms > 0)
-                            _InfoChip(
-                              icon: Icons.meeting_room,
-                              label: '$rooms غرف',
-                              accent: Colors.teal,
-                            ),
-                          if (area > 0)
-                            _InfoChip(
-                              icon: Icons.area_chart,
-                              label: '${area.toString()} م²',
-                              accent: Colors.orange,
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // price bubble overlay (top-left)
-                Positioned(
-                  top: 45,
-                  left: 5,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Theme.of(context).colorScheme.primary,
-                          Theme.of(context).colorScheme.secondary,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withOpacity(0.28),
-                          blurRadius: 12,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      '${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} $currency',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        )
-        .animate()
-        .scaleXY(begin: 0.98, end: 1.0, duration: 420.ms, curve: Curves.easeOut)
-        .fade(duration: 500.ms)
-        .slideY(begin: 0.26, duration: 400.ms, curve: Curves.easeOut);
-  }
-}
-
-class _ClickableBadge extends StatelessWidget {
-  final Widget child;
+  final QueryDocumentSnapshot property;
   final VoidCallback onTap;
 
-  const _ClickableBadge({required this.child, required this.onTap});
+  const PropertyCard({super.key, required this.property, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final data = property.data() as Map<String, dynamic>;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final String title = data['title'] ?? 'بدون عنوان';
+    final String imageUrl =
+        (data['imageUrls'] != null && (data['imageUrls'] as List).isNotEmpty)
+        ? data['imageUrls'][0]
+        : 'https://placehold.co/600x400/png?text=No+Image';
+
+    final double price = double.tryParse(data['price'].toString()) ?? 0.0;
+    final String currency = data['currency'] ?? 'ر.س';
+    final String address = data['address'] ?? 'غير محدد';
+    final int rooms = int.tryParse(data['rooms'].toString()) ?? 0;
+    final int bathrooms = int.tryParse(data['bathrooms'].toString()) ?? 0;
+    final double area = double.tryParse(data['area'].toString()) ?? 0.0;
+    final String type = data['propertyType'] ?? '';
+
+    Color badgeColor = _getBadgeColor(type, colorScheme);
+
+    return GestureDetector(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: child,
+      child:
+          Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark ? theme.cardColor : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: isDark
+                      ? Border.all(color: colorScheme.outline.withOpacity(0.2))
+                      : Border.all(color: Colors.grey.withOpacity(0.1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.15),
+                      spreadRadius: 1,
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // --- قسم الصورة ---
+                    Flexible(
+                      child: Stack(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: AspectRatio(
+                              aspectRatio: 16 / 9,
+                              child: CachedNetworkImage(
+                                imageUrl: imageUrl,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  child: const Center(
+                                    child: CircularProgressIndicator.adaptive(),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: colorScheme.surfaceContainerHighest,
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    size: 50,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (type.isNotEmpty)
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: badgeColor.withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: badgeColor.withOpacity(0.4),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  type,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    // --- قسم التفاصيل ---
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.2,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${price.toStringAsFixed(0)} $currency',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          if (address != 'غير محدد')
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14,
+                                  color: colorScheme.secondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    address,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurface.withOpacity(
+                                        0.7,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: 10),
+                          Divider(
+                            height: 1,
+                            color: colorScheme.outlineVariant.withOpacity(0.3),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              if (rooms > 0)
+                                _buildSpecItem(
+                                  context,
+                                  Icons.bed_outlined,
+                                  '$rooms غرف',
+                                ),
+                              if (bathrooms > 0)
+                                _buildSpecItem(
+                                  context,
+                                  Icons.bathtub_outlined,
+                                  '$bathrooms حمام',
+                                ),
+                              if (area > 0)
+                                _buildSpecItem(
+                                  context,
+                                  Icons.square_foot_outlined,
+                                  '${area.toStringAsFixed(0)} م²',
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+              .animate()
+              .fadeIn(duration: 300.ms)
+              .slideY(begin: 0.1, curve: Curves.easeOut),
     );
   }
-}
 
-class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.icon,
-    required this.label,
-    required this.background,
-    required this.foreground,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [background, background.withOpacity(0.9)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.14),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-        border: Border.all(color: Colors.white.withOpacity(0.06), width: 0.6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: foreground),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: foreground,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
+  Color _getBadgeColor(String type, ColorScheme scheme) {
+    final t = type.trim();
+    if (t.contains('بيت')) return Colors.blue.shade600;
+    if (t.contains('فيلا')) return Colors.purple.shade600;
+    if (t.contains('بناية')) return Colors.indigo.shade600;
+    if (t.contains('شقة')) return Colors.teal.shade600;
+    if (t.contains('مكتب')) return Colors.blueGrey.shade600;
+    if (t.contains('دكان') || t.contains('محل')) return Colors.orange.shade700;
+    if (t.contains('ارض') || t.contains('أرض')) return Colors.brown.shade600;
+    if (t.contains('مزرعة')) return Colors.green.shade600;
+    return scheme.primary;
   }
-}
 
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-    required this.accent,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [accent.withOpacity(0.18), accent.withOpacity(0.06)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget _buildSpecItem(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: colorScheme.secondary.withOpacity(0.8)),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurface.withOpacity(0.7),
+          ),
         ),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(color: accent.withOpacity(0.12), width: 0.6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: accent),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:aqar_app/horizontal_properties_section.dart';
 import 'package:aqar_app/property_card.dart';
 import 'package:aqar_app/screens/filtered_properties_screen.dart';
+import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
@@ -10,6 +11,8 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final featuredPropertiesQuery = FirebaseFirestore.instance
         .collection('properties')
         .where('isFeatured', isEqualTo: true)
@@ -26,115 +29,131 @@ class HomeScreen extends StatelessWidget {
         .orderBy('createdAt', descending: true)
         .limit(10);
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // عقارات للبيع
-          HorizontalPropertiesSection(
-            title: 'عقارات للبيع',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('category', isEqualTo: 'بيع')
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'category',
-            filterValue: 'بيع',
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: isDark
+            ? null
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.blue.shade100,
+                  Colors.blue.shade300,
+                  Colors.grey.shade200,
+                ],
+              ),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // عقارات مميزة
+            _FeaturedPropertiesCarousel(query: featuredPropertiesQuery),
 
-          // عقارات للإيجار
-          HorizontalPropertiesSection(
-            title: 'عقارات للإيجار',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('category', isEqualTo: 'إيجار')
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'category',
-            filterValue: 'إيجار',
-          ),
-          // عقارات مميزة
-          _FeaturedPropertiesCarousel(query: featuredPropertiesQuery),
+            // عقارات للبيع
+            HorizontalPropertiesSection(
+              title: 'عقارات للبيع',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('category', isEqualTo: 'بيع')
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'category',
+              filterValue: 'بيع',
+            ),
 
-          // بيوت
-          HorizontalPropertiesSection(
-            title: 'بيوت',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('propertyType', isEqualTo: 'بيت')
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'propertyType',
-            filterValue: 'بيت',
-          ),
+            // عقارات للإيجار
+            HorizontalPropertiesSection(
+              title: 'عقارات للإيجار',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('category', isEqualTo: 'إيجار')
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'category',
+              filterValue: 'إيجار',
+            ),
 
-          // فلل
-          HorizontalPropertiesSection(
-            title: 'فلل',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('propertyType', isEqualTo: 'فيلا')
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'propertyType',
-            filterValue: 'فيلا',
-          ),
-          // عقارات أراضي
-          _FeaturedPropertiesCarousel(query: featuredPropertiesQueryA),
+            // بيوت
+            HorizontalPropertiesSection(
+              title: 'بيوت',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('propertyType', isEqualTo: 'بيت')
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'propertyType',
+              filterValue: 'بيت',
+            ),
 
-          // أراضي
-          HorizontalPropertiesSection(
-            title: 'أراضي',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('propertyType', isEqualTo: 'ارض')
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'propertyType',
-            filterValue: 'ارض',
-          ),
+            // فلل
+            HorizontalPropertiesSection(
+              title: 'فلل',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('propertyType', isEqualTo: 'فيلا')
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'propertyType',
+              filterValue: 'فيلا',
+            ),
+            // عقارات أراضي
+            _FeaturedPropertiesCarousel(query: featuredPropertiesQueryA),
 
-          // بنايات
-          HorizontalPropertiesSection(
-            title: 'بنايات',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('propertyType', isEqualTo: 'بناية')
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'propertyType',
-            filterValue: 'بناية',
-          ),
-          // عقارات دكاكين
-          _FeaturedPropertiesCarousel(query: featuredPropertiesQueryd),
+            // أراضي
+            HorizontalPropertiesSection(
+              title: 'أراضي',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('propertyType', isEqualTo: 'ارض')
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'propertyType',
+              filterValue: 'ارض',
+            ),
 
-          // دكاكين
-          HorizontalPropertiesSection(
-            title: 'دكاكين',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('propertyType', isEqualTo: 'دكان')
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'propertyType',
-            filterValue: 'دكان',
-          ),
+            // بنايات
+            HorizontalPropertiesSection(
+              title: 'بنايات',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('propertyType', isEqualTo: 'بناية')
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'propertyType',
+              filterValue: 'بناية',
+            ),
+            // عقارات دكاكين
+            _FeaturedPropertiesCarousel(query: featuredPropertiesQueryd),
 
-          // عقارات بخصم
-          HorizontalPropertiesSection(
-            title: 'عقارات بخصم',
-            query: FirebaseFirestore.instance
-                .collection('properties')
-                .where('discountPercent', isGreaterThan: 0)
-                .orderBy('discountPercent', descending: true)
-                .orderBy('createdAt', descending: true)
-                .limit(10),
-            filterType: 'hasDiscount',
-            filterValue: true,
-          ),
+            // دكاكين
+            HorizontalPropertiesSection(
+              title: 'دكاكين',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('propertyType', isEqualTo: 'دكان')
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'propertyType',
+              filterValue: 'دكان',
+            ),
 
-          const SizedBox(height: 24),
-        ],
+            // عقارات بخصم
+            HorizontalPropertiesSection(
+              title: 'عقارات بخصم',
+              query: FirebaseFirestore.instance
+                  .collection('properties')
+                  .where('discountPercent', isGreaterThan: 0)
+                  .orderBy('discountPercent', descending: true)
+                  .orderBy('createdAt', descending: true)
+                  .limit(10),
+              filterType: 'hasDiscount',
+              filterValue: true,
+            ),
+
+            const SizedBox(height: 55),
+          ],
+        ),
       ),
     );
   }
@@ -152,7 +171,7 @@ class _FeaturedPropertiesCarousel extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
-            height: 250,
+            height: 200,
             child: Center(child: CircularProgressIndicator()),
           );
         }
@@ -174,6 +193,9 @@ class _FeaturedPropertiesCarousel extends StatelessWidget {
                     'عقارات مميزة',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? null
+                          : Colors.white,
                     ),
                   ),
                   TextButton(
@@ -196,29 +218,34 @@ class _FeaturedPropertiesCarousel extends StatelessWidget {
             CarouselSlider.builder(
               itemCount: properties.length,
               itemBuilder: (context, index, realIndex) {
-                final property =
-                    properties[index].data() as Map<String, dynamic>;
-                final propertyId = properties[index].id;
+                final doc = properties[index];
                 return SizedBox(
                   width: MediaQuery.of(context).size.width,
                   child: PropertyCard(
-                    property: property,
-                    propertyId: propertyId,
+                    property: doc,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (ctx) =>
+                              PropertyDetailsScreen(propertyId: doc.id),
+                        ),
+                      );
+                    },
                   ),
                 );
               },
               options: CarouselOptions(
-                height: 250,
+                height: 280,
                 autoPlay: true,
-                autoPlayInterval: const Duration(seconds: 5),
+                autoPlayInterval: const Duration(seconds: 2),
                 autoPlayAnimationDuration: const Duration(milliseconds: 1200),
                 autoPlayCurve: Curves.fastOutSlowIn,
                 enlargeCenterPage: true,
-                viewportFraction: 0.8,
+                viewportFraction: 0.85,
                 aspectRatio: 16 / 9,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
           ],
         );
       },

@@ -1,0 +1,23 @@
+{
+  "name": "aqar-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Aqar Plus - Automated WhatsApp & Telegram Marketing Bot",
+  "main": "whatsapp-bot.js",
+  "scripts": {
+    "start": "node whatsapp-bot.js",
+    "dev": "nodemon whatsapp-bot.js"
+  },
+  "keywords": ["whatsapp", "telegram", "bot", "firebase", "baileys"],
+  "author": "Aqar Plus",
+  "license": "MIT",
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.8",
+    "@hapi/boom": "^10.0.1",
+    "firebase-admin": "^12.0.0",
+    "axios": "^1.6.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}

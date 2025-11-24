@@ -11,7 +11,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
-
+import 'package:aqar_app/widgets/report_dialog.dart';
 // استيراد الفيديو
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
@@ -142,45 +142,177 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
-  void _deleteProperty() async {
-    final shouldDelete = await showDialog<bool>(
+  // دالة جديدة للأرشفة، تستخدم لعدة أسباب (بيع، تأجير، حذف)
+  Future<void> _archiveOrDeleteProperty(String reason, String title) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('تأكيد الحذف'),
-        content: const Text('هل أنت متأكد من رغبتك في حذف هذا العقار؟'),
+        title: Text(title),
+        content: Text(
+          'هل أنت متأكد؟ سيتم نقل العقار إلى الأرشيف ولن يظهر في القوائم العامة.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('إلغاء'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('حذف'),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(title),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: reason == 'حذف بواسطة المالك'
+                  ? Colors.red
+                  : null,
+            ),
           ),
         ],
       ),
     );
 
-    if (shouldDelete == null || !shouldDelete) return;
+    if (confirm != true) return;
 
     try {
-      await FirebaseFirestore.instance
+      final docRef = FirebaseFirestore.instance
           .collection('properties')
-          .doc(widget.propertyId)
-          .delete();
-
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تم حذف العقار بنجاح.')));
+          .doc(widget.propertyId);
+      final docSnapshot = await docRef.get();
+      if (docSnapshot.exists) {
+        await FirebaseFirestore.instance.collection('archived_properties').add({
+          ...docSnapshot.data()!,
+          'originalId': widget.propertyId,
+          'archivedAt': FieldValue.serverTimestamp(),
+          'archiveReason': reason,
+        });
+      }
+      await docRef.delete();
+      if (mounted) Navigator.of(context).pop('تم أرشفة العقار بنجاح.');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('حدث خطأ أثناء الحذف: ${e.toString()}')),
       );
     }
+  }
+
+  // --- دالة جديدة لإيقاف/تفعيل العقار ---
+  Future<void> _togglePauseProperty(bool isCurrentlyPaused) async {
+    final String actionText = isCurrentlyPaused ? 'إعادة تفعيل' : 'إيقاف مؤقت';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$actionText العقار'),
+        content: Text(
+          isCurrentlyPaused
+              ? 'هل أنت متأكد من إعادة تفعيل العقار؟ سيظهر مجدداً في القوائم العامة.'
+              : 'هل أنت متأكد من إيقاف العقار مؤقتاً؟ سيتم إخفاؤه من العرض العام.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(actionText),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('properties')
+          .doc(widget.propertyId)
+          .update({'isPaused': !isCurrentlyPaused});
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم ${actionText} العقار بنجاح.')),
+        );
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+    }
+  }
+
+  // --- دالة جديدة لعرض قائمة الإدارة السفلية ---
+  void _showManagementBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              // --- خيار الإيقاف المؤقت / إعادة التفعيل ---
+              FutureBuilder<DocumentSnapshot>(
+                future: _propertyFuture,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox.shrink();
+                  final isPaused =
+                      (snapshot.data!.data()
+                          as Map<String, dynamic>)['isPaused'] ==
+                      true;
+                  return ListTile(
+                    leading: Icon(
+                      isPaused
+                          ? Icons.play_circle_outline
+                          : Icons.pause_circle_outline,
+                      color: Colors.orange,
+                    ),
+                    title: Text(
+                      isPaused ? 'إعادة تفعيل العرض' : 'إيقاف مؤقت للعرض',
+                    ),
+                    subtitle: Text(
+                      isPaused
+                          ? 'سيظهر العقار للجميع مرة أخرى'
+                          : 'سيتم إخفاء العقار مؤقتاً',
+                    ),
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _togglePauseProperty(isPaused);
+                    },
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sell_outlined, color: Colors.green),
+                title: const Text('تحديد كـ "تم البيع"'),
+                subtitle: const Text('سيتم أرشفة العقار ونقله لسجلاتك'),
+                onTap: () {
+                  Navigator.of(ctx).pop(); // إغلاق القائمة
+                  _archiveOrDeleteProperty('تم البيع', 'تأكيد البيع');
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.key_outlined, color: Colors.blue),
+                title: const Text('تحديد كـ "تم التأجير"'),
+                subtitle: const Text('سيتم أرشفة العقار ونقله لسجلاتك'),
+                onTap: () {
+                  Navigator.of(ctx).pop(); // إغلاق القائمة
+                  _archiveOrDeleteProperty('تم التأجير', 'تأكيد التأجير');
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  'حذف العقار',
+                  style: TextStyle(color: Colors.red),
+                ),
+                subtitle: const Text('سيتم نقل العقار إلى الأرشيف أولاً'),
+                onTap: () {
+                  Navigator.of(ctx).pop(); // إغلاق القائمة
+                  _archiveOrDeleteProperty('حذف بواسطة المالك', 'تأكيد الحذف');
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _shareProperty(Map<String, dynamic> propertyData) {
@@ -354,6 +486,39 @@ $storeLink
     }
   }
 
+  // ودجت مخصص للأزرار الدائرية الواضحة
+  Widget _buildAppBarIcon({
+    required IconData icon,
+    required VoidCallback onPressed,
+    Color iconColor = Colors.black87,
+    String? tooltip,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9), // خلفية بيضاء واضحة
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: tooltip,
+        icon: Icon(icon, color: iconColor, size: 22),
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+        style: IconButton.styleFrom(
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ),
+    );
+  }
+
   // --- 2. دالة جديدة لبناء بطاقة معلومات البائع ---
   Widget _buildSellerInfo(
     BuildContext context,
@@ -521,6 +686,14 @@ $storeLink
               SliverAppBar(
                 expandedHeight: 300,
                 pinned: true,
+                // زر الرجوع المخصص
+                leading: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: _buildAppBarIcon(
+                    icon: Icons.arrow_back,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: imageUrls.isNotEmpty
                       ? PageView.builder(
@@ -545,18 +718,20 @@ $storeLink
                                     imageUrl: imageUrls[index],
                                     fit: BoxFit.cover,
                                   ),
+                                  // أيقونة التكبير
                                   Positioned(
-                                    bottom: 10,
-                                    right: 10,
+                                    bottom: 12,
+                                    right: 12,
                                     child: Container(
-                                      padding: const EdgeInsets.all(6),
+                                      padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: Colors.black54,
+                                        color: Colors.black.withOpacity(0.6),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: const Icon(
                                         Icons.fullscreen,
                                         color: Colors.white,
+                                        size: 20,
                                       ),
                                     ),
                                   ),
@@ -570,44 +745,77 @@ $storeLink
                           child: const Icon(Icons.house, size: 48),
                         ),
                 ),
+                // أزرار الإجراءات (مشاركة، مفضلة، تعديل...)
                 actions: [
-                  IconButton(
+                  _buildAppBarIcon(
+                    icon: Icons.share,
                     onPressed: () => _shareProperty(property),
-                    icon: const Icon(Icons.share),
+                    tooltip: 'مشاركة',
                   ),
                   if (_currentUser != null)
-                    IconButton(
+                    _buildAppBarIcon(
+                      icon: _isFavorited
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      iconColor: _isFavorited ? Colors.red : Colors.black87,
                       onPressed: _toggleFavorite,
-                      icon: Icon(
-                        _isFavorited ? Icons.favorite : Icons.favorite_border,
-                        color: _isFavorited ? Colors.red : Colors.white,
-                      ),
+                      tooltip: 'المفضلة',
                     ),
-                  if (_isOwner)
-                    IconButton(
-                      onPressed: () => Navigator.of(context)
-                          .push(
-                            MaterialPageRoute(
-                              builder: (ctx) => EditPropertyScreen(
-                                propertyId: widget.propertyId,
-                              ),
+                  if (!_isOwner) // زر الإبلاغ لغير المالك
+                    _buildAppBarIcon(
+                      icon: Icons.flag_outlined,
+                      iconColor: Colors.red.shade700,
+                      tooltip: 'إبلاغ',
+                      onPressed: () {
+                        if (_currentUser == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('يجب تسجيل الدخول للإبلاغ.'),
                             ),
-                          )
-                          .then(
-                            (_) => setState(() {
-                              _propertyFuture = FirebaseFirestore.instance
-                                  .collection('properties')
-                                  .doc(widget.propertyId)
-                                  .get();
-                            }),
-                          ),
-                      icon: const Icon(Icons.edit),
+                          );
+                          return;
+                        }
+                        // استدعاء نافذة الإبلاغ (تأكد من استيراد report_dialog.dart)
+                        showDialog(
+                          context: context,
+                          builder: (ctx) =>
+                              ReportDialog(propertyId: widget.propertyId),
+                        );
+                        // ملاحظة: سأفعل هذا السطر عندما ننشئ ملف ReportDialog، حالياً سأطبع فقط
+                        debugPrint('Open Report Dialog');
+                      },
                     ),
-                  if (_isOwner)
-                    IconButton(
-                      onPressed: _deleteProperty,
-                      icon: const Icon(Icons.delete),
+                  if (_isOwner) ...[
+                    _buildAppBarIcon(
+                      icon: Icons.edit,
+                      onPressed: () {
+                        Navigator.of(context)
+                            .push(
+                              MaterialPageRoute(
+                                builder: (ctx) => EditPropertyScreen(
+                                  propertyId: widget.propertyId,
+                                ),
+                              ),
+                            )
+                            .then((_) {
+                              setState(() {
+                                _propertyFuture = FirebaseFirestore.instance
+                                    .collection('properties')
+                                    .doc(widget.propertyId)
+                                    .get();
+                              });
+                            });
+                      },
+                      tooltip: 'تعديل',
+                    ), // زر التعديل
+                    // --- زر إدارة العقار الجديد ---
+                    _buildAppBarIcon(
+                      icon: Icons.settings_outlined,
+                      onPressed: _showManagementBottomSheet,
+                      tooltip: 'إدارة العقار',
                     ),
+                  ],
+                  const SizedBox(width: 8), // مسافة صغيرة في النهاية
                 ],
               ),
 

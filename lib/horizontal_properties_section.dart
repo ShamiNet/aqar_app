@@ -1,5 +1,6 @@
 import 'package:aqar_app/screens/filtered_properties_screen.dart';
-import 'package:aqar_app/property_card.dart';
+import 'package:aqar_app/property_card.dart'; // تأكد من مسار الملف الصحيح
+import 'package:aqar_app/screens/property_details_screen.dart'; // <--- ضروري للتنقل
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -29,7 +30,7 @@ class HorizontalPropertiesSection extends StatelessWidget {
           return const Center(child: Text('حدث خطأ ما!'));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink(); // لا تعرض شيئاً إذا كانت القائمة فارغة
+          return const SizedBox.shrink();
         }
 
         final properties = snapshot.data!.docs;
@@ -46,6 +47,9 @@ class HorizontalPropertiesSection extends StatelessWidget {
                     title,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? null
+                          : Colors.white,
                     ),
                   ),
                   TextButton(
@@ -66,20 +70,26 @@ class HorizontalPropertiesSection extends StatelessWidget {
               ),
             ),
             SizedBox(
-              height: 200, // ارتفاع القائمة الأفقية
+              height: 250,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 itemCount: properties.length,
                 itemBuilder: (ctx, index) {
-                  final property =
-                      properties[index].data() as Map<String, dynamic>;
-                  final propertyId = properties[index].id;
+                  final doc = properties[index];
                   return SizedBox(
-                    width: 250, // عرض بطاقة العقار
+                    width: 280,
                     child: PropertyCard(
-                      property: property,
-                      propertyId: propertyId,
+                      property: doc, // نمرر الـ doc كاملاً
+                      onTap: () {
+                        // نمرر منطق التنقل هنا
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (ctx) =>
+                                PropertyDetailsScreen(propertyId: doc.id),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },
@@ -105,7 +115,14 @@ class HorizontalPropertiesSection extends StatelessWidget {
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: 2,
-            itemBuilder: (ctx, index) => const Card(margin: EdgeInsets.all(8)),
+            itemBuilder: (ctx, index) => Container(
+              margin: const EdgeInsets.all(8),
+              width: 260,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
           ),
         ),
       ],

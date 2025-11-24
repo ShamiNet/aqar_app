@@ -1,4 +1,6 @@
 // import 'dart:io';
+import 'package:aqar_app/screens/my_properties_screen.dart';
+import 'package:aqar_app/screens/my_archived_properties_screen.dart'; // <-- استيراد
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqar_app/screens/admin_dashboard_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -352,29 +354,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       }
                       final propertyCount = propertySnapshot.data!.docs.length;
                       return Card(
+                        clipBehavior: Clip.antiAlias,
                         child: ListTile(
                           leading: const Icon(Icons.home_work),
                           title: const Text('عقاراتي المعروضة'),
-                          trailing: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primaryContainer,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              '$propertyCount',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // شارة العدد
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primaryContainer,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '$propertyCount',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimaryContainer,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              // سهم التوجيه
+                              const Icon(Icons.arrow_forward_ios, size: 16),
+                            ],
                           ),
+                          // ✅ هنا كود الانتقال
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (ctx) => const MyPropertiesScreen(),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
                   ),
 
+                  // --- قسم الأرشيف ---
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('archived_properties')
+                        .where('userId', isEqualTo: _user.uid)
+                        .snapshots(),
+                    builder: (ctx, archivedSnapshot) {
+                      if (!archivedSnapshot.hasData) {
+                        return const SizedBox();
+                      }
+                      final count = archivedSnapshot.data!.docs.length;
+                      return Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: ListTile(
+                          leading: const Icon(Icons.archive_outlined),
+                          title: const Text('أرشيفي'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondaryContainer,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '$count',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSecondaryContainer,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Icon(Icons.arrow_forward_ios, size: 16),
+                            ],
+                          ),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (ctx) =>
+                                    const MyArchivedPropertiesScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
                   // لوحة التحكم للمدير
                   if (userRole == 'مدير' || userRole == 'admin') ...[
                     const SizedBox(height: 10),

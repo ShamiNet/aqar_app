@@ -14,7 +14,7 @@ import 'package:aqar_app/main.dart';
 void main() {
   testWidgets('Renders AuthGate', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const AqarApp());
+    await tester.pumpWidget(const AqarApp(startScreen: AuthGate()));
 
     // Verify that AuthGate is present.
     expect(find.byType(AuthGate), findsOneWidget);

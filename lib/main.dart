@@ -4,6 +4,7 @@ import 'package:aqar_app/screens/auth_gate.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
@@ -12,6 +13,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:form_builder_validators/localization/l10n.dart';
 import 'package:app_links/app_links.dart';
 import 'package:aqar_app/screens/property_details_screen.dart';
+import 'package:aqar_app/screens/onboarding_screen.dart'; // تأكد من المسار
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -33,12 +35,20 @@ void main() async {
   //   androidProvider: AndroidProvider.debug,
   //   appleProvider: AppleProvider.debug,
   // );
+  // 1. تحقق هل المستخدم رأى الشاشة سابقاً؟
+  final prefs = await SharedPreferences.getInstance();
+  final bool seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
 
-  runApp(const AqarApp());
+  runApp(
+    AqarApp(
+      startScreen: seenOnboarding ? const AuthGate() : const OnboardingScreen(),
+    ),
+  );
 }
 
 class AqarApp extends StatefulWidget {
-  const AqarApp({super.key});
+  final Widget startScreen; // استقبل الشاشة
+  const AqarApp({super.key, required this.startScreen});
 
   @override
   State<AqarApp> createState() => _AqarAppState();
@@ -153,7 +163,7 @@ class _AqarAppState extends State<AqarApp> {
                 textTheme: GoogleFonts.cairoTextTheme(),
                 visualDensity: VisualDensity.standard,
               ),
-              home: const AuthGate(),
+              home: widget.startScreen,
             );
           },
         );
