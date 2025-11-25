@@ -23,6 +23,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   VoidCallback? _submitForm;
 
   static const _draftPrefix = 'add_property_';
+  // معرف الأدمن لاستلام إشعارات العقارات الجديدة (يمكن تغييره لاحقاً)
+  static const _adminId = 'QzX6w0qA8vflx5oGM3jW4GgW2BC2';
 
   @override
   void initState() {
@@ -66,26 +68,39 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
       final LatLng location = data['location'];
 
-      // 3. حفظ البيانات في Firestore
-      await FirebaseFirestore.instance.collection('properties').add({
-        'title': data['title'],
-        'price': data['price'],
-        'currency': data['currency'],
-        'description': data['description'],
-        'category': data['category'],
-        'propertyType': data['propertyType'],
-        'subscriptionPeriod': data['subscriptionPeriod'],
-        'floor': data['floor'],
-        'rooms': data['rooms'],
-        'area': data['area'],
-        'isFeatured': data['isFeatured'],
-        'discountPercent': data['discountPercent'],
-        'location': GeoPoint(location.latitude, location.longitude),
-        'userId': user.uid,
-        'imageUrls': imageUrls,
-        'videoUrl': videoUrl, // حقل الفيديو الجديد
-        'createdAt': Timestamp.now(),
-        'address': data['address'],
+      // 3. حفظ البيانات في Firestore والحصول على المعرف
+      final newPropRef = await FirebaseFirestore.instance
+          .collection('properties')
+          .add({
+            'title': data['title'],
+            'price': data['price'],
+            'currency': data['currency'],
+            'description': data['description'],
+            'category': data['category'],
+            'propertyType': data['propertyType'],
+            'subscriptionPeriod': data['subscriptionPeriod'],
+            'floor': data['floor'],
+            'rooms': data['rooms'],
+            'area': data['area'],
+            'isFeatured': data['isFeatured'],
+            'discountPercent': data['discountPercent'],
+            'location': GeoPoint(location.latitude, location.longitude),
+            'userId': user.uid,
+            'imageUrls': imageUrls,
+            'videoUrl': videoUrl,
+            'createdAt': Timestamp.now(),
+            'address': data['address'],
+          });
+
+      // 🚀 [إشعار] إرسال تنبيه للأدمن بوجود عقار جديد
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'userId': _adminId,
+        'title': 'عقار جديد تمت إضافته',
+        'body':
+            'قام ${user.displayName ?? 'مستخدم'} بإضافة عقار: ${data['title']}',
+        'propertyId': newPropRef.id,
+        'type': 'new_property',
+        'timestamp': FieldValue.serverTimestamp(),
       });
 
       FirebaseAnalytics.instance.logEvent(
@@ -130,12 +145,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     return imageUrls;
   }
 
-  // دالة رفع الفيديو
   Future<String> _uploadVideo(XFile video) async {
     final CloudinaryResponse res = await cloudinary.uploadFile(
       CloudinaryFile.fromFile(
         video.path,
-        resourceType: CloudinaryResourceType.Video, // تحديد النوع فيديو
+        resourceType: CloudinaryResourceType.Video,
         folder: 'property_videos',
       ),
     );

@@ -1,6 +1,8 @@
+import 'package:aqar_app/screens/ratings_screen.dart';
 import 'package:aqar_app/services/notification_service.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:aqar_app/screens/auth_gate.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,11 +16,17 @@ import 'package:form_builder_validators/localization/l10n.dart';
 import 'package:app_links/app_links.dart';
 import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:aqar_app/screens/onboarding_screen.dart'; // تأكد من المسار
+import 'package:aqar_app/screens/chat_messages_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint("Handling a background message: ${message.messageId}");
+  // طباعة واضحة جداً عند وصول إشعار في الخلفية
+  debugPrint("🟥🟥🟥 [FCM - الخلفية] وصل إشعار والتطبيق مغلق! 🟥🟥🟥");
+  debugPrint("📦 ID: ${message.messageId}");
+  debugPrint("📦 Title: ${message.notification?.title}");
+  debugPrint("📦 Body: ${message.notification?.body}");
+  debugPrint("📦 Data: ${message.data}");
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -26,16 +34,40 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.initialize();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  debugPrint("🔵 [System] جاري تهيئة Firebase...");
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint("🟢 [System] تم تهيئة Firebase بنجاح.");
+
+  // --- إعداد معالجات رسائل FCM ---
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // طلب الصلاحيات وفحصها
+  debugPrint("🔵 [FCM] جاري طلب صلاحية الإشعارات...");
+  NotificationSettings settings = await FirebaseMessaging.instance
+      .requestPermission(
+        alert: true,
+        announcement: false,
+        badge: true,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+        sound: true,
+      );
+
+  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+    debugPrint('🟢🟢 [FCM] المستخدم وافق على الإشعارات (Authorized)');
+  } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+    debugPrint('🟡 [FCM] موافقة مؤقتة (Provisional)');
+  } else {
+    debugPrint('🔴🔴 [FCM] المستخدم رفض الإشعارات أو لم يوافق (Declined)');
+  }
+
+  // طباعة التوكن
+  _printFCMToken();
+
   await NotificationService.initialize();
 
-  // await FirebaseAppCheck.instance.activate(
-  //   androidProvider: AndroidProvider.debug,
-  //   appleProvider: AppleProvider.debug,
-  // );
-  // 1. تحقق هل المستخدم رأى الشاشة سابقاً؟
   final prefs = await SharedPreferences.getInstance();
   final bool seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
 
@@ -46,8 +78,21 @@ void main() async {
   );
 }
 
+/// دالة لطباعة توكن الجهاز بشكل واضح جداً
+void _printFCMToken() async {
+  try {
+    final fcmToken = await FirebaseMessaging.instance.getToken();
+    debugPrint("\n====================================================");
+    debugPrint("🔑🔑 [FCM Token] انسخ هذا التوكن للاختبار:");
+    debugPrint(fcmToken.toString());
+    debugPrint("====================================================\n");
+  } catch (e) {
+    debugPrint("❌ [FCM Error] فشل جلب التوكن: $e");
+  }
+}
+
 class AqarApp extends StatefulWidget {
-  final Widget startScreen; // استقبل الشاشة
+  final Widget startScreen;
   const AqarApp({super.key, required this.startScreen});
 
   @override
@@ -61,21 +106,132 @@ class _AqarAppState extends State<AqarApp> {
   void initState() {
     super.initState();
     _initDeepLinks();
+    _setupFirebaseMessaging();
   }
 
   Future<void> _initDeepLinks() async {
     _appLinks = AppLinks();
-
     final Uri? initialUri = await _appLinks.getInitialLink();
     if (initialUri != null) {
       _handleLink(initialUri);
     }
-
     _appLinks.uriLinkStream.listen((Uri? uri) {
       if (uri != null) {
         _handleLink(uri);
       }
     });
+  }
+
+  void _setupFirebaseMessaging() {
+    // 1. عند وصول رسالة والتطبيق مفتوح
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint(
+        '\n🔔🔔🔔 [FCM - Foreground] وصل إشعار والتطبيق مفتوح! 🔔🔔🔔',
+      );
+      debugPrint('📝 العنوان: ${message.notification?.title}');
+      debugPrint('📝 المحتوى: ${message.notification?.body}');
+      debugPrint('📦 البيانات (Data): ${message.data}');
+
+      if (message.notification != null) {
+        debugPrint('👀 الإشعار يحتوي على بيانات عرض، المفترض يظهر الآن.');
+        // هنا يمكنك إظهار SnackBar للتأكد بصرياً
+        if (navigatorKey.currentState != null) {
+          ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
+            SnackBar(
+              content: Text(" وصل إشعار: ${message.notification!.title}"),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    });
+
+    // 2. عند فتح التطبيق من الإشعار
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('🚀 [FCM] المستخدم ضغط على الإشعار وفتح التطبيق!');
+      _handleNotificationData(message.data);
+    });
+
+    // 3. عند فتح التطبيق وكان مغلقاً تماماً
+    FirebaseMessaging.instance.getInitialMessage().then((
+      RemoteMessage? message,
+    ) {
+      if (message != null) {
+        debugPrint('🚀 [FCM] التطبيق فتح من إشعار (Initial Message)!');
+        _handleNotificationData(message.data);
+      }
+    });
+  }
+
+  void _handleNotificationData(Map<String, dynamic> data) {
+    debugPrint('➡️ [FCM] معالجة التوجيه. البيانات: $data');
+    final propertyId = data['propertyId'];
+
+    final String? screenType = data['screen']; // هل هي 'chat' أم عقار؟
+
+    // داخل _handleNotificationData في main.dart
+    if (data['type'] == 'new_rating') {
+      // هنا يمكنك توجيه المستخدم لصفحة تقييماته الخاصة ليراها
+      // أو لصفحة RatingsScreen مع تمرير معرفه الشخصي
+      final myId = FirebaseAuth.instance.currentUser?.uid;
+      if (myId != null) {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) =>
+                RatingsScreen(targetUserId: myId, targetUserName: 'تقييماتي'),
+          ),
+        );
+      }
+    }
+    // الحالة 1: توجيه للمحادثة
+    if (screenType == 'chat') {
+      final String? chatId = data['chatId'];
+      final String? recipientId = data['recipientId'];
+      final String? recipientName = data['recipientName'];
+
+      if (chatId != null && recipientId != null) {
+        debugPrint('💬 توجيه لشاشة المحادثة: $chatId');
+        // تأخير بسيط لضمان جاهزية السياق
+        Future.delayed(const Duration(milliseconds: 500), () {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (context) => ChatMessagesScreen(
+                chatId: chatId,
+                recipientId: recipientId,
+                recipientName: recipientName ?? 'مستخدم',
+              ),
+            ),
+          );
+        });
+        return; // إنهاء الدالة هنا
+      }
+    }
+
+    // الحالة 2: توجيه للعقار (الكود القديم)
+
+    if (propertyId != null && propertyId != '0') {
+      debugPrint('🏠 توجيه للعقار رقم: $propertyId');
+      Future.delayed(const Duration(milliseconds: 500), () {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (context) => PropertyDetailsScreen(propertyId: propertyId),
+          ),
+        );
+      });
+    }
+    if (propertyId != null) {
+      debugPrint('✅ [FCM] التوجيه للعقار رقم: $propertyId');
+      Future.delayed(const Duration(milliseconds: 500), () {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (context) => PropertyDetailsScreen(propertyId: propertyId),
+          ),
+        );
+      });
+    } else {
+      debugPrint('⚠️ [FCM] لا يوجد propertyId في الإشعار.');
+    }
   }
 
   // --- الدالة المعدلة والذكية ---

@@ -6,6 +6,9 @@ import 'package:aqar_app/screens/my_properties_screen.dart';
 import 'package:aqar_app/screens/properties_map_screen.dart';
 import 'package:aqar_app/screens/search_screen.dart';
 import 'package:aqar_app/services/notification_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 // import 'package:aqar_app/screens/map_legend_screen.dart'; // غير مستخدم هنا مباشرة
 import 'package:flutter/material.dart';
 import 'package:aqar_app/config/theme_controller.dart';
@@ -90,7 +93,42 @@ class _TabsScreenState extends State<TabsScreen> {
   void initState() {
     super.initState();
     // حفظ التوكن عند بدء الشاشة الرئيسية لضمان استلام الإشعارات
-    NotificationService.saveTokenToFirestore();
+    // NotificationService.saveTokenToFirestore(); // سنعتمد على الدالة الجديدة فقط
+    _saveUserFCMToken();
+  }
+
+  /// دالة للحصول على توكن الجهاز وحفظه في Firestore للمستخدم الحالي
+  void _saveUserFCMToken() async {
+    debugPrint("🔄 [TabsScreen] بدء عملية حفظ التوكن...");
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      debugPrint(
+        "⚠️ [TabsScreen] لا يوجد مستخدم مسجل دخول حالياً. لن يتم حفظ التوكن.",
+      );
+      return;
+    }
+
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        debugPrint(
+          "🔑 [TabsScreen] تم جلب التوكن من الجهاز: ${fcmToken.substring(0, 10)}...",
+        );
+
+        // حفظ التوكن
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'fcmToken': fcmToken,
+        }, SetOptions(merge: true));
+        debugPrint(
+          "✅✅ [TabsScreen] تم حفظ التوكن بنجاح في المستند users/${user.uid}",
+        );
+      } else {
+        debugPrint("❌ [TabsScreen] التوكن عاد بقيمة null!");
+      }
+    } catch (e) {
+      debugPrint("❌❌ [TabsScreen] خطأ فادح أثناء حفظ التوكن: $e");
+    }
   }
 
   @override
@@ -200,12 +238,12 @@ class _TabsScreenState extends State<TabsScreen> {
           Icon(
             Icons.favorite_border,
             size: 30,
-            color: _selectedIndex == 3 ? Colors.white : null,
+            color: _selectedIndex == 4 ? Colors.white : null,
           ),
           Icon(
             Icons.person_outline,
             size: 30,
-            color: _selectedIndex == 4 ? Colors.white : null,
+            color: _selectedIndex == 5 ? Colors.white : null,
           ),
         ],
       ),

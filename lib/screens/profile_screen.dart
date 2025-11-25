@@ -1,6 +1,10 @@
 // import 'dart:io';
+import 'package:aqar_app/screens/admin_all_chats_screen.dart';
+import 'package:aqar_app/screens/favorites_screen.dart';
+import 'package:aqar_app/screens/my_deals_screen.dart';
 import 'package:aqar_app/screens/my_properties_screen.dart';
 import 'package:aqar_app/screens/my_archived_properties_screen.dart'; // <-- استيراد
+import 'package:aqar_app/screens/ratings_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:aqar_app/screens/admin_dashboard_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +14,7 @@ import 'package:aqar_app/config/cloudinary_config.dart';
 import 'package:about/about.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'dart:io'; // ضروري جداً لاستخدام File
 
 class ProfileScreen extends StatefulWidget {
@@ -247,6 +252,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final bio = userData['bio'] ?? '';
           final profileImageUrl = userData['profileImageUrl'];
           final String userRole = userData['role'] ?? 'مشترك';
+          // --- ⭐️ إضافة جديدة: قراءة بيانات السمعة ---
+          final reputationScore = (userData['reputationScore'] ?? 0.0)
+              .toDouble();
+          final reputationCount = (userData['reputationCount'] ?? 0).toInt();
 
           return SingleChildScrollView(
             child: Padding(
@@ -304,6 +313,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       context,
                     ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                   ),
+
+                  const SizedBox(height: 12),
+
+                  // --- ⭐️ إضافة جديدة: عرض التقييم والنجوم ---
+                  _buildReputation(reputationScore, reputationCount, context),
+                  // --- نهاية الإضافة ---
 
                   // عرض رقم الهاتف إذا وجد
                   if (phone.isNotEmpty) ...[
@@ -451,6 +466,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
+                  if (FirebaseAuth.instance.currentUser?.email ==
+                      'kloklop8@gmail.com') // ضع ايميلك هنا
+                    ListTile(
+                      leading: Icon(Icons.security),
+                      title: Text('لوحة مراقبة المحادثات'),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AdminAllChatsScreen(),
+                        ),
+                      ),
+                    ),
+                  // --- إضافة 1: قسم المفضلة ---
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.favorite,
+                        color: Colors.redAccent,
+                      ),
+                      title: const Text('المفضلة'),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        // سنقوم بإنشاء هذه الشاشة لاحقاً أو يمكنك إضافتها الآن
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (ctx) => const FavoritesScreen(),
+                          ),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'راقب العقارات التي قمت بإضافتهم للمفضلة...',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // --- إضافة 2: سجل الصفقات (مشتريات ومبيعات) ---
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.handshake_outlined,
+                        color: Colors.green,
+                      ),
+                      title: const Text('سجل الصفقات'),
+                      subtitle: const Text(
+                        'العقارات التي قمت بشرائها أو استئجارها',
+                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        // سنقوم بإنشاء شاشة DealsHistoryScreen لاحقاً
+                        // Navigator.of(context).push(
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (ctx) => const MyDealsScreen(),
+                          ),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'شاهد الصفقات التي قمت بها من خلال تطبيق عقار بلص...',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  // --- إضافة 3: عرض التعليقات (Reviews) ---
+                  // بما أننا أضفنا التقييم، قد يرغب المستخدم بقراءة التعليقات التي كُتبت عنه
+                  Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      leading: const Icon(Icons.star_half, color: Colors.amber),
+                      title: const Text('التقييمات والآراء'),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RatingsScreen(
+                              targetUserId: _user!
+                                  .uid, // ✅ التصحيح: استخدام معرف المستخدم الحاليd, // معرف البائع/المعلن
+                              targetUserName: username, // اسم البائع
+                            ),
+                          ),
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('شاشة التقييمات ...')),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
                   // لوحة التحكم للمدير
                   if (userRole == 'مدير' || userRole == 'admin') ...[
                     const SizedBox(height: 10),
@@ -492,13 +606,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
           );
         },
       ),
+    );
+  }
+
+  // --- ⭐️ إضافة جديدة: ويدجت لعرض نجوم التقييم ---
+  Widget _buildReputation(double score, int count, BuildContext context) {
+    if (count == 0) {
+      return const Text(
+        'لا توجد تقييمات بعد',
+        style: TextStyle(color: Colors.grey),
+      );
+    }
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        RatingBarIndicator(
+          rating: score,
+          itemBuilder: (context, index) =>
+              const Icon(Icons.star, color: Colors.amber),
+          itemCount: 5,
+          itemSize: 20.0,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '${score.toStringAsFixed(1)} ($count تقييم)',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
     );
   }
 }
