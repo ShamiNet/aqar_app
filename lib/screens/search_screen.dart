@@ -1,7 +1,7 @@
+import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/widgets/properties_list.dart';
 import 'package:aqar_app/widgets/properties_list_skeleton.dart';
 import 'package:aqar_app/filter_dialog.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -14,18 +14,20 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
 
-  // القيم الافتراضية للفلاتر
+  // لتخزين البيانات القادمة من السيرفر
+  late Future<List<Map<String, dynamic>>> _allPropertiesFuture;
+
   String? _selectedCategory;
-  RangeValues _priceRange = const RangeValues(
-    0,
-    10000000,
-  ); // رفعنا الحد الأعلى لضمان شمول العقارات الغالية
+  RangeValues _priceRange = const RangeValues(0, 10000000);
   int _minRooms = 0;
 
   @override
   void initState() {
     super.initState();
-    // الاستماع لتغييرات النص لتحديث الواجهة فوراً
+    // جلب البيانات مرة واحدة عند فتح الشاشة
+    _allPropertiesFuture = ApiService.fetchProperties();
+
+    // تحديث الواجهة عند الكتابة
     _searchController.addListener(() {
       setState(() {});
     });
@@ -56,23 +58,43 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  // دالة الفلترة المحلية
+  List<Map<String, dynamic>> _applyFilters(
+    List<Map<String, dynamic>> allProperties,
+  ) {
+    final searchQuery = _searchController.text.trim().toLowerCase();
+
+    return allProperties.where((property) {
+      // 1. فلترة التصنيف
+      if (_selectedCategory != null &&
+          property['category'] != _selectedCategory) {
+        return false;
+      }
+
+      // 2. فلترة السعر
+      final price = num.tryParse(property['price'].toString()) ?? 0;
+      if (price < _priceRange.start || price > _priceRange.end) {
+        return false;
+      }
+
+      // 3. فلترة الغرف
+      final rooms = int.tryParse(property['rooms'].toString()) ?? 0;
+      if (_minRooms > 0 && rooms < _minRooms) {
+        return false;
+      }
+
+      // 4. فلترة البحث بالنص
+      final title = (property['title'] ?? '').toString().toLowerCase();
+      if (searchQuery.isNotEmpty && !title.contains(searchQuery)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 1. بناء الاستعلام الأساسي (Server-Side Filtering)
-    // نفلتر بالسعر والتصنيف على السيرفر لأنها بيانات مهيكلة
-    Query query = FirebaseFirestore.instance.collection('properties');
-
-    if (_selectedCategory != null) {
-      query = query.where('category', isEqualTo: _selectedCategory);
-    }
-
-    // تصفية السعر على السيرفر
-    // ملاحظة: عند استخدام فلترة بالنطاق، يجب الترتيب بنفس الحقل
-    query = query
-        .where('price', isGreaterThanOrEqualTo: _priceRange.start)
-        .where('price', isLessThanOrEqualTo: _priceRange.end)
-        .orderBy('price');
-
     return Scaffold(
       appBar: AppBar(
         title: TextField(
@@ -98,75 +120,31 @@ class _SearchScreenState extends State<SearchScreen> {
               icon: const Icon(Icons.clear),
               onPressed: () {
                 _searchController.clear();
-                // يمكن أيضاً إعادة تعيين الفلاتر هنا إذا أردت
               },
             ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: query.snapshots(),
+      // نستخدم FutureBuilder بدلاً من StreamBuilder
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _allPropertiesFuture,
         builder: (ctx, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const PropertiesListSkeleton();
           }
 
           if (snapshot.hasError) {
-            debugPrint('Search Error: ${snapshot.error}');
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'حدث خطأ في البحث.\nتأكد من وجود الفهارس (Indexes) في Firebase Console إذا ظهر رابط في السجلات.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            );
-          }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
-              child: Text('لا توجد عقارات ضمن نطاق السعر والتصنيف المحددين.'),
+              child: Text('حدث خطأ في جلب البيانات من السيرفر'),
             );
           }
 
-          // 2. التصفية المتقدمة (Client-Side Filtering)
-          // نقوم بتصفية العنوان وعدد الغرف هنا لتجنب قيود Firestore
-          final searchQuery = _searchController.text.trim().toLowerCase();
+          final allProperties = snapshot.data ?? [];
 
-          final filteredProperties = snapshot.data!.docs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-
-            // تصفية العنوان (بحث ذكي يحتوي على النص)
-            final title = (data['title'] ?? '').toString().toLowerCase();
-            final matchesSearch =
-                searchQuery.isEmpty || title.contains(searchQuery);
-
-            // تصفية عدد الغرف
-            // نحول القيمة لرقم للتأكد من المقارنة الصحيحة
-            final rooms = int.tryParse(data['rooms'].toString()) ?? 0;
-            final matchesRooms = _minRooms == 0 || rooms >= _minRooms;
-
-            return matchesSearch && matchesRooms;
-          }).toList();
+          // تطبيق الفلترة محلياً
+          final filteredProperties = _applyFilters(allProperties);
 
           if (filteredProperties.isEmpty) {
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.search_off, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  'لا توجد نتائج مطابقة لـ "$searchQuery"',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                if (_minRooms > 0)
-                  Text(
-                    'مع حد أدنى $_minRooms غرف',
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-              ],
-            );
+            return const Center(child: Text('لا توجد نتائج مطابقة.'));
           }
 
           return PropertiesList(properties: filteredProperties);

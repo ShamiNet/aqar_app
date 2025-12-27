@@ -1,7 +1,7 @@
 import 'package:aqar_app/screens/property_form.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_form_builder/flutter_form_builder.dart';
+import 'package:aqar_app/services/api_service.dart'; // ✅ استخدام السيرفر
 import 'package:flutter/material.dart';
+import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:aqar_app/config/cloudinary_config.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
@@ -30,14 +30,10 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
 
   void _loadPropertyData() async {
     try {
-      final propertyDoc = await FirebaseFirestore.instance
-          .collection('properties')
-          .doc(widget.propertyId)
-          .get();
-
-      if (propertyDoc.exists) {
+      final data = await ApiService.fetchPropertyDetails(widget.propertyId);
+      if (data != null) {
         setState(() {
-          _propertyData = propertyDoc.data()!;
+          _propertyData = data;
           _isLoading = false;
         });
       } else {
@@ -53,22 +49,24 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 1. الصور
+      // 1. رفع الصور الجديدة
       final newImageUrls = await _uploadImages(data['newImages']);
       final List<dynamic> finalImageUrls = [
         ...data['existingImageUrls'],
         ...newImageUrls,
       ];
 
-      // 2. الفيديو
-      String? videoUrl = _propertyData['videoUrl']; // القيمة القديمة
+      // حذف الصور التي طلب المستخدم حذفها
+      final imagesToRemove = data['imagesToRemove'] as List<String>?;
+      if (imagesToRemove != null) {
+        finalImageUrls.removeWhere((url) => imagesToRemove.contains(url));
+      }
 
-      // إذا طلب المستخدم حذف الفيديو القديم أو رفع فيديو جديد، نلغي الرابط القديم
+      // 2. معالجة الفيديو
+      String? videoUrl = _propertyData['videoUrl'];
       if (data['removeExistingVideo'] == true || data['newVideo'] != null) {
         videoUrl = null;
       }
-
-      // رفع الفيديو الجديد إذا وجد
       if (data['newVideo'] != null) {
         final CloudinaryResponse res = await cloudinary.uploadFile(
           CloudinaryFile.fromFile(
@@ -80,27 +78,27 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         videoUrl = res.secureUrl;
       }
 
-      // 3. التحديث
-      await FirebaseFirestore.instance
-          .collection('properties')
-          .doc(widget.propertyId)
-          .update({
-            'title': data['title'],
-            'price': data['price'],
-            'description': data['description'],
-            'category': data['category'],
-            'propertyType': data['propertyType'],
-            'subscriptionPeriod': data['subscriptionPeriod'],
-            'currency': data['currency'],
-            'isFeatured': data['isFeatured'],
-            'discountPercent': data['discountPercent'],
-            'area': data['area'],
-            'rooms': data['rooms'],
-            'floor': data['floor'],
-            'imageUrls': finalImageUrls,
-            'videoUrl': videoUrl, // تحديث رابط الفيديو
-            'updatedAt': Timestamp.now(),
-          });
+      // 3. تجهيز البيانات للتحديث
+      final updateData = {
+        'title': data['title'],
+        'price': data['price'],
+        'description': data['description'],
+        'category': data['category'],
+        'propertyType': data['propertyType'],
+        'subscriptionPeriod': data['subscriptionPeriod'],
+        'currency': data['currency'],
+        'isFeatured': data['isFeatured'],
+        'discountPercent': data['discountPercent'],
+        'area': data['area'],
+        'rooms': data['rooms'],
+        'floor': data['floor'],
+        'imageUrls': finalImageUrls,
+        'videoUrl': videoUrl,
+        // الموقع عادة لا يتم تعديله، لكن يمكن إضافته إذا لزم الأمر
+      };
+
+      // 4. الإرسال للسيرفر
+      await ApiService.updateProperty(widget.propertyId, updateData);
 
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -157,15 +155,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                   ),
                   const SizedBox(height: 20),
                   if (_isSaving)
-                    const Center(
-                      child: Column(
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 8),
-                          Text('جاري الحفظ... (الفيديو يأخذ وقتاً)'),
-                        ],
-                      ),
-                    )
+                    const Center(child: CircularProgressIndicator())
                   else
                     ElevatedButton(
                       onPressed: () => _submitForm?.call(),

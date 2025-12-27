@@ -9,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:cloudinary_public/cloudinary_public.dart'; // نحتاج استيراد هذا النوع للرفع
+import 'package:cloudinary_public/cloudinary_public.dart';
 
 class PropertyForm extends StatefulWidget {
   final GlobalKey<FormBuilderState> formKey;
@@ -40,7 +40,6 @@ class _PropertyFormState extends State<PropertyForm> {
   final List<dynamic> _images = [];
   final List<String> _imagesToRemove = [];
 
-  // --- متغيرات الفيديو الجديدة ---
   XFile? _pickedVideo;
   String? _existingVideoUrl;
   bool _removeExistingVideo = false;
@@ -53,7 +52,9 @@ class _PropertyFormState extends State<PropertyForm> {
     super.initState();
     _processedInitialData = _processDataForDisplay(widget.initialData);
 
-    // تهيئة الفيديو الموجود مسبقاً (في حالة التعديل)
+    // ✅ معالجة الموقع الأولي (إصلاح الخطأ)
+    _initializeLocation();
+
     if (widget.initialData['videoUrl'] != null) {
       _existingVideoUrl = widget.initialData['videoUrl'];
     }
@@ -65,6 +66,27 @@ class _PropertyFormState extends State<PropertyForm> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.bindSubmit(_onSave);
     });
+  }
+
+  // ✅ دالة جديدة لتحويل الموقع بأمان
+  void _initializeLocation() {
+    if (widget.initialData['location'] != null) {
+      final loc = widget.initialData['location'];
+
+      if (loc is Map) {
+        // إذا جاء من السيرفر كـ Map
+        final double? lat = (loc['_latitude'] ?? loc['latitude'])?.toDouble();
+        final double? lng = (loc['_longitude'] ?? loc['longitude'])?.toDouble();
+        if (lat != null && lng != null) {
+          _selectedLocation = LatLng(lat, lng);
+          _getAddressFromLatLng(_selectedLocation!);
+        }
+      } else if (loc is LatLng) {
+        // إذا كان أصلاً LatLng
+        _selectedLocation = loc;
+        _getAddressFromLatLng(_selectedLocation!);
+      }
+    }
   }
 
   Map<String, dynamic> _processDataForDisplay(Map<String, dynamic> data) {
@@ -101,13 +123,12 @@ class _PropertyFormState extends State<PropertyForm> {
           draftData[key] = draftValue.toString();
           final fieldState = widget.formKey.currentState!.fields[key];
           if (fieldState?.value is bool) {
-            if (draftValue is bool) {
+            if (draftValue is bool)
               draftData[key] = draftValue;
-            } else if (draftValue == 'true') {
+            else if (draftValue == 'true')
               draftData[key] = true;
-            } else {
+            else
               draftData[key] = false;
-            }
           }
         }
       }
@@ -151,7 +172,9 @@ class _PropertyFormState extends State<PropertyForm> {
         );
         return;
       }
-      if (_selectedLocation == null && !widget.isEditMode) {
+      if (_selectedLocation == null) {
+        // في حالة التعديل، إذا لم يغير الموقع، نستخدم القديم الموجود في _selectedLocation (الذي هيأناه في initState)
+        // إذا كان لا يزال null، نظهر خطأ
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('الرجاء تحديد موقع العقار على الخريطة.'),
@@ -165,16 +188,14 @@ class _PropertyFormState extends State<PropertyForm> {
       );
 
       data.addAll({
-        'location': _selectedLocation ?? widget.initialData['location'],
+        'location': _selectedLocation, // نرسل كائن LatLng
         'address':
             '${_addressStreet ?? ''}, ${_addressCity ?? ''}, ${_addressCountry ?? ''}',
         'newImages': _images.whereType<XFile>().toList(),
         'existingImageUrls': _images.whereType<String>().toList(),
         'imagesToRemove': _imagesToRemove,
-
-        // --- بيانات الفيديو الجديدة ---
-        'newVideo': _pickedVideo, // ملف الفيديو الجديد
-        'removeExistingVideo': _removeExistingVideo, // هل حذف القديم؟
+        'newVideo': _pickedVideo,
+        'removeExistingVideo': _removeExistingVideo,
       });
 
       widget.onSave(data);
@@ -190,17 +211,16 @@ class _PropertyFormState extends State<PropertyForm> {
     });
   }
 
-  // --- دالة اختيار الفيديو ---
   void _pickVideo() async {
     final imagePicker = ImagePicker();
     final video = await imagePicker.pickVideo(
       source: ImageSource.gallery,
-      maxDuration: const Duration(minutes: 2), // حد أقصى دقيقتين
+      maxDuration: const Duration(minutes: 2),
     );
     if (video == null) return;
     setState(() {
       _pickedVideo = video;
-      _removeExistingVideo = true; // إذا اختار جديداً، نحذف القديم منطقياً
+      _removeExistingVideo = true;
     });
   }
 
@@ -231,7 +251,7 @@ class _PropertyFormState extends State<PropertyForm> {
         });
       }
     } catch (e) {
-      debugPrint('[PropertyForm] _getAddressFromLatLng: Error: $e');
+      debugPrint('[PropertyForm] Error getting address: $e');
     }
   }
 
@@ -239,14 +259,6 @@ class _PropertyFormState extends State<PropertyForm> {
   Widget build(BuildContext context) {
     if (_images.isEmpty && widget.initialData['imageUrls'] != null) {
       _images.addAll(widget.initialData['imageUrls']);
-    }
-    if (_selectedLocation == null && widget.initialData['location'] != null) {
-      final location = widget.initialData['location']; // GeoPoint
-      if (location != null) {
-        // تحقق إضافي
-        _selectedLocation = LatLng(location.latitude, location.longitude);
-        _getAddressFromLatLng(_selectedLocation!);
-      }
     }
 
     return FormBuilder(
@@ -264,24 +276,14 @@ class _PropertyFormState extends State<PropertyForm> {
                 borderRadius: BorderRadius.circular(12),
               ),
               filled: true,
-              fillColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHighest.withOpacity(0.3),
               prefixIcon: const Icon(Icons.title_outlined),
             ),
             validator: FormBuilderValidators.compose([
-              FormBuilderValidators.required(errorText: 'الرجاء إدخال عنوان.'),
-              FormBuilderValidators.minLength(
-                5,
-                errorText: 'العنوان قصير جداً.',
-              ),
+              FormBuilderValidators.required(errorText: 'مطلوب'),
+              FormBuilderValidators.minLength(5, errorText: 'قصير جداً'),
             ]),
           ),
           const SizedBox(height: 16),
-
-          // ... (التصنيف، النوع، السعر، العملة، المميز، الخصم، المساحة، الغرف، الطابق)
-          // سأختصر هذه الأجزاء لأنها لم تتغير، ولكن تأكد من نسخها من الملف السابق
-          // أو إذا أردت الملف كاملاً، سأضع الأجزاء الرئيسية هنا
           FormBuilderDropdown<String>(
             name: 'category',
             decoration: InputDecoration(
@@ -347,8 +349,6 @@ class _PropertyFormState extends State<PropertyForm> {
               prefixIcon: const Icon(Icons.attach_money),
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            valueTransformer: (val) =>
-                num.tryParse(val?.replaceAll(',', '') ?? '') ?? 0,
             validator: FormBuilderValidators.required(errorText: 'مطلوب'),
           ),
           const SizedBox(height: 16),
@@ -385,7 +385,6 @@ class _PropertyFormState extends State<PropertyForm> {
             ),
             keyboardType: TextInputType.number,
             initialValue: '0',
-            valueTransformer: (val) => int.tryParse(val ?? '0') ?? 0,
           ),
           const SizedBox(height: 16),
           FormBuilderTextField(
@@ -397,7 +396,6 @@ class _PropertyFormState extends State<PropertyForm> {
               ),
             ),
             keyboardType: TextInputType.number,
-            valueTransformer: (val) => num.tryParse(val ?? '') ?? 0,
             validator: FormBuilderValidators.required(errorText: 'مطلوب'),
           ),
           const SizedBox(height: 16),
@@ -414,7 +412,6 @@ class _PropertyFormState extends State<PropertyForm> {
                 ),
               ),
               keyboardType: TextInputType.number,
-              valueTransformer: (val) => int.tryParse(val ?? '') ?? 0,
             ),
           const SizedBox(height: 16),
           if (widget.formKey.currentState?.fields['propertyType']?.value !=
@@ -428,10 +425,8 @@ class _PropertyFormState extends State<PropertyForm> {
                 ),
               ),
               keyboardType: TextInputType.number,
-              valueTransformer: (val) => int.tryParse(val ?? '') ?? 0,
             ),
           const SizedBox(height: 16),
-
           FormBuilderTextField(
             name: 'description',
             decoration: InputDecoration(
@@ -440,29 +435,20 @@ class _PropertyFormState extends State<PropertyForm> {
                 borderRadius: BorderRadius.circular(12),
               ),
               filled: true,
-              fillColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHighest.withOpacity(0.3),
               prefixIcon: const Icon(Icons.description_outlined),
               alignLabelWithHint: true,
             ),
             maxLines: 3,
             validator: FormBuilderValidators.compose([
-              FormBuilderValidators.required(errorText: 'الرجاء إدخال الوصف.'),
-              FormBuilderValidators.minLength(
-                10,
-                errorText: 'الوصف قصير جداً.',
-              ),
+              FormBuilderValidators.required(errorText: 'مطلوب'),
+              FormBuilderValidators.minLength(10, errorText: 'قصير جداً'),
             ]),
           ),
           const SizedBox(height: 20),
-
-          if (!widget.isEditMode) _buildLocationPicker(),
+          _buildLocationPicker(),
           const SizedBox(height: 20),
           _buildImagePicker(),
           const SizedBox(height: 20),
-
-          // --- قسم الفيديو الجديد ---
           _buildVideoPicker(),
           const SizedBox(height: 20),
         ],
@@ -525,7 +511,6 @@ class _PropertyFormState extends State<PropertyForm> {
     );
   }
 
-  // --- ويدجت اختيار الفيديو الجديد ---
   Widget _buildVideoPicker() {
     return Card(
       elevation: 2,
@@ -600,12 +585,10 @@ class _PropertyFormState extends State<PropertyForm> {
           top: 0,
           right: 0,
           child: GestureDetector(
-            onTap: () {
-              setState(() {
-                if (image is String) _imagesToRemove.add(image);
-                _images.removeAt(index);
-              });
-            },
+            onTap: () => setState(() {
+              if (image is String) _imagesToRemove.add(image);
+              _images.removeAt(index);
+            }),
             child: const CircleAvatar(
               radius: 10,
               backgroundColor: Colors.red,

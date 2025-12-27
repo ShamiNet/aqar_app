@@ -1,17 +1,55 @@
 import 'package:aqar_app/screens/property_details_screen.dart';
+import 'package:aqar_app/services/api_service.dart'; // ✅
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅
 
-class FavoritesScreen extends StatelessWidget {
+class FavoritesScreen extends StatefulWidget {
   const FavoritesScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+  State<FavoritesScreen> createState() => _FavoritesScreenState();
+}
 
-    if (user == null) {
+class _FavoritesScreenState extends State<FavoritesScreen> {
+  // ✅ جعلناها nullable لتفادي الأخطاء أثناء التحميل
+  Future<List<Map<String, dynamic>>>? _favoritesFuture;
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = prefs.getString('user_id');
+
+    if (mounted) {
+      setState(() {
+        if (uid != null) {
+          _isLoggedIn = true;
+          _favoritesFuture = ApiService.fetchFavorites(uid);
+        } else {
+          _isLoggedIn = false;
+          _favoritesFuture = Future.value([]);
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // عرض مؤشر تحميل حتى نتأكد من حالة الدخول
+    if (_favoritesFuture == null) {
+      return const Scaffold(
+        // ✅ تم إصلاح الخطأ هنا (حذفنا الـ AppBar أثناء التحميل لمنع الوميض)
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!_isLoggedIn) {
       return Scaffold(
         appBar: AppBar(title: const Text('المفضلة')),
         body: const Center(child: Text('يرجى تسجيل الدخول لعرض مفضلتك.')),
@@ -20,14 +58,8 @@ class FavoritesScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('العقارات المفضلة')),
-      body: StreamBuilder<QuerySnapshot>(
-        // 1. جلب معرفات العقارات المفضلة من مجموعة المستخدم
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('favorites')
-            .orderBy('favoritedAt', descending: true)
-            .snapshots(),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _favoritesFuture,
         builder: (ctx, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -35,7 +67,7 @@ class FavoritesScreen extends StatelessWidget {
           if (snapshot.hasError) {
             return const Center(child: Text('حدث خطأ في جلب البيانات.'));
           }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -55,41 +87,14 @@ class FavoritesScreen extends StatelessWidget {
             );
           }
 
-          final favDocs = snapshot.data!.docs;
+          final favorites = snapshot.data!;
 
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: favDocs.length,
+            itemCount: favorites.length,
             itemBuilder: (ctx, index) {
-              // معرف العقار هو معرف المستند في المفضلة
-              final propertyId = favDocs[index].id;
-
-              // 2. جلب تفاصيل العقار الحقيقية لكل عنصر
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('properties')
-                    .doc(propertyId)
-                    .get(),
-                builder: (ctx, propSnapshot) {
-                  if (!propSnapshot.hasData) {
-                    return const SizedBox(
-                      height: 100,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-
-                  // التحقق من أن العقار لا يزال موجوداً (لم يحذفه المالك)
-                  if (!propSnapshot.data!.exists) {
-                    return const SizedBox.shrink();
-                    // يمكننا هنا حذف المفضلة تلقائياً إذا أردنا، لكن إخفاءها يكفي الآن
-                  }
-
-                  final propertyData =
-                      propSnapshot.data!.data() as Map<String, dynamic>;
-
-                  return _buildFavoriteCard(context, propertyData, propertyId);
-                },
-              );
+              final propertyData = favorites[index];
+              return _buildFavoriteCard(context, propertyData);
             },
           );
         },
@@ -97,11 +102,8 @@ class FavoritesScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFavoriteCard(
-    BuildContext context,
-    Map<String, dynamic> data,
-    String propertyId,
-  ) {
+  Widget _buildFavoriteCard(BuildContext context, Map<String, dynamic> data) {
+    final propertyId = data['id'] ?? 'unknown';
     final title = data['title'] ?? 'بدون عنوان';
     final price = data['price'] ?? 0;
     final currency = data['currency'] ?? 'ر.س';

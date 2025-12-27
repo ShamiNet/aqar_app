@@ -1,25 +1,27 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class PropertyCard extends StatelessWidget {
-  final QueryDocumentSnapshot property;
+  // ✅ التعديل: استقبال Map بدلاً من QueryDocumentSnapshot
+  final Map<String, dynamic> property;
   final VoidCallback onTap;
 
   const PropertyCard({super.key, required this.property, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final data = property.data() as Map<String, dynamic>;
+    final data = property;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     final String title = data['title'] ?? 'بدون عنوان';
-    final String imageUrl =
-        (data['imageUrls'] != null && (data['imageUrls'] as List).isNotEmpty)
-        ? data['imageUrls'][0]
+    final List<dynamic> images = data['imageUrls'] is List
+        ? data['imageUrls']
+        : [];
+    final String imageUrl = images.isNotEmpty
+        ? images[0]
         : 'https://placehold.co/600x400/png?text=No+Image';
 
     final double price = double.tryParse(data['price'].toString()) ?? 0.0;

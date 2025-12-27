@@ -1,10 +1,10 @@
 import 'package:aqar_app/screens/auth_gate.dart';
+import 'package:aqar_app/screens/chat_messages_screen.dart';
+import 'package:aqar_app/screens/admin_chat_monitor_screen.dart';
 import 'package:aqar_app/screens/property_details_screen.dart';
-import 'package:aqar_app/screens/archived_property_details_screen.dart';
-import 'package:aqar_app/screens/chat_messages_screen.dart'; // هام للدخول للمحادثة
-import 'package:aqar_app/screens/public_profile_screen.dart'; // هام للملف الشخصي
+import 'package:aqar_app/screens/public_profile_screen.dart';
+import 'package:aqar_app/services/api_service.dart'; // ✅ استخدام السيرفر
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
@@ -23,8 +23,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    // 5 تبويبات شاملة لكل أدوات الإدارة
     _tabController = TabController(length: 5, vsync: this);
+    print('🔴 [AdminDashboard] بدء لوحة القيادة الإدارية!');
+    print('🔴 [AdminDashboard] Admin Dashboard Initialized!');
   }
 
   @override
@@ -34,32 +35,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   }
 
   Future<void> _signOut() async {
-    final shouldSignOut = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تسجيل الخروج'),
-        content: const Text('هل أنت متأكد من رغبتك في تسجيل الخروج؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('تسجيل الخروج'),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldSignOut == true) {
-      await FirebaseAuth.instance.signOut();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (ctx) => const AuthGate()),
-          (route) => false,
-        );
-      }
+    await ApiService.logout();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (ctx) => const AuthGate()),
+        (route) => false,
+      );
     }
   }
 
@@ -72,7 +53,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true, // يسمح بالتمرير إذا كانت الشاشة صغيرة
+          isScrollable: true,
           indicatorColor: Colors.orange,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.grey,
@@ -96,10 +77,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         controller: _tabController,
         children: const [
           _OverviewTab(),
-          _UsersManagementTab(), // التبويب الجديد لإدارة المستخدمين
-          _AppControlTab(), // التبويب الجديد للتحكم في التطبيق
-          _ChatMonitoringTab(), // التبويب الجديد لمراقبة المحادثات
-          _ReportsAndArchiveTab(), // دمجنا البلاغات والأرشيف لتوفير المساحة
+          _UsersManagementTab(),
+          _AppControlTab(),
+          _ChatMonitoringTab(),
+          _ReportsAndArchiveTab(),
         ],
       ),
     );
@@ -115,59 +96,45 @@ class _OverviewTab extends StatefulWidget {
 }
 
 class _OverviewTabState extends State<_OverviewTab> {
-  late Future<Map<String, int>> _statsFuture;
-
-  Future<Map<String, int>> _fetchStats() async {
-    final usersCountFuture = FirebaseFirestore.instance
-        .collection('users')
-        .count()
-        .get();
-    final propertiesCountFuture = FirebaseFirestore.instance
-        .collection('properties')
-        .count()
-        .get();
-    final chatsCountFuture = FirebaseFirestore.instance
-        .collection('chats')
-        .count()
-        .get();
-
-    final results = await Future.wait([
-      usersCountFuture,
-      propertiesCountFuture,
-      chatsCountFuture,
-    ]);
-
-    return {
-      'users': results[0].count ?? 0,
-      'properties': results[1].count ?? 0,
-      'chats': results[2].count ?? 0,
-    };
-  }
+  late Future<Map<String, dynamic>> _statsFuture;
 
   @override
   void initState() {
     super.initState();
-    _statsFuture = _fetchStats();
+    // ✅ جلب الإحصائيات من السيرفر
+    print('🟠 [OverviewTab] بدء تبويب نظرة عامة - جلب الإحصائيات!');
+    _statsFuture = ApiService.fetchAdminStats();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _statsFuture = ApiService.fetchAdminStats();
+    });
+    await _statsFuture;
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, int>>(
+    return FutureBuilder<Map<String, dynamic>>(
       future: _statsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        final stats =
-            snapshot.data ?? {'users': 0, 'properties': 0, 'chats': 0};
+
+        // خريطة البيانات من API
+        final apiData = snapshot.data ?? {};
+        final stats = {
+          'users': apiData['totalUsers'] ?? 0,
+          'properties': apiData['totalProperties'] ?? 0,
+          'chats': apiData['totalChats'] ?? 0,
+          'activeUsers': apiData['activeUsers'] ?? 0,
+          'bannedUsers': apiData['bannedUsers'] ?? 0,
+          'reports': apiData['totalReports'] ?? 0,
+        };
 
         return RefreshIndicator(
-          onRefresh: () async {
-            setState(() {
-              _statsFuture = _fetchStats();
-            });
-            await _statsFuture;
-          },
+          onRefresh: _refresh,
           child: ListView(
             padding: const EdgeInsets.all(16.0),
             children: [
@@ -253,20 +220,31 @@ class _OverviewTabState extends State<_OverviewTab> {
   }
 }
 
-// --- 2. تبويب إدارة المستخدمين (Users Management) ---
+// --- 2. تبويب إدارة المستخدمين ---
 class _UsersManagementTab extends StatefulWidget {
   const _UsersManagementTab();
-
   @override
   State<_UsersManagementTab> createState() => _UsersManagementTabState();
 }
 
 class _UsersManagementTabState extends State<_UsersManagementTab> {
+  late Future<List<Map<String, dynamic>>> _usersFuture;
   String _searchQuery = '';
-  final _currentUser = FirebaseAuth.instance.currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _usersFuture = ApiService.fetchAllUsers();
+  }
+
+  Future<void> _refreshUsers() async {
+    setState(() {
+      _usersFuture = ApiService.fetchAllUsers();
+    });
+    await _usersFuture;
+  }
 
   void _toggleUserBan(
-    BuildContext context,
     String userId,
     bool currentStatus,
     String username,
@@ -276,9 +254,64 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
       builder: (ctx) => AlertDialog(
         title: Text(currentStatus ? 'إلغاء الحظر' : 'حظر المستخدم'),
         content: Text(
+          'هل تريد ${currentStatus ? "إلغاء حظر" : "حظر"} "$username"؟',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await ApiService.toggleUserBan(userId, !currentStatus);
+        setState(() {
+          _usersFuture = ApiService.fetchAllUsers();
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                currentStatus ? 'تم إلغاء حظر المستخدم' : 'تم حظر المستخدم',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('فشلت العملية: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _toggleUserAdmin(
+    String userId,
+    bool currentStatus,
+    String username,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(currentStatus ? 'إزالة صلاحيات المدير' : 'ترقية لمدير'),
+        content: Text(
           currentStatus
-              ? 'هل تريد فك الحظر عن $username؟'
-              : 'هل أنت متأكد من حظر $username؟ لن يتمكن من الدخول للتطبيق.',
+              ? 'هل تريد إزالة صلاحيات المدير من "$username"؟'
+              : 'هل تريد منح "$username" صلاحيات المدير؟',
         ),
         actions: [
           TextButton(
@@ -288,40 +321,43 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: currentStatus ? Colors.green : Colors.red,
+              backgroundColor: currentStatus ? Colors.red : Colors.green,
             ),
-            child: Text(currentStatus ? 'فك الحظر' : 'حظر'),
+            child: const Text('تأكيد'),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'isBanned': !currentStatus,
-      });
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(currentStatus ? 'تم فك الحظر' : 'تم حظر المستخدم'),
-          ),
-        );
+      try {
+        await ApiService.toggleUserAdmin(userId, !currentStatus);
+        setState(() {
+          _usersFuture = ApiService.fetchAllUsers();
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                currentStatus
+                    ? 'تم إزالة صلاحيات المدير'
+                    : 'تم ترقية المستخدم لمدير',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('فشلت العملية: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
-  }
-
-  void _toggleAdminRole(
-    BuildContext context,
-    String userId,
-    String currentRole,
-  ) async {
-    final newRole = currentRole == 'admin' ? 'user' : 'admin';
-    await FirebaseFirestore.instance.collection('users').doc(userId).update({
-      'role': newRole,
-    });
-    if (mounted)
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تم تغيير الصلاحية إلى $newRole')));
   }
 
   @override
@@ -331,139 +367,264 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: TextField(
-            decoration: InputDecoration(
-              hintText: 'بحث بالاسم أو الإيميل...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              filled: true,
-              fillColor: Colors.grey[100],
+            decoration: const InputDecoration(
+              hintText: 'بحث...',
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
             ),
             onChanged: (val) =>
                 setState(() => _searchQuery = val.toLowerCase()),
           ),
         ),
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _usersFuture,
             builder: (ctx, snapshot) {
-              if (!snapshot.hasData)
-                return const Center(child: CircularProgressIndicator());
-
-              final users = snapshot.data!.docs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final name = (data['username'] ?? '').toString().toLowerCase();
-                final email = (data['email'] ?? '').toString().toLowerCase();
-                return name.contains(_searchQuery) ||
-                    email.contains(_searchQuery);
-              }).toList();
-
-              if (users.isEmpty)
-                return const Center(child: Text('لا يوجد مستخدمين مطابقين.'));
-
-              return ListView.builder(
-                itemCount: users.length,
-                itemBuilder: (ctx, index) {
-                  final userData = users[index].data() as Map<String, dynamic>;
-                  final userId = users[index].id;
-                  if (userId == _currentUser?.uid)
-                    return const SizedBox.shrink();
-
-                  final isBanned = userData['isBanned'] == true;
-                  final isAdmin = userData['role'] == 'admin';
-                  final username = userData['username'] ?? 'مجهول';
-
-                  return Card(
-                    color: isBanned ? Colors.red.shade50 : null,
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: userData['profileImageUrl'] != null
-                            ? CachedNetworkImageProvider(
-                                userData['profileImageUrl'],
-                              )
-                            : null,
-                        child: userData['profileImageUrl'] == null
-                            ? const Icon(Icons.person)
-                            : null,
-                      ),
-                      title: Row(
-                        children: [
-                          Text(
-                            username,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          if (isAdmin)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 5),
-                              child: Icon(
-                                Icons.verified_user,
-                                color: Colors.blue,
-                                size: 16,
-                              ),
-                            ),
-                          if (isBanned)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 5),
-                              child: Icon(
-                                Icons.block,
-                                color: Colors.red,
-                                size: 16,
-                              ),
-                            ),
-                        ],
-                      ),
-                      subtitle: Text(userData['email'] ?? ''),
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (val) {
-                          if (val == 'block')
-                            _toggleUserBan(context, userId, isBanned, username);
-                          if (val == 'role')
-                            _toggleAdminRole(
-                              context,
-                              userId,
-                              userData['role'] ?? 'user',
-                            );
-                          if (val == 'profile')
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PublicProfileScreen(
-                                  userId: userId,
-                                  userName: username,
-                                ),
-                              ),
-                            );
-                        },
-                        itemBuilder: (ctx) => [
-                          PopupMenuItem(
-                            value: 'profile',
-                            child: const Text('عرض الملف الشخصي'),
-                          ),
-                          PopupMenuItem(
-                            value: 'role',
-                            child: Text(
-                              isAdmin ? 'إزالة الإدارة' : 'تعيين كمدير',
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 'block',
-                            child: Text(
-                              isBanned ? 'فك الحظر' : 'حظر المستخدم',
-                              style: TextStyle(
-                                color: isBanned ? Colors.green : Colors.red,
-                              ),
-                            ),
-                          ),
-                        ],
+              // Build a child widget based on snapshot and wrap with RefreshIndicator
+              Widget child;
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                child = const Center(child: CircularProgressIndicator());
+              } else if (snapshot.hasError) {
+                child = ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    const SizedBox(height: 80),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 64,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Text('خطأ في تحميل المستخدمين: ${snapshot.error}'),
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: ElevatedButton(
+                        onPressed: _refreshUsers,
+                        child: const Text('إعادة المحاولة'),
                       ),
                     ),
-                  );
-                },
-              );
+                  ],
+                );
+              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                child = ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: const [
+                    SizedBox(height: 80),
+                    Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Center(child: Text('لا يوجد مستخدمين.')),
+                    SizedBox(height: 16),
+                  ],
+                );
+              } else {
+                final users = snapshot.data!.where((user) {
+                  final name = (user['username'] ?? '')
+                      .toString()
+                      .toLowerCase();
+                  final email = (user['email'] ?? '').toString().toLowerCase();
+                  return name.contains(_searchQuery) ||
+                      email.contains(_searchQuery);
+                }).toList();
+
+                child = ListView.builder(
+                  itemCount: users.length,
+                  itemBuilder: (ctx, index) {
+                    final user = users[index];
+                    final isBanned = user['isBanned'] == true;
+                    final isAdmin = user['isAdmin'] == true;
+                    final isSuperAdmin = user['isSuperAdmin'] == true;
+                    final isOnline = user['isOnline'] == true;
+                    final lastSeen = user['lastSeen'];
+
+                    // حساب آخر ظهور
+                    String lastSeenText = '';
+                    if (isOnline) {
+                      lastSeenText = 'متصل الآن';
+                    } else if (lastSeen != null) {
+                      try {
+                        final DateTime lastSeenDate = DateTime.parse(
+                          lastSeen.toString(),
+                        );
+                        final Duration diff = DateTime.now().difference(
+                          lastSeenDate,
+                        );
+
+                        if (diff.inMinutes < 1) {
+                          lastSeenText = 'منذ لحظات';
+                        } else if (diff.inMinutes < 60) {
+                          lastSeenText = 'منذ ${diff.inMinutes} د';
+                        } else if (diff.inHours < 24) {
+                          lastSeenText = 'منذ ${diff.inHours} ساعة';
+                        } else {
+                          lastSeenText = 'منذ ${diff.inDays} يوم';
+                        }
+                      } catch (e) {
+                        lastSeenText = 'غير متصل';
+                      }
+                    } else {
+                      lastSeenText = 'لم يتصل';
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: ListTile(
+                        leading: Stack(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: isAdmin
+                                  ? Colors.orange
+                                  : Colors.blue,
+                              child: Icon(
+                                isSuperAdmin
+                                    ? Icons.shield
+                                    : isAdmin
+                                    ? Icons.admin_panel_settings
+                                    : Icons.person,
+                                color: Colors.white,
+                              ),
+                            ),
+                            // نقطة خضراء إذا كان متصل
+                            if (isOnline)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    color: Colors.green,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        title: Row(
+                          children: [
+                            Text(user['username'] ?? 'مستخدم'),
+                            if (isSuperAdmin) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'المدير العام',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ] else if (isAdmin) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'مدير',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(user['email'] ?? ''),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.access_time,
+                                  size: 12,
+                                  color: isOnline ? Colors.green : Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  lastSeenText,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isOnline
+                                        ? Colors.green
+                                        : Colors.grey,
+                                    fontWeight: isOnline
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // زر إدارة صلاحيات المشرف
+                            IconButton(
+                              icon: Icon(
+                                isAdmin
+                                    ? Icons.remove_moderator
+                                    : Icons.add_moderator,
+                                color: isAdmin ? Colors.red : Colors.green,
+                              ),
+                              tooltip: isAdmin
+                                  ? 'إزالة الإشراف'
+                                  : 'ترقية لمشرف',
+                              onPressed: () => _toggleUserAdmin(
+                                user['id'],
+                                isAdmin,
+                                user['username'],
+                              ),
+                            ),
+                            // زر الحظر
+                            IconButton(
+                              icon: Icon(
+                                isBanned ? Icons.block : Icons.check_circle,
+                                color: isBanned ? Colors.red : Colors.grey,
+                              ),
+                              tooltip: isBanned ? 'إلغاء الحظر' : 'حظر',
+                              onPressed: () => _toggleUserBan(
+                                user['id'],
+                                isBanned,
+                                user['username'],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }
+
+              return RefreshIndicator(onRefresh: _refreshUsers, child: child);
             },
           ),
         ),
@@ -472,19 +633,19 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
   }
 }
 
-// --- 3. تبويب التحكم في التطبيق (App Control) ---
+// --- 3. تبويب التحكم في التطبيق ---
+// --- 3. تبويب التحكم في التطبيق (مفعل) ---
 class _AppControlTab extends StatefulWidget {
   const _AppControlTab();
-
   @override
   State<_AppControlTab> createState() => _AppControlTabState();
 }
 
 class _AppControlTabState extends State<_AppControlTab> {
-  final _minVersionController = TextEditingController();
-  final _maintenanceMsgController = TextEditingController();
-  bool _isMaintenanceMode = false;
-  bool _isLoading = true;
+  final _versionController = TextEditingController();
+  final _msgController = TextEditingController();
+  bool _maintenance = false;
+  bool _loading = true;
 
   @override
   void initState() {
@@ -493,52 +654,52 @@ class _AppControlTabState extends State<_AppControlTab> {
   }
 
   Future<void> _loadSettings() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('app_settings')
-          .doc('config')
-          .get();
-      if (doc.exists) {
-        final data = doc.data()!;
-        setState(() {
-          _minVersionController.text = data['min_version'] ?? '1.0.0';
-          _isMaintenanceMode = data['maintenance_mode'] ?? false;
-          _maintenanceMsgController.text =
-              data['maintenance_message'] ?? 'التطبيق في صيانة حالياً';
-          _isLoading = false;
-        });
-      } else {
-        setState(() => _isLoading = false);
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
+    final settings = await ApiService.fetchAppSettings();
+    if (mounted) {
+      setState(() {
+        _versionController.text = settings['min_version'] ?? '1.0.0';
+        _maintenance = settings['maintenance_mode'] ?? false;
+        _msgController.text = settings['maintenance_message'] ?? '';
+        _loading = false;
+      });
     }
   }
 
-  Future<void> _saveSettings() async {
-    setState(() => _isLoading = true);
-    await FirebaseFirestore.instance
-        .collection('app_settings')
-        .doc('config')
-        .set({
-          'min_version': _minVersionController.text.trim(),
-          'maintenance_mode': _isMaintenanceMode,
-          'maintenance_message': _maintenanceMsgController.text.trim(),
-          'last_updated': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-    setState(() => _isLoading = false);
-    if (mounted)
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم الحفظ بنجاح'),
-          backgroundColor: Colors.green,
-        ),
-      );
+  Future<void> _save() async {
+    setState(() => _loading = true);
+    try {
+      await ApiService.updateAppSettings({
+        'min_version': _versionController.text,
+        'maintenance_mode': _maintenance,
+        'maintenance_message': _msgController.text,
+      });
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم الحفظ بنجاح')));
+        if (_maintenance) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('وضع الصيانة مفعّل. لن يظهر للمشرفين.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل الحفظ: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: CircularProgressIndicator());
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -546,20 +707,14 @@ class _AppControlTabState extends State<_AppControlTab> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
                   'إصدار التطبيق الإجباري',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 10),
                 TextField(
-                  controller: _minVersionController,
-                  decoration: const InputDecoration(
-                    labelText: 'رقم الإصدار (مثلاً 1.0.5)',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
+                  controller: _versionController,
+                  decoration: const InputDecoration(labelText: 'رقم الإصدار'),
                 ),
               ],
             ),
@@ -567,314 +722,394 @@ class _AppControlTabState extends State<_AppControlTab> {
         ),
         const SizedBox(height: 16),
         Card(
-          color: _isMaintenanceMode ? Colors.orange.shade50 : null,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                SwitchListTile(
-                  title: const Text(
-                    'وضع الصيانة',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: const Text(
-                    'إغلاق التطبيق أمام الجميع ما عدا الأدمن',
-                  ),
-                  value: _isMaintenanceMode,
-                  activeColor: Colors.orange,
-                  onChanged: (val) => setState(() => _isMaintenanceMode = val),
+                const Text(
+                  'وضع الصيانة',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
-                if (_isMaintenanceMode)
-                  TextField(
-                    controller: _maintenanceMsgController,
-                    decoration: const InputDecoration(
-                      labelText: 'رسالة الصيانة',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 2,
-                  ),
+                SwitchListTile(
+                  title: const Text('تفعيل الصيانة'),
+                  value: _maintenance,
+                  onChanged: (v) => setState(() => _maintenance = v),
+                ),
+                TextField(
+                  controller: _msgController,
+                  decoration: const InputDecoration(labelText: 'رسالة الصيانة'),
+                ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: 30),
-        ElevatedButton.icon(
-          onPressed: _saveSettings,
-          icon: const Icon(Icons.save),
-          label: const Text('حفظ الإعدادات'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.all(16),
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-          ),
-        ),
+        const SizedBox(height: 20),
+        ElevatedButton(onPressed: _save, child: const Text('حفظ الإعدادات')),
       ],
     );
   }
 }
 
-// --- 4. تبويب مراقبة المحادثات (Chat Monitoring) ---
-class _ChatMonitoringTab extends StatelessWidget {
+// --- 4. تبويب مراقبة الشات ---
+class _ChatMonitoringTab extends StatefulWidget {
   const _ChatMonitoringTab();
 
   @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('chats')
-          .orderBy('lastMessageTimestamp', descending: true)
-          .snapshots(),
-      builder: (ctx, snapshot) {
-        if (!snapshot.hasData)
-          return const Center(child: CircularProgressIndicator());
-        if (snapshot.data!.docs.isEmpty)
-          return const Center(child: Text('لا توجد محادثات.'));
-
-        return ListView.separated(
-          padding: const EdgeInsets.all(12),
-          itemCount: snapshot.data!.docs.length,
-          separatorBuilder: (ctx, index) => const Divider(),
-          itemBuilder: (ctx, index) {
-            final chatData =
-                snapshot.data!.docs[index].data() as Map<String, dynamic>;
-            final chatId = snapshot.data!.docs[index].id;
-            final Map<String, dynamic> names =
-                chatData['participantNames'] ?? {};
-            final namesString = names.values.join(' ↔️ ');
-            final lastMessage = chatData['lastMessage'] ?? '';
-            final timestamp = chatData['lastMessageTimestamp'] as Timestamp?;
-            final timeString = timestamp != null
-                ? intl.DateFormat('dd/MM hh:mm a').format(timestamp.toDate())
-                : '';
-
-            return ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.purple,
-                child: Icon(Icons.remove_red_eye, color: Colors.white),
-              ),
-              title: Text(
-                namesString.isEmpty ? 'محادثة مجهولة' : namesString,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-                maxLines: 1,
-              ),
-              subtitle: Text(
-                lastMessage,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Text(
-                timeString,
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
-              ),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ChatMessagesScreen(
-                      chatId: chatId,
-                      recipientId: 'monitor',
-                      recipientName: 'وضع المراقبة',
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
+  State<_ChatMonitoringTab> createState() => _ChatMonitoringTabState();
 }
 
-// --- 5. تبويب البلاغات والأرشيف (Reports & Archive) ---
-class _ReportsAndArchiveTab extends StatefulWidget {
-  const _ReportsAndArchiveTab();
-
-  @override
-  State<_ReportsAndArchiveTab> createState() => _ReportsAndArchiveTabState();
-}
-
-class _ReportsAndArchiveTabState extends State<_ReportsAndArchiveTab>
-    with SingleTickerProviderStateMixin {
-  late TabController _innerTabController;
+class _ChatMonitoringTabState extends State<_ChatMonitoringTab> {
+  late Future<List<Map<String, dynamic>>> _chatsFuture;
+  String _searchQuery = '';
+  bool _showOnlineOnly = false;
 
   @override
   void initState() {
     super.initState();
-    _innerTabController = TabController(length: 2, vsync: this);
+    // ✅ جلب جميع المحادثات عند بدء التشغيل
+    _chatsFuture = ApiService.fetchAllChats();
+  }
+
+  void _refreshChats() {
+    setState(() {
+      _chatsFuture = ApiService.fetchAllChats();
+    });
+  }
+
+  List<Map<String, dynamic>> _filterChats(List<Map<String, dynamic>> chats) {
+    var filtered = chats;
+
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((chat) {
+        final user1 = chat['user1'] as Map<String, dynamic>?;
+        final user2 = chat['user2'] as Map<String, dynamic>?;
+        final query = _searchQuery.toLowerCase();
+        return (user1?['username']?.toString().toLowerCase().contains(query) ??
+                false) ||
+            (user1?['email']?.toString().toLowerCase().contains(query) ??
+                false) ||
+            (user2?['username']?.toString().toLowerCase().contains(query) ??
+                false) ||
+            (user2?['email']?.toString().toLowerCase().contains(query) ??
+                false);
+      }).toList();
+    }
+
+    if (_showOnlineOnly) {
+      filtered = filtered.where((chat) {
+        final user1 = chat['user1'] as Map<String, dynamic>?;
+        final user2 = chat['user2'] as Map<String, dynamic>?;
+        return (user1?['isOnline'] == true) || (user2?['isOnline'] == true);
+      }).toList();
+    }
+
+    return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        TabBar(
-          controller: _innerTabController,
-          labelColor: Colors.red,
-          unselectedLabelColor: Colors.grey,
-          tabs: const [
-            Tab(text: 'البلاغات النشطة'),
-            Tab(text: 'أرشيف العقارات'),
-          ],
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: Colors.grey.shade100,
+          child: Column(
+            children: [
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'ابحث باسم المستخدم أو البريد الإلكتروني...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  FilterChip(
+                    label: const Text('المتصلين فقط'),
+                    selected: _showOnlineOnly,
+                    onSelected: (selected) =>
+                        setState(() => _showOnlineOnly = selected),
+                    avatar: Icon(
+                      Icons.circle,
+                      color: _showOnlineOnly ? Colors.green : Colors.grey,
+                      size: 12,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _refreshChats,
+                    tooltip: 'تحديث',
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         Expanded(
-          child: TabBarView(
-            controller: _innerTabController,
-            children: const [_ReportsList(), _ArchiveList()],
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _chatsFuture,
+            builder: (ctx, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.chat_bubble_outline,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('لا توجد محادثات حالياً'),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _refreshChats,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('تحديث'),
+                      ),
+                    ],
+                  ),
+                );
+              }
+              final filteredChats = _filterChats(snapshot.data!);
+              if (filteredChats.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('لا توجد نتائج للبحث'),
+                    ],
+                  ),
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: () async => _refreshChats(),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: filteredChats.length,
+                  itemBuilder: (ctx, index) =>
+                      _buildChatCard(filteredChats[index]),
+                ),
+              );
+            },
           ),
         ),
       ],
     );
   }
-}
 
-class _ReportsList extends StatelessWidget {
-  const _ReportsList();
+  Widget _buildChatCard(Map<String, dynamic> chat) {
+    final user1 = chat['user1'] as Map<String, dynamic>?;
+    final user2 = chat['user2'] as Map<String, dynamic>?;
+    final messagesCount = chat['messagesCount'] ?? 0;
+    final lastMessage = chat['lastMessage']?.toString() ?? '';
+    final lastMessageTime = chat['lastMessageTimestamp'];
 
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('reports')
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData)
-          return const Center(child: CircularProgressIndicator());
-        if (snapshot.data!.docs.isEmpty)
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 50),
-                Text('لا توجد بلاغات!'),
-              ],
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      elevation: 3,
+      child: InkWell(
+        onTap: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (ctx) =>
+                  AdminChatMonitorScreen(chatId: chat['id'], chatData: chat),
             ),
           );
-
-        return ListView.builder(
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (ctx, index) {
-            final report =
-                snapshot.data!.docs[index].data() as Map<String, dynamic>;
-            final reportId = snapshot.data!.docs[index].id;
-            final propertyId = report['propertyId'];
-
-            return Card(
-              margin: const EdgeInsets.all(8),
-              child: ListTile(
-                leading: const Icon(Icons.warning, color: Colors.red),
-                title: Text(report['reason'] ?? 'سبب غير محدد'),
-                subtitle: Text(report['details'] ?? ''),
-                trailing: IconButton(
-                  icon: const Icon(Icons.arrow_forward),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            PropertyDetailsScreen(propertyId: propertyId),
-                      ),
-                    );
-                  },
-                ),
-                onLongPress: () async {
-                  // خيار الحذف السريع للبلاغ
-                  await FirebaseFirestore.instance
-                      .collection('reports')
-                      .doc(reportId)
-                      .delete();
-                },
+          if (result == true) _refreshChats();
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: _buildUserChip(user1)),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.chat, color: Colors.orange, size: 20),
+                  ),
+                  Expanded(child: _buildUserChip(user2)),
+                ],
               ),
-            );
-          },
-        );
-      },
+              const SizedBox(height: 12),
+              if (lastMessage.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.message, size: 16, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          lastMessage,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Chip(
+                    avatar: const Icon(Icons.chat_bubble, size: 16),
+                    label: Text('$messagesCount رسالة'),
+                    backgroundColor: Colors.blue.shade50,
+                    labelStyle: const TextStyle(fontSize: 11),
+                  ),
+                  const SizedBox(width: 8),
+                  if (lastMessageTime != null)
+                    Chip(
+                      avatar: const Icon(Icons.access_time, size: 16),
+                      label: Text(_formatTimestamp(lastMessageTime)),
+                      backgroundColor: Colors.orange.shade50,
+                      labelStyle: const TextStyle(fontSize: 11),
+                    ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.visibility, color: Colors.blue),
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (ctx) => AdminChatMonitorScreen(
+                            chatId: chat['id'],
+                            chatData: chat,
+                          ),
+                        ),
+                      );
+                      if (result == true) _refreshChats();
+                    },
+                    tooltip: 'عرض المحادثة',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  Widget _buildUserChip(Map<String, dynamic>? user) {
+    if (user == null) {
+      return const Chip(
+        label: Text('مستخدم محذوف', style: TextStyle(fontSize: 11)),
+        avatar: Icon(Icons.person_off, size: 16),
+        backgroundColor: Colors.grey,
+      );
+    }
+    final username = user['username']?.toString() ?? 'مستخدم';
+    final isOnline = user['isOnline'] == true;
+    final isBanned = user['isBanned'] == true;
+    return Chip(
+      avatar: CircleAvatar(
+        radius: 12,
+        backgroundImage: user['profileImage'] != null
+            ? CachedNetworkImageProvider(user['profileImage'])
+            : null,
+        child: user['profileImage'] == null
+            ? const Icon(Icons.person, size: 12)
+            : null,
+      ),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              username,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ),
+          const SizedBox(width: 4),
+          if (isOnline)
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+              ),
+            ),
+          if (isBanned) const Icon(Icons.block, size: 12, color: Colors.red),
+        ],
+      ),
+      backgroundColor: isOnline ? Colors.green.shade50 : Colors.grey.shade200,
+    );
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    try {
+      if (timestamp == null) return 'غير معروف';
+      DateTime dateTime;
+      if (timestamp is String) {
+        dateTime = DateTime.parse(timestamp);
+      } else if (timestamp is int) {
+        dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      } else {
+        return 'غير معروف';
+      }
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+      if (difference.inMinutes < 1) return 'الآن';
+      if (difference.inMinutes < 60) return 'منذ ${difference.inMinutes} دقيقة';
+      if (difference.inHours < 24) return 'منذ ${difference.inHours} ساعة';
+      if (difference.inDays < 7) return 'منذ ${difference.inDays} يوم';
+      return intl.DateFormat('dd/MM/yyyy').format(dateTime);
+    } catch (e) {
+      return 'غير معروف';
+    }
   }
 }
 
-class _ArchiveList extends StatelessWidget {
-  const _ArchiveList();
-
-  Future<void> _restoreProperty(
-    BuildContext context,
-    String docId,
-    Map<String, dynamic> data,
-  ) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('استعادة عقار'),
-        content: const Text('هل أنت متأكد من استعادة هذا العقار؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('استعادة'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      data.remove('archivedAt');
-      data.remove('archiveReason');
-      await FirebaseFirestore.instance.collection('properties').add(data);
-      await FirebaseFirestore.instance
-          .collection('archived_properties')
-          .doc(docId)
-          .delete();
-      if (context.mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم الاستعادة بنجاح')));
-    }
-  }
+// --- 5. تبويب البلاغات والأرشيف ---
+class _ReportsAndArchiveTab extends StatelessWidget {
+  const _ReportsAndArchiveTab();
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('archived_properties')
-          .orderBy('archivedAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData)
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: ApiService.fetchReports(),
+      builder: (ctx, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        if (snapshot.data!.docs.isEmpty)
-          return const Center(child: Text('الأرشيف فارغ.'));
+        if (!snapshot.hasData || snapshot.data!.isEmpty)
+          return const Center(child: Text('لا توجد بلاغات.'));
 
         return ListView.builder(
-          itemCount: snapshot.data!.docs.length,
+          itemCount: snapshot.data!.length,
           itemBuilder: (ctx, index) {
-            final doc = snapshot.data!.docs[index];
-            final data = doc.data() as Map<String, dynamic>;
-
-            return Card(
-              child: ListTile(
-                title: Text(data['title'] ?? 'بدون عنوان'),
-                subtitle: Text('السبب: ${data['archiveReason'] ?? '---'}'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.restore),
-                  tooltip: 'استعادة',
-                  onPressed: () => _restoreProperty(context, doc.id, data),
-                ),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ArchivedPropertyDetailsScreen(propertyData: data),
-                    ),
-                  );
-                },
-              ),
+            final report = snapshot.data![index];
+            return ListTile(
+              leading: const Icon(Icons.warning, color: Colors.red),
+              title: Text(report['reason'] ?? 'بلاغ'),
+              subtitle: Text(report['details'] ?? ''),
             );
           },
         );

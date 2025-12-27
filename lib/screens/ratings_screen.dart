@@ -1,11 +1,11 @@
+import 'package:aqar_app/services/api_service.dart'; // ✅
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart'; // تأكد من وجود المكتبة
 import 'package:intl/intl.dart' as intl;
 
-class RatingsScreen extends StatelessWidget {
-  final String targetUserId; // معرف البائع (صاحب البروفايل)
+class RatingsScreen extends StatefulWidget {
+  final String targetUserId;
   final String targetUserName;
 
   const RatingsScreen({
@@ -15,36 +15,46 @@ class RatingsScreen extends StatelessWidget {
   });
 
   @override
+  State<RatingsScreen> createState() => _RatingsScreenState();
+}
+
+class _RatingsScreenState extends State<RatingsScreen> {
+  late Future<Map<String, dynamic>> _summaryFuture;
+  late Future<List<Map<String, dynamic>>> _reviewsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _summaryFuture = ApiService.fetchUserRatingSummary(widget.targetUserId);
+    _reviewsFuture = ApiService.fetchUserReviews(widget.targetUserId);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('تقييمات $targetUserName'), centerTitle: true),
+      appBar: AppBar(
+        title: Text('تقييمات ${widget.targetUserName}'),
+        centerTitle: true,
+      ),
       body: Column(
         children: [
-          _buildRatingSummary(context),
+          _buildRatingSummary(),
           const Divider(height: 1, thickness: 1),
-          Expanded(child: _buildReviewsList(context)),
+          Expanded(child: _buildReviewsList()),
         ],
       ),
     );
   }
 
-  Widget _buildRatingSummary(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(targetUserId)
-          .snapshots(),
+  Widget _buildRatingSummary() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _summaryFuture,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const SizedBox(
-            height: 100,
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
+        if (!snapshot.hasData) return const LinearProgressIndicator();
 
-        final userData = snapshot.data!.data() as Map<String, dynamic>?;
-        final double score = (userData?['reputationScore'] ?? 0.0).toDouble();
-        final int count = (userData?['reputationCount'] ?? 0).toInt();
+        final data = snapshot.data!;
+        final double score = (data['reputationScore'] ?? 0.0).toDouble();
+        final int count = (data['reputationCount'] ?? 0).toInt();
 
         return Container(
           padding: const EdgeInsets.all(20),
@@ -68,7 +78,13 @@ class RatingsScreen extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStarDisplay(score, 30),
+                  RatingBarIndicator(
+                    rating: score,
+                    itemBuilder: (context, index) =>
+                        const Icon(Icons.star, color: Colors.amber),
+                    itemCount: 5,
+                    itemSize: 24.0,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '$count تقييم ومراجعة',
@@ -76,11 +92,6 @@ class RatingsScreen extends StatelessWidget {
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'بناءً على تعاملات المستخدمين',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
                 ],
               ),
@@ -91,259 +102,91 @@ class RatingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildReviewsList(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(targetUserId)
-          .collection('reviews')
-          .orderBy('timestamp', descending: true)
-          .snapshots(),
+  Widget _buildReviewsList() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _reviewsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.rate_review_outlined,
-                  size: 64,
-                  color: Colors.grey[300],
-                ),
-                const SizedBox(height: 16),
-                const Text('لا توجد تقييمات بعد لهذا المستخدم.'),
-              ],
-            ),
-          );
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('لا توجد تقييمات بعد.'));
         }
 
-        final reviews = snapshot.data!.docs;
-
+        final reviews = snapshot.data!;
         return ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: reviews.length,
           separatorBuilder: (ctx, index) => const SizedBox(height: 16),
           itemBuilder: (ctx, index) {
-            final reviewData = reviews[index].data() as Map<String, dynamic>;
-            final reviewId = reviews[index].id; // نحتاج المعرف للإبلاغ
             return _ReviewItemCard(
-              reviewData: reviewData,
-              reviewId: reviewId,
-              targetUserId: targetUserId, // لتحديد مسار التقييم بدقة
+              reviewData: reviews[index],
+              targetUserId: widget.targetUserId,
             );
           },
         );
       },
     );
   }
-
-  Widget _buildStarDisplay(double rating, double size) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (index) {
-        IconData icon;
-        if (index < rating.floor()) {
-          icon = Icons.star;
-        } else if (index < rating && (rating - index) >= 0.5) {
-          icon = Icons.star_half;
-        } else {
-          icon = Icons.star_border;
-        }
-        return Icon(icon, color: Colors.amber, size: size);
-      }),
-    );
-  }
 }
 
 class _ReviewItemCard extends StatelessWidget {
   final Map<String, dynamic> reviewData;
-  final String reviewId;
   final String targetUserId;
 
-  // معرف الأدمن لاستقبال البلاغات
-  static const String _adminId = 'QzX6w0qA8vflx5oGM3jW4GgW2BC2';
-
-  const _ReviewItemCard({
-    required this.reviewData,
-    required this.reviewId,
-    required this.targetUserId,
-  });
-
-  void _reportReview(BuildContext context) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يجب تسجيل الدخول للإبلاغ.')),
-      );
-      return;
-    }
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إبلاغ عن تعليق'),
-        content: const Text(
-          'هل هذا التعليق مسيء أو يخالف القوانين؟ سيتم إرسال بلاغ للإدارة.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('إبلاغ'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        // 1. إضافة البلاغ في مجموعة التقارير (للوحة التحكم)
-        await FirebaseFirestore.instance.collection('reports').add({
-          'type': 'review_report',
-          'reason': 'تعليق مسيء',
-          'details': reviewData['comment'] ?? 'لا يوجد نص',
-          'targetId': targetUserId, // المستخدم المُقيَّم
-          'reviewId': reviewId,
-          'reporterId': currentUser.uid,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-
-        // 2. 🚀 [إشعار] إرسال تنبيه للأدمن
-        await FirebaseFirestore.instance.collection('notifications').add({
-          'userId': _adminId,
-          'title': 'بلاغ جديد 🚨',
-          'body': 'قام مستخدم بالإبلاغ عن تعليق مسيء في بروفايل أحد الأعضاء.',
-          'type': 'report',
-          'screen': 'admin_reports', // للتوجيه المستقبلي
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم استلام البلاغ، شكراً لك.')),
-          );
-        }
-      } catch (e) {
-        debugPrint('Error reporting review: $e');
-      }
-    }
-  }
+  const _ReviewItemCard({required this.reviewData, required this.targetUserId});
 
   @override
   Widget build(BuildContext context) {
-    final reviewerId = reviewData['reviewerId'];
     final rating = (reviewData['rating'] ?? 0.0).toDouble();
     final comment = reviewData['comment'] ?? '';
-    final timestamp = (reviewData['timestamp'] as Timestamp?)?.toDate();
-    final dateStr = timestamp != null
-        ? intl.DateFormat('dd MMM yyyy').format(timestamp)
-        : '';
+    // سيحتاج السيرفر لإرسال اسم المراجع وصورته مع التقييم
+    final reviewerName = reviewData['reviewerName'] ?? 'مستخدم';
+    final reviewerImage = reviewData['reviewerImage'];
 
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final isMe = currentUser?.uid == reviewerId;
-
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(reviewerId)
-          .get(),
-      builder: (context, snapshot) {
-        String reviewerName = 'مستخدم';
-        String? reviewerImage;
-
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final userData = snapshot.data!.data() as Map<String, dynamic>;
-          reviewerName = userData['username'] ?? 'مستخدم';
-          reviewerImage = userData['profileImageUrl'];
-        }
-
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
+                CircleAvatar(
+                  backgroundImage: reviewerImage != null
+                      ? CachedNetworkImageProvider(reviewerImage)
+                      : null,
+                  child: reviewerImage == null
+                      ? const Icon(Icons.person)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: reviewerImage != null
-                          ? CachedNetworkImageProvider(reviewerImage)
-                          : null,
-                      child: reviewerImage == null
-                          ? Text(
-                              reviewerName.isNotEmpty ? reviewerName[0] : '?',
-                            )
-                          : null,
+                    Text(
+                      reviewerName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            reviewerName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Row(
-                            children: [
-                              ...List.generate(
-                                5,
-                                (index) => Icon(
-                                  index < rating
-                                      ? Icons.star
-                                      : Icons.star_border,
-                                  color: Colors.amber,
-                                  size: 14,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                dateStr,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    RatingBarIndicator(
+                      rating: rating,
+                      itemBuilder: (context, index) =>
+                          const Icon(Icons.star, color: Colors.amber),
+                      itemCount: 5,
+                      itemSize: 14.0,
                     ),
-                    // زر الإبلاغ (لا يظهر إذا كان التعليق لي)
-                    if (!isMe)
-                      IconButton(
-                        icon: const Icon(
-                          Icons.flag_outlined,
-                          size: 20,
-                          color: Colors.grey,
-                        ),
-                        tooltip: 'إبلاغ عن التعليق',
-                        onPressed: () => _reportReview(context),
-                      ),
                   ],
                 ),
-                if (comment.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(comment, style: const TextStyle(height: 1.4)),
-                ],
               ],
             ),
-          ),
-        );
-      },
+            if (comment.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(comment),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

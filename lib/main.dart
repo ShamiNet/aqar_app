@@ -1,7 +1,8 @@
+import 'dart:convert';
 import 'package:aqar_app/screens/ratings_screen.dart';
 import 'package:aqar_app/services/notification_service.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:aqar_app/screens/auth_gate.dart';
+import 'package:aqar_app/services/api_service.dart'; // ✅
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -15,18 +16,15 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:form_builder_validators/localization/l10n.dart';
 import 'package:app_links/app_links.dart';
 import 'package:aqar_app/screens/property_details_screen.dart';
-import 'package:aqar_app/screens/onboarding_screen.dart'; // تأكد من المسار
+import 'package:aqar_app/screens/onboarding_screen.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // طباعة واضحة جداً عند وصول إشعار في الخلفية
-  debugPrint("🟥🟥🟥 [FCM - الخلفية] وصل إشعار والتطبيق مغلق! 🟥🟥🟥");
-  debugPrint("📦 ID: ${message.messageId}");
-  debugPrint("📦 Title: ${message.notification?.title}");
-  debugPrint("📦 Body: ${message.notification?.body}");
-  debugPrint("📦 Data: ${message.data}");
+  debugPrint(
+    "🟥 [FCM - Background] Notification received: ${message.messageId}",
+  );
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -35,36 +33,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.initialize();
 
-  debugPrint("🔵 [System] جاري تهيئة Firebase...");
+  debugPrint("🔵 [System] Initializing Firebase...");
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint("🟢 [System] تم تهيئة Firebase بنجاح.");
+  debugPrint("🟢 [System] Firebase Initialized.");
 
-  // --- إعداد معالجات رسائل FCM ---
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  // طلب الصلاحيات وفحصها
-  debugPrint("🔵 [FCM] جاري طلب صلاحية الإشعارات...");
-  NotificationSettings settings = await FirebaseMessaging.instance
-      .requestPermission(
-        alert: true,
-        announcement: false,
-        badge: true,
-        carPlay: false,
-        criticalAlert: false,
-        provisional: false,
-        sound: true,
-      );
-
-  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-    debugPrint('🟢🟢 [FCM] المستخدم وافق على الإشعارات (Authorized)');
-  } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-    debugPrint('🟡 [FCM] موافقة مؤقتة (Provisional)');
-  } else {
-    debugPrint('🔴🔴 [FCM] المستخدم رفض الإشعارات أو لم يوافق (Declined)');
-  }
-
-  // طباعة التوكن
-  _printFCMToken();
 
   await NotificationService.initialize();
 
@@ -78,19 +51,6 @@ void main() async {
   );
 }
 
-/// دالة لطباعة توكن الجهاز بشكل واضح جداً
-void _printFCMToken() async {
-  try {
-    final fcmToken = await FirebaseMessaging.instance.getToken();
-    debugPrint("\n====================================================");
-    debugPrint("🔑🔑 [FCM Token] انسخ هذا التوكن للاختبار:");
-    debugPrint(fcmToken.toString());
-    debugPrint("====================================================\n");
-  } catch (e) {
-    debugPrint("❌ [FCM Error] فشل جلب التوكن: $e");
-  }
-}
-
 class AqarApp extends StatefulWidget {
   final Widget startScreen;
   const AqarApp({super.key, required this.startScreen});
@@ -99,15 +59,149 @@ class AqarApp extends StatefulWidget {
   State<AqarApp> createState() => _AqarAppState();
 }
 
-class _AqarAppState extends State<AqarApp> {
+class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
   late AppLinks _appLinks;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initDeepLinks();
     _setupFirebaseMessaging();
+    _updateTokenOnStart(); // ✅ تحديث التوكن عبر السيرفر
+    _setUserOnline(true); // ✅ المستخدم الآن متصل
+    _checkUserBanStatus(); // ✅ فحص فوري عند فتح التطبيق
+    _startBanCheckTimer(); // ✅ فحص دوري للحظر كل 10 ثوان
+    // ✅ الفحص الدوري للصيانة أُضيف إلى AuthGate بدلاً من هنا
   }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _setUserOnline(false); // ✅ المستخدم غادر التطبيق
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _setUserOnline(true); // ✅ رجع للتطبيق
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      _setUserOnline(false); // ✅ غادر التطبيق مؤقتاً
+    }
+  }
+
+  Future<void> _setUserOnline(bool isOnline) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    if (userId != null) {
+      await ApiService.updateOnlineStatus(userId, isOnline);
+    }
+  }
+
+  Future<void> _updateTokenOnStart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    if (userId != null) {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        // استخدام ApiService بدلاً من Firestore المباشر
+        ApiService.updateFcmToken(userId, token);
+      }
+    }
+  }
+
+  // ✅ فحص دوري للتحقق من حالة الحظر كل 10 ثوان
+  void _startBanCheckTimer() {
+    Future.delayed(const Duration(seconds: 10), () async {
+      if (mounted) {
+        await _checkUserBanStatus();
+        _startBanCheckTimer(); // استدعاء نفسها مرة أخرى
+      }
+    });
+  }
+
+  Future<void> _checkUserBanStatus() async {
+    try {
+      final isLoggedIn = await ApiService.isLoggedIn();
+      debugPrint(
+        '🔍 [BanCheck] Checking ban status... User logged in: $isLoggedIn',
+      );
+      if (!isLoggedIn) {
+        debugPrint('⚪ [BanCheck] User not logged in, skipping ban check');
+        return;
+      }
+
+      // جلب الحالة من السيرفر لضمان تحديث حالة الحظر فوراً
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      debugPrint('👤 [BanCheck] User ID: $userId');
+      if (userId == null) {
+        debugPrint('⚪ [BanCheck] No user ID found');
+        return;
+      }
+
+      debugPrint('🌐 [BanCheck] Fetching user profile from server...');
+      final remoteUser = await ApiService.fetchUserProfile(userId);
+      debugPrint(
+        '📥 [BanCheck] User profile received: ${remoteUser != null ? 'YES' : 'NO'}',
+      );
+
+      if (remoteUser != null) {
+        debugPrint('💾 [BanCheck] Storing updated user data locally');
+        await prefs.setString('user_data', jsonEncode(remoteUser));
+        debugPrint('✅ [BanCheck] isBanned status: ${remoteUser['isBanned']}');
+      }
+
+      if (remoteUser != null && remoteUser['isBanned'] == true) {
+        debugPrint(
+          '🚫🚫🚫 [BanCheck] USER IS BANNED! Starting logout procedure...',
+        );
+
+        // تسجيل الخروج
+        debugPrint('🔄 [BanCheck] Calling ApiService.logout()...');
+        await ApiService.logout();
+        debugPrint('✅ [BanCheck] Logout completed');
+
+        // الذهاب إلى شاشة تسجيل الدخول
+        if (mounted) {
+          debugPrint('📍 [BanCheck] Navigating to AuthGate...');
+          navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (ctx) => const AuthGate()),
+            (route) => false,
+          );
+          debugPrint('✅ [BanCheck] Navigation to AuthGate completed');
+
+          // عرض رسالة للمستخدم
+          debugPrint('📢 [BanCheck] Showing ban notification to user...');
+          try {
+            ScaffoldMessenger.of(
+              navigatorKey.currentState!.context,
+            ).showSnackBar(
+              const SnackBar(
+                content: Text('تم حظر حسابك من قبل الإدارة'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 5),
+              ),
+            );
+            debugPrint('✅ [BanCheck] Ban notification shown successfully');
+          } catch (e) {
+            debugPrint('⚠️ [BanCheck] Error showing notification: $e');
+          }
+        } else {
+          debugPrint('❌ [BanCheck] Widget is not mounted, cannot navigate');
+        }
+      } else {
+        debugPrint('✅ [BanCheck] User is NOT banned, status is normal');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [BanCheck] Error checking ban status: $e');
+    }
+  }
+
+  // ✅ الفحص الدوري للصيانة أُضيف إلى AuthGate بدلاً من هنا
 
   Future<void> _initDeepLinks() async {
     _appLinks = AppLinks();
@@ -123,22 +217,12 @@ class _AqarAppState extends State<AqarApp> {
   }
 
   void _setupFirebaseMessaging() {
-    // 1. عند وصول رسالة والتطبيق مفتوح
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint(
-        '\n🔔🔔🔔 [FCM - Foreground] وصل إشعار والتطبيق مفتوح! 🔔🔔🔔',
-      );
-      debugPrint('📝 العنوان: ${message.notification?.title}');
-      debugPrint('📝 المحتوى: ${message.notification?.body}');
-      debugPrint('📦 البيانات (Data): ${message.data}');
-
       if (message.notification != null) {
-        debugPrint('👀 الإشعار يحتوي على بيانات عرض، المفترض يظهر الآن.');
-        // هنا يمكنك إظهار SnackBar للتأكد بصرياً
         if (navigatorKey.currentState != null) {
           ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
             SnackBar(
-              content: Text(" وصل إشعار: ${message.notification!.title}"),
+              content: Text(message.notification!.title ?? "إشعار جديد"),
               backgroundColor: Colors.blue,
               duration: const Duration(seconds: 2),
             ),
@@ -147,34 +231,27 @@ class _AqarAppState extends State<AqarApp> {
       }
     });
 
-    // 2. عند فتح التطبيق من الإشعار
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('🚀 [FCM] المستخدم ضغط على الإشعار وفتح التطبيق!');
       _handleNotificationData(message.data);
     });
 
-    // 3. عند فتح التطبيق وكان مغلقاً تماماً
     FirebaseMessaging.instance.getInitialMessage().then((
       RemoteMessage? message,
     ) {
       if (message != null) {
-        debugPrint('🚀 [FCM] التطبيق فتح من إشعار (Initial Message)!');
         _handleNotificationData(message.data);
       }
     });
   }
 
   void _handleNotificationData(Map<String, dynamic> data) {
-    debugPrint('➡️ [FCM] معالجة التوجيه. البيانات: $data');
     final propertyId = data['propertyId'];
+    final String? screenType = data['screen'];
 
-    final String? screenType = data['screen']; // هل هي 'chat' أم عقار؟
-
-    // داخل _handleNotificationData في main.dart
     if (data['type'] == 'new_rating') {
-      // هنا يمكنك توجيه المستخدم لصفحة تقييماته الخاصة ليراها
-      // أو لصفحة RatingsScreen مع تمرير معرفه الشخصي
       final myId = FirebaseAuth.instance.currentUser?.uid;
+      // ملاحظة: FirebaseAuth قد يكون null هنا إذا اعتمدنا كلياً على السيرفر،
+      // لكن للإشعارات القادمة من FCM لا بأس باستخدامه أو استخدام SharedPreferences
       if (myId != null) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(
@@ -183,16 +260,15 @@ class _AqarAppState extends State<AqarApp> {
           ),
         );
       }
+      return;
     }
-    // الحالة 1: توجيه للمحادثة
+
     if (screenType == 'chat') {
       final String? chatId = data['chatId'];
       final String? recipientId = data['recipientId'];
       final String? recipientName = data['recipientName'];
 
       if (chatId != null && recipientId != null) {
-        debugPrint('💬 توجيه لشاشة المحادثة: $chatId');
-        // تأخير بسيط لضمان جاهزية السياق
         Future.delayed(const Duration(milliseconds: 500), () {
           navigatorKey.currentState?.push(
             MaterialPageRoute(
@@ -204,24 +280,11 @@ class _AqarAppState extends State<AqarApp> {
             ),
           );
         });
-        return; // إنهاء الدالة هنا
+        return;
       }
     }
 
-    // الحالة 2: توجيه للعقار (الكود القديم)
-
-    if (propertyId != null && propertyId != '0') {
-      debugPrint('🏠 توجيه للعقار رقم: $propertyId');
-      Future.delayed(const Duration(milliseconds: 500), () {
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (context) => PropertyDetailsScreen(propertyId: propertyId),
-          ),
-        );
-      });
-    }
     if (propertyId != null) {
-      debugPrint('✅ [FCM] التوجيه للعقار رقم: $propertyId');
       Future.delayed(const Duration(milliseconds: 500), () {
         navigatorKey.currentState?.push(
           MaterialPageRoute(
@@ -229,42 +292,20 @@ class _AqarAppState extends State<AqarApp> {
           ),
         );
       });
-    } else {
-      debugPrint('⚠️ [FCM] لا يوجد propertyId في الإشعار.');
     }
   }
 
-  // --- الدالة المعدلة والذكية ---
   void _handleLink(Uri uri) {
-    debugPrint('🔗 رابط عميق تم استلامه: $uri');
-    debugPrint('Host: ${uri.host}');
-    debugPrint('Scheme: ${uri.scheme}');
-    debugPrint('Path: ${uri.path}');
-    debugPrint('Segments: ${uri.pathSegments}');
-
     String? propertyId;
-
-    // التحقق من الكلمات المفتاحية (properties أو property)
     if (uri.pathSegments.contains('properties')) {
       final index = uri.pathSegments.indexOf('properties');
-      if (index + 1 < uri.pathSegments.length) {
+      if (index + 1 < uri.pathSegments.length)
         propertyId = uri.pathSegments[index + 1];
-      }
-    } else if (uri.pathSegments.contains('property')) {
-      final index = uri.pathSegments.indexOf('property');
-      if (index + 1 < uri.pathSegments.length) {
-        propertyId = uri.pathSegments[index + 1];
-      }
-    }
-    // حالة احتياطية: إذا كان الرابط بسيطاً جداً (مثلاً: aqarapp://ID_MUBASHAR)
-    else if (uri.pathSegments.isNotEmpty) {
-      // نعتبر آخر جزء في الرابط هو الرقم
+    } else if (uri.pathSegments.isNotEmpty) {
       propertyId = uri.pathSegments.last;
     }
 
-    if (propertyId != null && propertyId.isNotEmpty) {
-      debugPrint('✅ تم استخراج رقم العقار: $propertyId');
-      // إضافة تأخير بسيط لضمان جاهزية التطبيق
+    if (propertyId != null) {
       Future.delayed(const Duration(milliseconds: 500), () {
         navigatorKey.currentState?.push(
           MaterialPageRoute(
@@ -272,8 +313,6 @@ class _AqarAppState extends State<AqarApp> {
           ),
         );
       });
-    } else {
-      debugPrint('❌ لم يتم العثور على رقم العقار في الرابط');
     }
   }
 
@@ -285,15 +324,6 @@ class _AqarAppState extends State<AqarApp> {
         return ValueListenableBuilder<Color>(
           valueListenable: ThemeController.seedColor,
           builder: (context, seed, __) {
-            final lightScheme = ColorScheme.fromSeed(
-              seedColor: seed,
-              brightness: Brightness.light,
-            );
-            final darkScheme = ColorScheme.fromSeed(
-              seedColor: seed,
-              brightness: Brightness.dark,
-            );
-
             return MaterialApp(
               navigatorKey: navigatorKey,
               debugShowCheckedModeBanner: false,
@@ -309,15 +339,19 @@ class _AqarAppState extends State<AqarApp> {
               ],
               theme: FlexThemeData.light(
                 useMaterial3: true,
-                colorScheme: lightScheme,
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: seed,
+                  brightness: Brightness.light,
+                ),
                 textTheme: GoogleFonts.cairoTextTheme(),
-                visualDensity: VisualDensity.standard,
               ),
               darkTheme: FlexThemeData.dark(
                 useMaterial3: true,
-                colorScheme: darkScheme,
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: seed,
+                  brightness: Brightness.dark,
+                ),
                 textTheme: GoogleFonts.cairoTextTheme(),
-                visualDensity: VisualDensity.standard,
               ),
               home: widget.startScreen,
             );

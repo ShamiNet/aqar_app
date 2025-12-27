@@ -1,10 +1,10 @@
-import 'package:aqar_app/main.dart'; // لاستيراد navigatorKey
+import 'package:aqar_app/main.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:aqar_app/services/api_service.dart'; // ✅ استخدام السيرفر
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationService {
   static final FirebaseMessaging _firebaseMessaging =
@@ -13,18 +13,16 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   static Future<void> initialize() async {
-    // طلب الأذونات
+    debugPrint('🔔 [NotificationService] Initializing...');
+
     await _firebaseMessaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    // إعدادات الإشعار المحلي
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@drawable/notification_icon');
-
-    // هنا نعالج الضغط على الإشعار وهو التطبيق مفتوح (Foreground)
     const InitializationSettings initSettings = InitializationSettings(
       android: androidSettings,
     );
@@ -32,33 +30,29 @@ class NotificationService {
     await _localNotifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // معالجة الضغط على الإشعار المحلي
         if (response.payload != null) {
-          // الـ payload هنا سيكون chatId
           _navigateToChat(response.payload!);
         }
       },
     );
 
-    // 1. معالجة فتح التطبيق من الخلفية (Background State)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('🔔 [NotificationService] Notification clicked (Background).');
       _handleMessage(message);
     });
 
-    // 2. معالجة فتح التطبيق وهو مغلق تماماً (Terminated State)
     final RemoteMessage? initialMessage = await _firebaseMessaging
         .getInitialMessage();
     if (initialMessage != null) {
+      debugPrint('🔔 [NotificationService] App launched from notification.');
       _handleMessage(initialMessage);
     }
 
-    // 3. الاستماع للرسائل أثناء الاستخدام (Foreground)
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       _showForegroundNotification(message);
     });
   }
 
-  // دالة التوجيه الذكي
   static void _handleMessage(RemoteMessage message) {
     if (message.data['type'] == 'chat') {
       final chatId = message.data['chatId'];
@@ -68,38 +62,37 @@ class NotificationService {
     }
   }
 
-  // الدالة التي تقوم بالانتقال الفعلي
   static Future<void> _navigateToChat(String chatId) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
+    debugPrint('🚀 [NotificationService] Navigating to chat: $chatId');
+    final prefs = await SharedPreferences.getInstance();
+    final currentUserId = prefs.getString('user_id');
+    if (currentUserId == null) {
+      debugPrint('❌ [NotificationService] No user_id in prefs.');
+      return;
+    }
 
     try {
-      // 1. جلب بيانات المحادثة لمعرفة اسم ورقم الطرف الآخر
-      final chatDoc = await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(chatId)
-          .get();
+      // ✅ التغيير هنا: استخدام API بدلاً من Firestore
+      final chatData = await ApiService.fetchChatInfo(chatId);
 
-      if (!chatDoc.exists) return;
+      if (chatData == null) {
+        debugPrint('❌ [NotificationService] Chat info not found on server.');
+        return;
+      }
 
-      final data = chatDoc.data()!;
-      final Map<String, dynamic> names = data['participantNames'] ?? {};
-
-      // تحديد الطرف الآخر
+      final Map<String, dynamic> names = chatData['participantNames'] ?? {};
       String recipientId = '';
       String recipientName = 'مستخدم';
 
       names.forEach((key, value) {
-        if (key != currentUser.uid) {
+        if (key != currentUserId) {
           recipientId = key;
           recipientName = value.toString();
         }
       });
 
-      // إذا لم نجد معرفاً (حالة نادرة)، نستخدم الافتراضي
       if (recipientId.isEmpty) return;
 
-      // 2. الانتقال للشاشة باستخدام المفتاح العام
       if (navigatorKey.currentState != null) {
         navigatorKey.currentState!.push(
           MaterialPageRoute(
@@ -112,28 +105,12 @@ class NotificationService {
         );
       }
     } catch (e) {
-      debugPrint('Error navigating to chat: $e');
+      debugPrint('❌ [NotificationService] Error navigating to chat: $e');
     }
   }
 
-  static Future<void> saveTokenToFirestore() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    String? token = await _firebaseMessaging.getToken();
-    if (token != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'fcmToken': token,
-        'lastLogin': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
-
-    _firebaseMessaging.onTokenRefresh.listen((newToken) async {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
-        {'fcmToken': newToken},
-      );
-    });
-  }
+  // تم نقل saveTokenToFirestore إلى ApiService واستدعاؤها في TabsScreen
+  // لذلك لا نحتاجها هنا.
 
   static Future<void> _showForegroundNotification(RemoteMessage message) async {
     RemoteNotification? notification = message.notification;
@@ -153,7 +130,6 @@ class NotificationService {
             icon: '@drawable/notification_icon',
           ),
         ),
-        // نمرر chatId كـ payload لكي نستخدمه عند الضغط
         payload: message.data['chatId'],
       );
     }

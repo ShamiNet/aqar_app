@@ -1,12 +1,13 @@
-import 'package:aqar_app/widgets/properties_list.dart';
+import 'package:aqar_app/property_card.dart';
+import 'package:aqar_app/screens/property_details_screen.dart';
+import 'package:aqar_app/services/api_service.dart'; // ✅
 import 'package:aqar_app/widgets/properties_list_skeleton.dart';
 import 'package:aqar_app/widgets/verified_badge.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class PublicProfileScreen extends StatelessWidget {
+class PublicProfileScreen extends StatefulWidget {
   final String userId;
   final String userName;
 
@@ -17,26 +18,39 @@ class PublicProfileScreen extends StatelessWidget {
   });
 
   @override
+  State<PublicProfileScreen> createState() => _PublicProfileScreenState();
+}
+
+class _PublicProfileScreenState extends State<PublicProfileScreen> {
+  late Future<Map<String, dynamic>?> _userProfileFuture;
+  late Future<List<Map<String, dynamic>>> _userPropertiesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _userProfileFuture = ApiService.fetchUserProfile(widget.userId);
+    _userPropertiesFuture = ApiService.fetchMyProperties(widget.userId);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(userName)),
+      appBar: AppBar(title: Text(widget.userName)),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // معلومات المستخدم
-            FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(userId)
-                  .get(),
+            // --- 1. قسم معلومات المستخدم ---
+            FutureBuilder<Map<String, dynamic>?>(
+              future: _userProfileFuture,
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SizedBox(
                     height: 200,
                     child: Center(child: CircularProgressIndicator()),
                   );
-
-                final userData = snapshot.data!.data() as Map<String, dynamic>?;
+                }
+                final userData = snapshot.data;
+                final username = userData?['username'] ?? widget.userName;
                 final image = userData?['profileImageUrl'];
                 final bio = userData?['bio'];
                 final phone = userData?['phone'];
@@ -55,7 +69,7 @@ class PublicProfileScreen extends StatelessWidget {
                             : null,
                         child: image == null
                             ? Text(
-                                userName[0],
+                                username.isNotEmpty ? username[0] : '?',
                                 style: const TextStyle(fontSize: 30),
                               )
                             : null,
@@ -65,7 +79,7 @@ class PublicProfileScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            userName,
+                            username,
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
@@ -75,7 +89,7 @@ class PublicProfileScreen extends StatelessWidget {
                           ],
                         ],
                       ),
-                      if (bio != null && bio.isNotEmpty) ...[
+                      if (bio != null && bio.toString().isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
                           bio,
@@ -83,7 +97,7 @@ class PublicProfileScreen extends StatelessWidget {
                           style: const TextStyle(color: Colors.grey),
                         ),
                       ],
-                      if (phone != null && phone.isNotEmpty) ...[
+                      if (phone != null && phone.toString().isNotEmpty) ...[
                         const SizedBox(height: 16),
                         FilledButton.icon(
                           onPressed: () => launchUrl(Uri.parse('tel:$phone')),
@@ -97,7 +111,7 @@ class PublicProfileScreen extends StatelessWidget {
               },
             ),
             const Divider(),
-            // عقارات المستخدم
+            // --- 2. قسم عقارات المستخدم ---
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Align(
@@ -110,16 +124,16 @@ class PublicProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('properties')
-                  .where('userId', isEqualTo: userId)
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _userPropertiesFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting)
-                  return const PropertiesListSkeleton();
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SizedBox(
+                    height: 300,
+                    child: PropertiesListSkeleton(),
+                  );
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.all(32.0),
                     child: Center(
@@ -127,40 +141,32 @@ class PublicProfileScreen extends StatelessWidget {
                     ),
                   );
                 }
-                // نستخدم shrinkWrap لأننا داخل SingleChildScrollView
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: snapshot.data!.docs.length,
-                  itemBuilder: (ctx, index) {
-                    // هنا نستخدم PropertyCard أو PropertiesList logic
-                    // للتبسيط سأعيد استخدام PropertiesList لكن نحتاج تعديلها لتقبل shrinkWrap
-                    // لذا سأبني الكارد يدوياً أو نستخدم الودجت الموجودة
-                    // الحل الأسرع: استخدام PropertiesList لكنها تحتوي على ListView بداخلها
-                    // الأفضل هنا هو نسخ منطق العرض البسيط
-                    return const SizedBox(); // (سيتم عرض العقارات في التحديث القادم للتبسيط، حالياً ركزنا على البروفايل)
-                  },
+                return Column(
+                  children: snapshot.data!.map((property) {
+                    final propertyId = property['id'] ?? 'unknown';
+                    return Container(
+                      height: 280,
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: PropertyCard(
+                        property: property,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (ctx) =>
+                                  PropertyDetailsScreen(propertyId: propertyId),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  }).toList(),
                 );
-                // *ملاحظة:* لعرض القائمة بشكل صحيح، يفضل استخدام PropertiesList مباشرة
-                // لكن PropertiesList فيها ListView وهذا يسبب خطأ مع SingleChildScrollView
-                // الحل: إما جعل PropertiesList تقبل shrinkWrap أو إزالة ScrollView.
-                // سأقوم بتعديل PropertiesList لاحقاً، الآن الصفحة تعرض المعلومات الأساسية.
               },
             ),
-            // حل مؤقت لعرض العقارات:
-            SizedBox(
-              height: 400, // ارتفاع ثابت مؤقت
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('properties')
-                    .where('userId', isEqualTo: userId)
-                    .snapshots(),
-                builder: (ctx, snap) {
-                  if (!snap.hasData) return const SizedBox();
-                  return PropertiesList(properties: snap.data!.docs);
-                },
-              ),
-            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),

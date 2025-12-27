@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart' as intl;
 
 class ArchivedPropertyDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> propertyData;
@@ -21,9 +21,36 @@ class ArchivedPropertyDetailsScreen extends StatelessWidget {
     final category = propertyData['category'] ?? 'غير محدد';
     final rooms = propertyData['rooms'];
     final area = propertyData['area'] ?? 0.0;
-    final location = propertyData['location'] as GeoPoint?;
     final archiveReason = propertyData['archiveReason'] ?? 'غير معروف';
-    final archivedAt = propertyData['archivedAt'] as Timestamp?;
+
+    // ✅ معالجة التاريخ من السيرفر (String -> DateTime)
+    DateTime? archivedAtDate;
+    if (propertyData['archivedAt'] != null) {
+      if (propertyData['archivedAt'] is String) {
+        try {
+          archivedAtDate = DateTime.parse(propertyData['archivedAt']);
+        } catch (e) {
+          /* ignore */
+        }
+      }
+      // دعم حالة Timestamp القديمة إذا كانت البيانات مخزنة محلياً
+      else if (propertyData['archivedAt'].toString().contains('Timestamp')) {
+        // تجاهل أو معالجة خاصة (غالباً لن تحدث مع السيرفر)
+      }
+    }
+
+    // ✅ معالجة الموقع من السيرفر (Map -> LatLng)
+    LatLng? locationLatLng;
+    final locData = propertyData['location'];
+    if (locData is Map<String, dynamic>) {
+      final double? lat = (locData['_latitude'] ?? locData['latitude'])
+          ?.toDouble();
+      final double? lng = (locData['_longitude'] ?? locData['longitude'])
+          ?.toDouble();
+      if (lat != null && lng != null) {
+        locationLatLng = LatLng(lat, lng);
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -63,9 +90,9 @@ class ArchivedPropertyDetailsScreen extends StatelessWidget {
                     'سبب الأرشفة: $archiveReason',
                     style: TextStyle(color: Colors.amber.shade800),
                   ),
-                  if (archivedAt != null)
+                  if (archivedAtDate != null)
                     Text(
-                      'تاريخ الأرشفة: ${archivedAt.toDate().day}/${archivedAt.toDate().month}/${archivedAt.toDate().year}',
+                      'تاريخ الأرشفة: ${intl.DateFormat('yyyy/MM/dd').format(archivedAtDate)}',
                       style: TextStyle(
                         color: Colors.amber.shade700,
                         fontSize: 12,
@@ -135,7 +162,7 @@ class ArchivedPropertyDetailsScreen extends StatelessWidget {
                       if (area > 0) Text('المساحة: $area م²'),
                     ],
                   ),
-                  if (location != null) ...[
+                  if (locationLatLng != null) ...[
                     const Divider(height: 32),
                     Text(
                       'الموقع',
@@ -146,18 +173,17 @@ class ArchivedPropertyDetailsScreen extends StatelessWidget {
                       height: 200,
                       child: GoogleMap(
                         initialCameraPosition: CameraPosition(
-                          target: LatLng(location.latitude, location.longitude),
+                          target: locationLatLng,
                           zoom: 15,
                         ),
                         markers: {
                           Marker(
                             markerId: const MarkerId('location'),
-                            position: LatLng(
-                              location.latitude,
-                              location.longitude,
-                            ),
+                            position: locationLatLng,
                           ),
                         },
+                        liteModeEnabled:
+                            true, // تفعيل الوضع الخفيف لتحسين الأداء
                       ),
                     ),
                   ],

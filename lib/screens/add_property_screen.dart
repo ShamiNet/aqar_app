@@ -1,4 +1,5 @@
 import 'package:aqar_app/screens/property_form.dart';
+import 'package:aqar_app/services/api_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
@@ -41,83 +42,71 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   }
 
   void _saveProperty(Map<String, dynamic> data) async {
-    debugPrint(
-      '[AddPropertyScreen] _saveProperty: "Save Property" button pressed.',
-    );
-    setState(() {
-      _isSaving = true;
-    });
+    debugPrint('[AddPropertyScreen] Saving property via API...');
+    setState(() => _isSaving = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        setState(() => _isSaving = false);
-        return;
+      // 1. الحصول على بيانات المستخدم من SharedPreferences أو الذاكرة
+      // في النسخة الحالية، نعتمد على ApiService، لكننا نحتاج للـ ID
+      // سنفترض أننا حفظنا الـ ID في SharedPreferences عند تسجيل الدخول
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+
+      if (userId == null) {
+        throw Exception(
+          'لم يتم العثور على بيانات المستخدم. يرجى تسجيل الدخول مجدداً.',
+        );
       }
 
-      // 1. رفع الصور
+      // 2. رفع الصور والفيديو (ما زال عبر Cloudinary - هذا ممتاز لأنه لا يمر عبر سيرفرك ولا فايربيز)
       final imageUrls = await _uploadImages(data['newImages']);
 
-      // 2. رفع الفيديو (إذا وجد)
       String? videoUrl;
       if (data['newVideo'] != null) {
-        debugPrint('Starting video upload...');
         videoUrl = await _uploadVideo(data['newVideo']);
-        debugPrint('Video uploaded: $videoUrl');
       }
 
-      final LatLng location = data['location'];
+      // 3. تجهيز البيانات للسيرفر
+      // تحويل LatLng إلى Map بسيط لأن JSON لا يفهم LatLng
+      final latLng =
+          data['location'] as LatLng; // تأكد من استيراد google_maps_flutter
+      final locationMap = {
+        '_latitude': latLng.latitude,
+        '_longitude': latLng.longitude,
+      };
 
-      // 3. حفظ البيانات في Firestore والحصول على المعرف
-      final newPropRef = await FirebaseFirestore.instance
-          .collection('properties')
-          .add({
-            'title': data['title'],
-            'price': data['price'],
-            'currency': data['currency'],
-            'description': data['description'],
-            'category': data['category'],
-            'propertyType': data['propertyType'],
-            'subscriptionPeriod': data['subscriptionPeriod'],
-            'floor': data['floor'],
-            'rooms': data['rooms'],
-            'area': data['area'],
-            'isFeatured': data['isFeatured'],
-            'discountPercent': data['discountPercent'],
-            'location': GeoPoint(location.latitude, location.longitude),
-            'userId': user.uid,
-            'imageUrls': imageUrls,
-            'videoUrl': videoUrl,
-            'createdAt': Timestamp.now(),
-            'address': data['address'],
-          });
+      final propertyData = {
+        'title': data['title'],
+        'price': data['price'],
+        'currency': data['currency'],
+        'description': data['description'],
+        'category': data['category'],
+        'propertyType': data['propertyType'],
+        'subscriptionPeriod': data['subscriptionPeriod'],
+        'floor': data['floor'],
+        'rooms': data['rooms'],
+        'area': data['area'],
+        'isFeatured': data['isFeatured'],
+        'discountPercent': data['discountPercent'],
+        'location': locationMap, // الموقع المحول
+        'userId': userId, // معرف المستخدم من السيرفر
+        'imageUrls': imageUrls,
+        'videoUrl': videoUrl,
+        // 'createdAt': سيتم إضافته في السيرفر
+        'address': data['address'],
+      };
 
-      // 🚀 [إشعار] إرسال تنبيه للأدمن بوجود عقار جديد
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'userId': _adminId,
-        'title': 'عقار جديد تمت إضافته',
-        'body':
-            'قام ${user.displayName ?? 'مستخدم'} بإضافة عقار: ${data['title']}',
-        'propertyId': newPropRef.id,
-        'type': 'new_property',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      // 4. الإرسال للسيرفر
+      await ApiService.addProperty(propertyData);
 
-      FirebaseAnalytics.instance.logEvent(
-        name: 'add_property',
-        parameters: {
-          'category': data['category'],
-          'property_type': data['propertyType'],
-          'has_video': videoUrl != null ? 'yes' : 'no',
-        },
-      );
+      // (اختياري) إشعار الأدمن يمكن نقله للسيرفر لاحقاً، لكن حالياً هو معطل أو يحتاج تعديل
 
       await _clearDraft();
 
       if (!mounted) return;
       Navigator.of(context).pop('تم حفظ العقار بنجاح!');
     } catch (e) {
-      debugPrint('[AddPropertyScreen] Error: $e');
+      debugPrint('Error: $e');
       setState(() => _isSaving = false);
       if (!mounted) return;
       ScaffoldMessenger.of(

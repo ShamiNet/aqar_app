@@ -1,21 +1,13 @@
-// import 'dart:io';
-import 'package:aqar_app/screens/admin_all_chats_screen.dart';
-import 'package:aqar_app/screens/favorites_screen.dart';
-import 'package:aqar_app/screens/my_deals_screen.dart';
-import 'package:aqar_app/screens/my_properties_screen.dart';
-import 'package:aqar_app/screens/my_archived_properties_screen.dart'; // <-- استيراد
-import 'package:aqar_app/screens/ratings_screen.dart';
+import 'dart:io';
+import 'package:aqar_app/services/api_service.dart'; // ✅ المصدر الوحيد للبيانات
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:aqar_app/screens/admin_dashboard_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:aqar_app/config/cloudinary_config.dart';
-import 'package:about/about.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
-import 'dart:io'; // ضروري جداً لاستخدام File
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -25,24 +17,61 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _user = FirebaseAuth.instance.currentUser;
+  String? _userId;
+  // نستخدم Future بدلاً من Stream لأننا نتصل بالسيرفر
+  Future<Map<String, dynamic>?>? _profileFuture;
 
-  // تحديث الدالة لتقبل البيانات الإضافية (الهاتف والنبذة)
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('👤 [Profile] initState called.');
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    debugPrint('👤 [Profile] Loading user ID from SharedPreferences...');
+    final prefs = await SharedPreferences.getInstance();
+    final uid = prefs.getString('user_id');
+
+    debugPrint('👤 [Profile] Found User ID: $uid');
+
+    if (mounted) {
+      setState(() {
+        _userId = uid;
+        if (uid != null) {
+          debugPrint('🚀 [Profile] Fetching profile data from API for: $uid');
+          _profileFuture = ApiService.fetchUserProfile(uid)
+              .then((data) {
+                debugPrint(
+                  '✅ [Profile] Data received successfully: ${data?.keys}',
+                );
+                return data;
+              })
+              .catchError((e) {
+                debugPrint('❌ [Profile] Error fetching profile: $e');
+                return null;
+              });
+        } else {
+          debugPrint('⚠️ [Profile] No user ID found (Guest mode).');
+        }
+      });
+    }
+  }
+
+  // تحديث البروفايل
   Future<void> _updateProfile(
     String newUsername,
     String newPhone,
     String newBio,
     XFile? newImage,
   ) async {
-    debugPrint('[ProfileScreen] _updateProfile: Starting profile update.');
-    if (_user == null) return;
+    if (_userId == null) return;
+    debugPrint('🔄 [Profile] Updating profile...');
 
     try {
       String? newImageUrl;
       if (newImage != null) {
-        debugPrint(
-          '[ProfileScreen] _updateProfile: Uploading new profile image.',
-        );
+        debugPrint('📤 [Profile] Uploading new image to Cloudinary...');
         final CloudinaryResponse res = await cloudinary.uploadFile(
           CloudinaryFile.fromFile(
             newImage.path,
@@ -51,29 +80,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
         newImageUrl = res.secureUrl;
+        debugPrint('✅ [Profile] Image uploaded: $newImageUrl');
       }
 
-      // تجهيز البيانات للتحديث
+      // تحديث البيانات (مؤقتاً عبر Firestore المباشر إذا كان مسموحاً للكتابة، أو يجب إضافة Endpoint في السيرفر)
+      // الأفضل استخدام endpoint، لكن للسرعة سنحاول التحديث المباشر ونراقبه
       final Map<String, dynamic> updatedData = {
         'username': newUsername,
-        'phone': newPhone, // حقل جديد
-        'bio': newBio, // حقل جديد
+        'phone': newPhone,
+        'bio': newBio,
       };
-
       if (newImageUrl != null) {
         updatedData['profileImageUrl'] = newImageUrl;
       }
 
-      debugPrint('[ProfileScreen] _updateProfile: Updating user in Firestore.');
+      // ملاحظة: هذا السطر قد يفشل إذا كان الاتصال محظوراً بالكامل.
+      // الحل الأمثل هو إضافة دالة updateProfile في ApiService والسيرفر.
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(_user.uid)
+          .doc(_userId)
           .update(updatedData);
 
-      debugPrint('[ProfileScreen] _updateProfile: Update successful.');
-      setState(() {}); // Refresh UI
+      debugPrint('✅ [Profile] Firestore document updated.');
+
+      // إعادة تحميل البيانات لتحديث الواجهة
+      _loadUser();
     } catch (e) {
-      debugPrint('[ProfileScreen] _updateProfile: An error occurred: $e');
+      debugPrint('❌ [Profile] Error updating profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('فشل التحديث: $e')));
+      }
     }
   }
 
@@ -87,114 +125,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bioController = TextEditingController(
       text: currentUserData['bio'] ?? '',
     );
-
     XFile? newImage;
 
-    debugPrint('[ProfileScreen] _showEditProfileDialog: Showing dialog.');
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
           title: const Text('تعديل الملف الشخصي'),
           scrollable: true,
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 1. صورة الملف الشخصي
-              StatefulBuilder(
-                builder: (context, setStateImg) {
-                  return Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.grey[200],
-                        // هنا تم إصلاح الخطأ
-                        backgroundImage: newImage != null
-                            ? FileImage(
-                                File(newImage!.path),
-                              ) // تحويل XFile إلى File
-                            : (currentUserData['profileImageUrl'] != null
-                                      ? NetworkImage(
-                                          currentUserData['profileImageUrl'],
-                                        )
-                                      : null)
-                                  as ImageProvider?,
-                        child:
-                            newImage == null &&
-                                currentUserData['profileImageUrl'] == null
-                            ? const Icon(Icons.person, size: 40)
-                            : null,
-                      ),
-                      TextButton.icon(
-                        onPressed: () async {
-                          final picker = ImagePicker();
-                          final picked = await picker.pickImage(
-                            source: ImageSource.gallery,
-                          );
-                          if (picked != null) {
-                            setStateImg(() {
-                              newImage = picked;
-                            });
-                          }
-                        },
-                        icon: const Icon(Icons.image),
-                        label: const Text('تغيير الصورة'),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-
-              // 2. اسم المستخدم
-              TextFormField(
-                controller: usernameController,
-                decoration: const InputDecoration(
-                  labelText: 'اسم المستخدم',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // 3. رقم الهاتف
-              TextFormField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'رقم الهاتف',
-                  prefixIcon: Icon(Icons.phone_android),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // 4. نبذة عني
-              TextFormField(
-                controller: bioController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'نبذة عني',
-                  prefixIcon: Icon(Icons.info_outline),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
+          content: StatefulBuilder(
+            builder: (context, setStateImg) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      final picker = ImagePicker();
+                      final picked = await picker.pickImage(
+                        source: ImageSource.gallery,
+                      );
+                      if (picked != null) {
+                        setStateImg(() => newImage = picked);
+                      }
+                    },
+                    child: CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: newImage != null
+                          ? FileImage(File(newImage!.path))
+                          : (currentUserData['profileImageUrl'] != null
+                                    ? NetworkImage(
+                                        currentUserData['profileImageUrl'],
+                                      )
+                                    : null)
+                                as ImageProvider?,
+                      child:
+                          newImage == null &&
+                              currentUserData['profileImageUrl'] == null
+                          ? const Icon(Icons.add_a_photo, size: 30)
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: usernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم المستخدم',
+                      icon: Icon(Icons.person),
+                    ),
+                  ),
+                  TextFormField(
+                    controller: phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'رقم الهاتف',
+                      icon: Icon(Icons.phone),
+                    ),
+                  ),
+                  TextFormField(
+                    controller: bioController,
+                    decoration: const InputDecoration(
+                      labelText: 'نبذة عني',
+                      icon: Icon(Icons.info),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              );
+            },
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
+              onPressed: () => Navigator.pop(ctx),
               child: const Text('إلغاء'),
             ),
             ElevatedButton(
               onPressed: () {
+                Navigator.pop(ctx);
                 _updateProfile(
                   usernameController.text,
                   phoneController.text,
                   bioController.text,
                   newImage,
                 );
-                Navigator.of(ctx).pop();
               },
               child: const Text('حفظ'),
             ),
@@ -206,56 +218,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_user == null) {
-      return const Center(child: Text('لم يتم العثور على مستخدم.'));
+    if (_userId == null) {
+      return const Center(child: CircularProgressIndicator());
     }
 
     return Scaffold(
-      // قمنا بإزالة العنوان (title) لتجنب التكرار مع الصفحة الرئيسية
-      // وأبقينا فقط زر الخروج في الـ AppBar
-      appBar: AppBar(
-        backgroundColor: Colors.transparent, // جعل الخلفية شفافة لدمجها
-        elevation: 0, // إزالة الظل
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
-            tooltip: 'تسجيل الخروج',
-            onPressed: () {
-              debugPrint('[ProfileScreen] Signing out user.');
-              FirebaseAuth.instance.signOut();
-            },
-          ),
-        ],
-      ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(_user.uid)
-            .snapshots(),
-        builder: (ctx, userSnapshot) {
-          if (userSnapshot.connectionState == ConnectionState.waiting) {
+      appBar: AppBar(title: const Text('ملفي الشخصي'), centerTitle: true),
+      // ✅ استخدام FutureBuilder بدلاً من StreamBuilder
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _profileFuture,
+        builder: (ctx, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (userSnapshot.hasError) {
-            return const Center(child: Text('حدث خطأ ما.'));
+          if (snapshot.hasError) {
+            return Center(child: Text('حدث خطأ: ${snapshot.error}'));
           }
-          if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
+          if (!snapshot.hasData || snapshot.data == null) {
             return const Center(
               child: Text('لم يتم العثور على بيانات المستخدم.'),
             );
           }
 
-          final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+          final userData = snapshot.data!;
           final username = userData['username'] ?? 'لا يوجد اسم';
-          final email = userData['email'] ?? 'لا يوجد بريد إلكتروني';
+          final email = userData['email'] ?? 'لا يوجد بريد';
           final phone = userData['phone'] ?? '';
           final bio = userData['bio'] ?? '';
           final profileImageUrl = userData['profileImageUrl'];
-          final String userRole = userData['role'] ?? 'مشترك';
-          // --- ⭐️ إضافة جديدة: قراءة بيانات السمعة ---
-          final reputationScore = (userData['reputationScore'] ?? 0.0)
-              .toDouble();
-          final reputationCount = (userData['reputationCount'] ?? 0).toInt();
+          // تحويل القيم بأمان لتجنب الأخطاء
+          final reputationScore =
+              (num.tryParse(userData['reputationScore'].toString()) ?? 0.0)
+                  .toDouble();
+          final reputationCount =
+              (num.tryParse(userData['reputationCount'].toString()) ?? 0)
+                  .toInt();
 
           return SingleChildScrollView(
             child: Padding(
@@ -263,33 +260,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // صورة الملف الشخصي وزر التعديل
+                  const SizedBox(height: 20),
                   Stack(
                     children: [
                       CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHighest,
+                        radius: 60,
+                        backgroundColor: Colors.grey[200],
                         backgroundImage: profileImageUrl != null
                             ? CachedNetworkImageProvider(profileImageUrl)
                             : null,
                         child: profileImageUrl == null
-                            ? const Icon(Icons.person, size: 50)
+                            ? const Icon(Icons.person, size: 60)
                             : null,
                       ),
                       Positioned(
                         bottom: 0,
                         right: 0,
                         child: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
+                          radius: 20,
+                          backgroundColor: Theme.of(context).primaryColor,
                           child: IconButton(
                             icon: const Icon(
                               Icons.edit,
-                              size: 18,
+                              size: 20,
                               color: Colors.white,
                             ),
                             onPressed: () => _showEditProfileDialog(userData),
@@ -299,314 +292,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // الاسم والبريد
                   Text(
                     username,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text(
-                    email,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                  ),
-
+                  Text(email, style: TextStyle(color: Colors.grey[600])),
                   const SizedBox(height: 12),
-
-                  // --- ⭐️ إضافة جديدة: عرض التقييم والنجوم ---
-                  _buildReputation(reputationScore, reputationCount, context),
-                  // --- نهاية الإضافة ---
-
-                  // عرض رقم الهاتف إذا وجد
-                  if (phone.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.phone, size: 16, color: Colors.grey),
-                        const SizedBox(width: 4),
-                        Text(
-                          phone,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  // عرض النبذة إذا وجدت
-                  if (bio.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        bio,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 20),
-                  const Divider(),
-
-                  // الإحصائيات
-                  const SizedBox(height: 10),
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('properties')
-                        .where('userId', isEqualTo: _user.uid)
-                        .snapshots(),
-                    builder: (ctx, propertySnapshot) {
-                      if (!propertySnapshot.hasData) {
-                        return const SizedBox();
-                      }
-                      final propertyCount = propertySnapshot.data!.docs.length;
-                      return Card(
-                        clipBehavior: Clip.antiAlias,
-                        child: ListTile(
-                          leading: const Icon(Icons.home_work),
-                          title: const Text('عقاراتي المعروضة'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // شارة العدد
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primaryContainer,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  '$propertyCount',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onPrimaryContainer,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // سهم التوجيه
-                              const Icon(Icons.arrow_forward_ios, size: 16),
-                            ],
-                          ),
-                          // ✅ هنا كود الانتقال
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (ctx) => const MyPropertiesScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
-
-                  // --- قسم الأرشيف ---
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection('archived_properties')
-                        .where('userId', isEqualTo: _user.uid)
-                        .snapshots(),
-                    builder: (ctx, archivedSnapshot) {
-                      if (!archivedSnapshot.hasData) {
-                        return const SizedBox();
-                      }
-                      final count = archivedSnapshot.data!.docs.length;
-                      return Card(
-                        clipBehavior: Clip.antiAlias,
-                        child: ListTile(
-                          leading: const Icon(Icons.archive_outlined),
-                          title: const Text('أرشيفي'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.secondaryContainer,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  '$count',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSecondaryContainer,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              const Icon(Icons.arrow_forward_ios, size: 16),
-                            ],
-                          ),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (ctx) =>
-                                    const MyArchivedPropertiesScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                  if (FirebaseAuth.instance.currentUser?.email ==
-                      'kloklop8@gmail.com') // ضع ايميلك هنا
+                  _buildReputation(reputationScore, reputationCount),
+                  const Divider(height: 30),
+                  if (phone.isNotEmpty)
                     ListTile(
-                      leading: Icon(Icons.security),
-                      title: Text('لوحة مراقبة المحادثات'),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => AdminAllChatsScreen(),
-                        ),
-                      ),
+                      leading: const Icon(Icons.phone),
+                      title: Text(phone),
                     ),
-                  // --- إضافة 1: قسم المفضلة ---
-                  Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.favorite,
-                        color: Colors.redAccent,
-                      ),
-                      title: const Text('المفضلة'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () {
-                        // سنقوم بإنشاء هذه الشاشة لاحقاً أو يمكنك إضافتها الآن
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (ctx) => const FavoritesScreen(),
-                          ),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'راقب العقارات التي قمت بإضافتهم للمفضلة...',
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  // --- إضافة 2: سجل الصفقات (مشتريات ومبيعات) ---
-                  Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.handshake_outlined,
-                        color: Colors.green,
-                      ),
-                      title: const Text('سجل الصفقات'),
-                      subtitle: const Text(
-                        'العقارات التي قمت بشرائها أو استئجارها',
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () {
-                        // سنقوم بإنشاء شاشة DealsHistoryScreen لاحقاً
-                        // Navigator.of(context).push(
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (ctx) => const MyDealsScreen(),
-                          ),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'شاهد الصفقات التي قمت بها من خلال تطبيق عقار بلص...',
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  // --- إضافة 3: عرض التعليقات (Reviews) ---
-                  // بما أننا أضفنا التقييم، قد يرغب المستخدم بقراءة التعليقات التي كُتبت عنه
-                  Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: ListTile(
-                      leading: const Icon(Icons.star_half, color: Colors.amber),
-                      title: const Text('التقييمات والآراء'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => RatingsScreen(
-                              targetUserId: _user!
-                                  .uid, // ✅ التصحيح: استخدام معرف المستخدم الحاليd, // معرف البائع/المعلن
-                              targetUserName: username, // اسم البائع
-                            ),
-                          ),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('شاشة التقييمات ...')),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-                  // لوحة التحكم للمدير
-                  if (userRole == 'مدير' || userRole == 'admin') ...[
-                    const SizedBox(height: 10),
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.dashboard_customize),
-                        title: const Text('لوحة تحكم المدير'),
-                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (ctx) => const AdminDashboardScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 10),
-
-                  // حول التطبيق
-                  Card(
-                    child: ListTile(
+                  if (bio.isNotEmpty)
+                    ListTile(
                       leading: const Icon(Icons.info_outline),
-                      title: const Text('حول التطبيق'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () {
-                        showAboutPage(
-                          context: context,
-                          applicationName: 'تطبيق عقار',
-                          applicationVersion: '1.0.0+1',
-                          applicationIcon: const Icon(
-                            Icons.house_rounded,
-                            size: 64,
-                          ),
-                          applicationLegalese: '© 2024 فريق التطوير',
-                        );
-                      },
+                      title: Text(bio),
                     ),
-                  ),
-                  const SizedBox(height: 100),
+                  const SizedBox(height: 50),
                 ],
               ),
             ),
@@ -616,14 +322,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- ⭐️ إضافة جديدة: ويدجت لعرض نجوم التقييم ---
-  Widget _buildReputation(double score, int count, BuildContext context) {
-    if (count == 0) {
-      return const Text(
-        'لا توجد تقييمات بعد',
-        style: TextStyle(color: Colors.grey),
-      );
-    }
+  Widget _buildReputation(double score, int count) {
+    if (count == 0) return const Text('لا توجد تقييمات بعد');
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -635,10 +335,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           itemSize: 20.0,
         ),
         const SizedBox(width: 8),
-        Text(
-          '${score.toStringAsFixed(1)} ($count تقييم)',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
+        Text('${score.toStringAsFixed(1)} ($count تقييم)'),
       ],
     );
   }

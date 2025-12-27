@@ -1,193 +1,111 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:aqar_app/services/api_service.dart';
+import 'package:aqar_app/screens/tabs_screen.dart';
+import 'package:aqar_app/screens/banned_user_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_login/flutter_login.dart';
-import 'package:aqar_app/screens/tabs_screen.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  bool _isBanned = false;
+  String? _bannedEmail;
 
   Duration get loginTime => const Duration(milliseconds: 2250);
 
+  // 1. دالة تسجيل الدخول
   Future<String?> _authUser(LoginData data) async {
-    debugPrint('Name: ${data.name}, Password: ${data.password}');
+    debugPrint('\n========================================');
+    debugPrint('👤 [UI] المستخدم ضغط على زر الدخول: ${data.name}');
+
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: data.name,
-        password: data.password,
-      );
-      debugPrint('[LoginScreen] _authUser: Sign in successful.');
-    } on FirebaseAuthException catch (error) {
-      return _handleAuthError(error);
+      // ✅✅✅ هذا هو السطر الأهم! الاتصال بالسيرفر الوسيط
+      await ApiService.login(data.name, data.password);
+
+      debugPrint('✅ [UI] العملية اكتملت بنجاح، سيتم التوجيه للرئيسية.');
+      setState(() {
+        _isBanned = false;
+      });
+      return null; // نجاح
+    } catch (error) {
+      final errorMessage = error.toString().replaceAll('Exception: ', '');
+      debugPrint('⚠️ [UI] حدث خطأ: $errorMessage');
+
+      // ✅ التحقق من رسالة الحظر المحددة
+      if (errorMessage.contains('تم حظر') ||
+          errorMessage.contains('banned') ||
+          errorMessage.toLowerCase().contains('ban')) {
+        debugPrint('🚫 [UI] تم الكشف عن المستخدم المحظور');
+        setState(() {
+          _isBanned = true;
+          _bannedEmail = data.name;
+        });
+        return null; // لا نعرض رسالة خطأ - نعرض صفحة منفصلة
+      }
+
+      return errorMessage;
     }
-    return null;
   }
 
+  // 2. دالة إنشاء الحساب
   Future<String?> _signupUser(SignupData data) async {
-    debugPrint('Signup Name: ${data.name}, Password: ${data.password}');
+    debugPrint('\n========================================');
+    debugPrint('📝 [UI] المستخدم يحاول إنشاء حساب: ${data.name}');
+
     final username = data.additionalSignupData?['username']?.trim() ?? '';
-    if (username.isEmpty) {
-      return 'الرجاء إدخال اسم المستخدم.';
-    }
-    if (username.length < 4) {
-      return 'اسم المستخدم يجب أن يكون 4 أحرف على الأقل.';
-    }
+    final phone = data.additionalSignupData?['phone']?.trim() ?? '';
+
+    if (username.isEmpty) return 'الرجاء إدخال اسم المستخدم.';
+    if (username.length < 4) return 'اسم المستخدم قصير جداً.';
 
     try {
-      final userCredentials = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: data.name!,
-            password: data.password!,
-          );
+      // ✅ خطوة 1: إنشاء الحساب عبر السيرفر
+      debugPrint('📝 [UI] إنشاء الحساب...');
+      await ApiService.signup(data.name!, data.password!, username, phone);
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredentials.user!.uid)
-          .set({
-            'username': username,
-            'email': data.name,
-            'role': 'مشترك',
-            'createdAt': Timestamp.now(),
-          });
-      debugPrint('[LoginScreen] _signupUser: User created successfully.');
-    } on FirebaseAuthException catch (error) {
-      return _handleAuthError(error);
-    } catch (e) {
-      return 'حدث خطأ غير متوقع: $e';
-    }
-    return null;
-  }
-
-  Future<String?> _signInWithGoogle() async {
-    try {
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: Starting Google sign-in process...',
-      );
-      // Trigger the Google sign-in flow.
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-
-      if (googleUser == null) {
-        // The user canceled the sign-in
-        debugPrint(
-          '[LoginScreen] _signInWithGoogle: User cancelled the sign-in process.',
-        );
-        return 'تم إلغاء تسجيل الدخول.';
-      }
-
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: Google user obtained: ${googleUser.email}',
-      );
-
-      // Obtain the auth details from the request.
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: Obtaining Google auth details...',
-      );
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Create a new credential.
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: Creating Firebase credential...',
-      );
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the credential.
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: Signing in to Firebase with credential...',
-      );
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(
-        credential,
-      );
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: Firebase sign-in successful. User UID: ${userCredential.user?.uid}',
-      );
-
-      // If it's a new user, create a document in Firestore.
-      if (userCredential.additionalUserInfo?.isNewUser == true) {
-        debugPrint(
-          '[LoginScreen] _signInWithGoogle: New user detected. Creating Firestore document...',
-        );
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set({
-              'username': userCredential.user!.displayName ?? 'مستخدم جوجل',
-              'email': userCredential.user!.email,
-              'role': 'مشترك',
-              'createdAt': Timestamp.now(),
-            });
-        debugPrint(
-          '[LoginScreen] _signInWithGoogle: Firestore document created for new user.',
-        );
-      }
-
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: Process completed successfully.',
-      );
-      // <<<< أضف هذا السطر هنا >>>>
-      // ننتظر قليلاً للسماح للتطبيق باستعادة واجهته بعد العودة من شاشة جوجل
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      return null; // Success
-    } on FirebaseAuthException catch (error) {
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: FirebaseAuthException: ${error.code} - ${error.message}',
-      );
-      return _handleAuthError(error);
-    } catch (e) {
-      debugPrint(
-        '[LoginScreen] _signInWithGoogle: An unexpected error occurred: $e',
-      );
-      return 'حدث خطأ غير متوقع أثناء تسجيل الدخول: $e';
+      debugPrint('✅ [UI] تم إنشاء الحساب وتسجيل الدخول بنجاح!');
+      setState(() {
+        _isBanned = false;
+      });
+      return null;
+    } catch (error) {
+      debugPrint('⚠️ [UI] خطأ في إنشاء الحساب: $error');
+      return error.toString().replaceAll('Exception: ', '');
     }
   }
 
   Future<String?> _recoverPassword(String name) async {
-    debugPrint('Name: $name');
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: name);
-    } on FirebaseAuthException catch (error) {
-      return _handleAuthError(error);
-    }
-    return null;
-  }
-
-  String _handleAuthError(FirebaseAuthException error) {
-    debugPrint('[LoginScreen] FirebaseAuthException: ${error.code}');
-    switch (error.code) {
-      case 'user-not-found':
-        return 'لا يوجد حساب مرتبط بهذا البريد الإلكتروني.';
-      case 'wrong-password':
-        return 'كلمة المرور غير صحيحة.';
-      case 'invalid-email':
-        return 'البريد الإلكتروني غير صالح.';
-      case 'email-already-in-use':
-        return 'هذا البريد الإلكتروني مستخدم بالفعل.';
-      case 'weak-password':
-        return 'كلمة المرور ضعيفة جداً.';
-      default:
-        return 'حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.';
-    }
+    return 'هذه الميزة غير مفعلة حالياً عبر السيرفر.';
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ إذا كان المستخدم محظوراً، عرض صفحة الحظر بدلاً من نموذج تسجيل الدخول
+    if (_isBanned && _bannedEmail != null) {
+      return BannedUserScreen(email: _bannedEmail);
+    }
+
     return FlutterLogin(
       title: 'عقار بلص',
-      backgroundImage: const AssetImage(
-        'images/aqar_gr_log.jpg',
-      ), // تأكد من وجود هذا الملف
-      logo: const AssetImage('assets/logo.png'), // تأكد من وجود هذا الملف
+      logo: const AssetImage('assets/logo.png'),
       onLogin: _authUser,
       onSignup: _signupUser,
       onRecoverPassword: _recoverPassword,
       onSubmitAnimationCompleted: () {
-        // ننتظر نهاية أي إطار رسم حالي
+        // إذا كان المستخدم محظوراً، لا نذهب للرئيسية
+        if (_isBanned) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => BannedUserScreen(email: _bannedEmail),
+            ),
+          );
+          return;
+        }
+
         WidgetsBinding.instance.addPostFrameCallback((_) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const TabsScreen()),
@@ -195,56 +113,27 @@ class LoginScreen extends StatelessWidget {
         });
       },
       userValidator: (value) {
-        if (value == null || !value.contains('@')) {
-          return 'البريد الإلكتروني غير صالح';
-        }
+        if (value == null || !value.contains('@')) return 'البريد غير صالح';
         return null;
       },
       passwordValidator: (value) {
-        if (value == null || value.length < 6) {
-          return 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
-        }
+        if (value == null || value.length < 6) return 'كلمة المرور قصيرة';
         return null;
       },
       additionalSignupFields: [
-        UserFormField(
+        const UserFormField(
           keyName: 'username',
           displayName: 'اسم المستخدم',
-          icon: const Icon(Icons.person),
-          fieldValidator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'الرجاء إدخال اسم المستخدم';
-            }
-            if (value.length < 4) {
-              return 'يجب أن يكون 4 أحرف على الأقل';
-            }
-            return null;
-          },
+          icon: Icon(Icons.person),
+        ),
+        const UserFormField(
+          keyName: 'phone',
+          displayName: 'رقم الهاتف (اختياري)',
+          icon: Icon(Icons.phone),
+          userType: LoginUserType.phone,
         ),
       ],
-      loginProviders: <LoginProvider>[
-        LoginProvider(
-          icon: FontAwesomeIcons.google,
-          label: 'Google',
-          callback: _signInWithGoogle,
-        ),
-      ],
-      messages: LoginMessages(
-        userHint: 'البريد الإلكتروني',
-        passwordHint: 'كلمة المرور',
-        confirmPasswordHint: 'تأكيد كلمة المرور',
-        loginButton: 'تسجيل الدخول',
-        signupButton: 'إنشاء حساب',
-        forgotPasswordButton: 'نسيت كلمة المرور؟',
-        recoverPasswordButton: 'إرسال',
-        goBackButton: 'رجوع',
-        confirmPasswordError: 'كلمتا المرور غير متطابقتين!',
-        recoverPasswordDescription:
-            'سنرسل رابطًا إلى بريدك الإلكتروني لإعادة تعيين كلمة المرور.',
-        recoverPasswordSuccess: 'تم إرسال الرابط بنجاح!',
-        flushbarTitleSuccess: 'نجاح',
-        flushbarTitleError: 'خطأ',
-      ),
+      loginProviders: [],
     );
   }
 }

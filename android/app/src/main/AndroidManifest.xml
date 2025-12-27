@@ -9,7 +9,8 @@
     <application
         android:label="عقار بلص"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:enableOnBackInvokedCallback="true">
         
         <meta-data android:name="com.google.android.geo.API_KEY"
                android:value="AIzaSyAEvvC4kDaVUBF8FVIBENzlBS4xcN_DBZ0"/>
@@ -22,7 +23,6 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:enableOnBackInvokedCallback="true"
             android:windowSoftInputMode="adjustResize">
             
             <meta-data
