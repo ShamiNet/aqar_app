@@ -11,8 +11,10 @@ class ThemeController {
     ThemeMode.system,
   );
 
+  // ✅ التعديل هنا: تغيير اللون الافتراضي إلى الأزرق الملكي الغامق (أكثر فخامة)
+  // بدلاً من Colors.teal
   static final ValueNotifier<Color> seedColor = ValueNotifier<Color>(
-    Colors.teal,
+    const Color(0xFF1565C0), // أزرق ملكي
   );
 
   static Future<void> initialize() async {
@@ -20,7 +22,9 @@ class ThemeController {
     final themeString = prefs.getString(_themeKey) ?? 'system';
     themeMode.value = _themeModeFromString(themeString);
 
-    final colorValue = prefs.getInt(_seedColorKey) ?? Colors.teal.value;
+    // استرجاع اللون المحفوظ، أو استخدام الأزرق الملكي كافتراضي
+    final colorValue =
+        prefs.getInt(_seedColorKey) ?? const Color(0xFF1565C0).value;
     seedColor.value = Color(colorValue);
   }
 

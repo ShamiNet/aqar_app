@@ -28,6 +28,7 @@ const checkAdmin = async (req, res, next) => {
         if (!userDoc.exists) {
             console.error(`[Admin Check] المستخدم ${userId} غير موجود في قاعدة البيانات`);
             return res.status(404).json({ 
+        
                 message: 'المستخدم غير موجود.',
                 code: 'USER_NOT_FOUND'
             });
@@ -167,11 +168,13 @@ router.get('/users', verifyToken, checkAdmin, async (req, res) => {
                 isAdmin: userData.isAdmin || false,
                 isSuperAdmin: userData.isSuperAdmin || false,
                 isBanned: userData.isBanned || false,
+                isVerified: userData.isVerified || false,
                 isOnline: userData.isOnline || false,
                 lastSeen: userData.lastSeen || null,
                 createdAt: userData.createdAt || null,
                 reputationScore: userData.reputationScore || 0,
-                profileImage: userData.profileImage || null
+                profileImage: userData.profileImage || null,
+                profileImageUrl: userData.profileImageUrl || userData.profileImage || null
             });
         });
 
@@ -241,6 +244,55 @@ router.post('/users/:id/ban', verifyToken, checkAdmin, async (req, res) => {
         res.status(500).json({ 
             message: 'فشل تحديث حالة المستخدم.',
             code: 'UPDATE_USER_ERROR',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+/**
+ * ✅ 3.1 توثيق/إلغاء توثيق مستخدم
+ * POST /admin/users/:id/verify
+ * Body: { isVerified: boolean }
+ */
+router.post('/users/:id/verify', verifyToken, checkAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isVerified } = req.body;
+
+        if (typeof isVerified !== 'boolean') {
+            return res.status(400).json({
+                message: 'isVerified يجب أن يكون true أو false',
+                code: 'INVALID_INPUT'
+            });
+        }
+
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists) {
+            return res.status(404).json({
+                message: 'المستخدم غير موجود.',
+                code: 'USER_NOT_FOUND'
+            });
+        }
+
+        await db.collection('users').doc(id).update({
+            isVerified,
+            verifiedUpdatedAt: new Date().toISOString(),
+            verifiedUpdatedBy: req.adminUser.email || req.userId
+        });
+
+        console.log(`✅ [Verify] تم ${isVerified ? 'توثيق' : 'إلغاء توثيق'} المستخدم ${id}`);
+
+        res.status(200).json({
+            message: `تم ${isVerified ? 'توثيق' : 'إلغاء توثيق'} الحساب بنجاح`,
+            userId: id,
+            isVerified,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('[Verify] خطأ في تحديث حالة التوثيق:', error);
+        res.status(500).json({
+            message: 'فشل توثيق/إلغاء توثيق الحساب.',
+            code: 'VERIFY_USER_ERROR',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
@@ -775,6 +827,58 @@ router.get('/health', verifyToken, checkAdmin, async (req, res) => {
 });
 
 // ==================== PUBLIC ROUTES (بدون صلاحيات) ====================
+
+/**
+ * 📨 إنشاء بلاغ من المستخدم
+ * POST /reports
+ * يتطلب توكن مستخدم عادي، ويحفظ البلاغ مع طابع زمني موحد (timestamp/createdAt)
+ */
+router.post('/reports', verifyToken, async (req, res) => {
+    try {
+        const { propertyId, reason, details, status, reporterId } = req.body || {};
+
+        const errors = [];
+        if (!propertyId) errors.push('propertyId مطلوب');
+        if (!reason) errors.push('reason مطلوب');
+
+        if (errors.length) {
+            return res.status(400).json({
+                message: 'بيانات ناقصة',
+                code: 'INVALID_REPORT_INPUT',
+                errors
+            });
+        }
+
+        const reporter = req.userId || reporterId || 'anonymous';
+        const now = new Date().toISOString();
+
+        const report = {
+            propertyId,
+            reason,
+            details: details || '',
+            status: status || 'pending',
+            reporterId: reporter,
+            timestamp: now,
+            createdAt: now
+        };
+
+        const docRef = await db.collection('reports').add(report);
+        console.log(`[Report] تم إنشاء البلاغ ${docRef.id} من المستخدم ${reporter}`);
+
+        return res.status(201).json({
+            message: 'تم استلام البلاغ',
+            reportId: docRef.id,
+            timestamp: now
+        });
+    } catch (error) {
+        console.error('[Report] خطأ في إنشاء البلاغ:', error);
+        return res.status(500).json({
+            message: 'فشل إنشاء البلاغ.',
+            code: 'CREATE_REPORT_ERROR',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
 
 /**
  * ⚙️ جلب إعدادات التطبيق (عام - بدون صلاحيات admin)

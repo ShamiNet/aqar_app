@@ -1,10 +1,10 @@
+import 'dart:io'; // ضروري لاستخدام File
 import 'package:aqar_app/screens/property_form.dart';
-import 'package:aqar_app/services/api_service.dart'; // ✅ استخدام السيرفر
+import 'package:aqar_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:aqar_app/config/cloudinary_config.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
+import 'package:aqar_app/config/cloudinary_config.dart'; // الكلاس المحدث
 
 class EditPropertyScreen extends StatefulWidget {
   const EditPropertyScreen({super.key, required this.propertyId});
@@ -49,7 +49,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 1. رفع الصور الجديدة
+      // 1. رفع الصور الجديدة باستخدام الطريقة الجديدة
       final newImageUrls = await _uploadImages(data['newImages']);
       final List<dynamic> finalImageUrls = [
         ...data['existingImageUrls'],
@@ -68,14 +68,10 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         videoUrl = null;
       }
       if (data['newVideo'] != null) {
-        final CloudinaryResponse res = await cloudinary.uploadFile(
-          CloudinaryFile.fromFile(
-            (data['newVideo'] as XFile).path,
-            resourceType: CloudinaryResourceType.Video,
-            folder: 'property_videos',
-          ),
+        // ✅ استخدام دالة رفع الفيديو الثابتة من CloudinaryConfig
+        videoUrl = await CloudinaryConfig.uploadVideo(
+          File((data['newVideo'] as XFile).path),
         );
-        videoUrl = res.secureUrl;
       }
 
       // 3. تجهيز البيانات للتحديث
@@ -94,24 +90,31 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         'floor': data['floor'],
         'imageUrls': finalImageUrls,
         'videoUrl': videoUrl,
-        // الموقع عادة لا يتم تعديله، لكن يمكن إضافته إذا لزم الأمر
+        'address': data['address'],
       };
 
       // 4. الإرسال للسيرفر
       await ApiService.updateProperty(widget.propertyId, updateData);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تم تحديث العقار بنجاح!')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم تحديث العقار بنجاح!'),
+          backgroundColor: Colors.green,
+        ),
+      );
       Navigator.of(context).pop();
     } catch (e) {
       debugPrint('Update error: $e');
-      setState(() => _isSaving = false);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('حدث خطأ: ${e.toString()}')));
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('حدث خطأ: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -119,16 +122,13 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     final List<String> imageUrls = [];
     for (final image in images) {
       try {
-        final CloudinaryResponse res = await cloudinary.uploadFile(
-          CloudinaryFile.fromFile(
-            image.path,
-            resourceType: CloudinaryResourceType.Image,
-            folder: 'property_images',
-          ),
-        );
-        imageUrls.add(res.secureUrl);
+        // ✅ استخدام دالة رفع الصور الثابتة من CloudinaryConfig
+        final url = await CloudinaryConfig.uploadImage(File(image.path));
+        if (url != null) {
+          imageUrls.add(url);
+        }
       } catch (e) {
-        /* ignore */
+        debugPrint('Error uploading image: $e');
       }
     }
     return imageUrls;

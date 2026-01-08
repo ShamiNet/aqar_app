@@ -3,6 +3,7 @@ import 'package:aqar_app/screens/ratings_screen.dart';
 import 'package:aqar_app/services/notification_service.dart';
 import 'package:aqar_app/screens/auth_gate.dart';
 import 'package:aqar_app/services/api_service.dart'; // ✅
+import 'package:aqar_app/services/websocket_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,9 @@ import 'package:form_builder_validators/localization/l10n.dart';
 import 'package:app_links/app_links.dart';
 import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:aqar_app/screens/onboarding_screen.dart';
+import 'package:flex_color_scheme/flex_color_scheme.dart'; // ✅ هذه المكتبة رائعة
+import 'package:provider/provider.dart'; // ✅ إضافة
+import 'package:aqar_app/providers/user_provider.dart'; // ✅ إضافة
 import 'package:aqar_app/screens/chat_messages_screen.dart';
 
 @pragma('vm:entry-point')
@@ -45,8 +49,16 @@ void main() async {
   final bool seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
 
   runApp(
-    AqarApp(
-      startScreen: seenOnboarding ? const AuthGate() : const OnboardingScreen(),
+    // ✅ تغليف التطبيق بـ MultiProvider
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UserProvider()..loadUserData()),
+      ],
+      child: AqarApp(
+        startScreen: seenOnboarding
+            ? const AuthGate()
+            : const OnboardingScreen(),
+      ),
     ),
   );
 }
@@ -66,12 +78,30 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 👇 هذا الجزء هو الأهم لحل مشكلة لوحة التحكم
+    ApiService.onTokenExpired = () {
+      if (mounted) {
+        ApiService.logout().then((_) {
+          navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (ctx) => const AuthGate()),
+            (route) => false,
+          );
+          ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
+            const SnackBar(
+              content: Text('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        });
+      }
+    };
+    // 👆 نهاية الجزء المضاف
     _initDeepLinks();
     _setupFirebaseMessaging();
     _updateTokenOnStart(); // ✅ تحديث التوكن عبر السيرفر
     _setUserOnline(true); // ✅ المستخدم الآن متصل
-    _checkUserBanStatus(); // ✅ فحص فوري عند فتح التطبيق
-    _startBanCheckTimer(); // ✅ فحص دوري للحظر كل 10 ثوان
+    _checkUserBanStatus(); // ✅ فحص فوري عند فتح التطبيق مرة واحدة فقط
+    // ❌ تم إزالة _startBanCheckTimer للحفاظ على الأداء
     // ✅ الفحص الدوري للصيانة أُضيف إلى AuthGate بدلاً من هنا
   }
 
@@ -87,6 +117,10 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _setUserOnline(true); // ✅ رجع للتطبيق
+      // هذا سيجلب أحدث البيانات من السيرفر دون الحاجة لتسجيل الخروج
+      if (mounted) {
+        Provider.of<UserProvider>(context, listen: false).loadUserData();
+      }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _setUserOnline(false); // ✅ غادر التطبيق مؤقتاً
@@ -107,52 +141,31 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
     if (userId != null) {
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null) {
-        // استخدام ApiService بدلاً من Firestore المباشر
         ApiService.updateFcmToken(userId, token);
       }
     }
-  }
-
-  // ✅ فحص دوري للتحقق من حالة الحظر كل 10 ثوان
-  void _startBanCheckTimer() {
-    Future.delayed(const Duration(seconds: 10), () async {
-      if (mounted) {
-        await _checkUserBanStatus();
-        _startBanCheckTimer(); // استدعاء نفسها مرة أخرى
-      }
-    });
   }
 
   Future<void> _checkUserBanStatus() async {
     try {
       final isLoggedIn = await ApiService.isLoggedIn();
       debugPrint(
-        '🔍 [BanCheck] Checking ban status... User logged in: $isLoggedIn',
+        '🔍 [BanCheck] Checking ban status (Startup)... User logged in: $isLoggedIn',
       );
-      if (!isLoggedIn) {
-        debugPrint('⚪ [BanCheck] User not logged in, skipping ban check');
-        return;
-      }
+      if (!isLoggedIn) return;
 
-      // جلب الحالة من السيرفر لضمان تحديث حالة الحظر فوراً
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
-      debugPrint('👤 [BanCheck] User ID: $userId');
-      if (userId == null) {
-        debugPrint('⚪ [BanCheck] No user ID found');
-        return;
+      if (userId == null) return;
+      if (userId != null) {
+        // ✅ بدء اتصال WebSocket
+        WebSocketService.connect(userId);
       }
 
-      debugPrint('🌐 [BanCheck] Fetching user profile from server...');
       final remoteUser = await ApiService.fetchUserProfile(userId);
-      debugPrint(
-        '📥 [BanCheck] User profile received: ${remoteUser != null ? 'YES' : 'NO'}',
-      );
 
       if (remoteUser != null) {
-        debugPrint('💾 [BanCheck] Storing updated user data locally');
         await prefs.setString('user_data', jsonEncode(remoteUser));
-        debugPrint('✅ [BanCheck] isBanned status: ${remoteUser['isBanned']}');
       }
 
       if (remoteUser != null && remoteUser['isBanned'] == true) {
@@ -160,22 +173,14 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
           '🚫🚫🚫 [BanCheck] USER IS BANNED! Starting logout procedure...',
         );
 
-        // تسجيل الخروج
-        debugPrint('🔄 [BanCheck] Calling ApiService.logout()...');
         await ApiService.logout();
-        debugPrint('✅ [BanCheck] Logout completed');
 
-        // الذهاب إلى شاشة تسجيل الدخول
         if (mounted) {
-          debugPrint('📍 [BanCheck] Navigating to AuthGate...');
           navigatorKey.currentState?.pushAndRemoveUntil(
             MaterialPageRoute(builder: (ctx) => const AuthGate()),
             (route) => false,
           );
-          debugPrint('✅ [BanCheck] Navigation to AuthGate completed');
 
-          // عرض رسالة للمستخدم
-          debugPrint('📢 [BanCheck] Showing ban notification to user...');
           try {
             ScaffoldMessenger.of(
               navigatorKey.currentState!.context,
@@ -186,22 +191,15 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
                 duration: Duration(seconds: 5),
               ),
             );
-            debugPrint('✅ [BanCheck] Ban notification shown successfully');
           } catch (e) {
             debugPrint('⚠️ [BanCheck] Error showing notification: $e');
           }
-        } else {
-          debugPrint('❌ [BanCheck] Widget is not mounted, cannot navigate');
         }
-      } else {
-        debugPrint('✅ [BanCheck] User is NOT banned, status is normal');
       }
     } catch (e) {
       debugPrint('⚠️ [BanCheck] Error checking ban status: $e');
     }
   }
-
-  // ✅ الفحص الدوري للصيانة أُضيف إلى AuthGate بدلاً من هنا
 
   Future<void> _initDeepLinks() async {
     _appLinks = AppLinks();
@@ -250,8 +248,6 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
 
     if (data['type'] == 'new_rating') {
       final myId = FirebaseAuth.instance.currentUser?.uid;
-      // ملاحظة: FirebaseAuth قد يكون null هنا إذا اعتمدنا كلياً على السيرفر،
-      // لكن للإشعارات القادمة من FCM لا بأس باستخدامه أو استخدام SharedPreferences
       if (myId != null) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(
@@ -338,20 +334,38 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
                 FormBuilderLocalizations.delegate,
               ],
               theme: FlexThemeData.light(
-                useMaterial3: true,
                 colorScheme: ColorScheme.fromSeed(
                   seedColor: seed,
                   brightness: Brightness.light,
+                  primary: seed,
+                ),
+                useMaterial3: true,
+                subThemesData: const FlexSubThemesData(
+                  defaultRadius: 12.0,
+                  inputDecoratorRadius: 12.0,
+                  elevatedButtonRadius: 12.0,
+                  outlinedButtonRadius: 12.0,
+                  cardElevation: 2.0,
                 ),
                 textTheme: GoogleFonts.cairoTextTheme(),
               ),
               darkTheme: FlexThemeData.dark(
-                useMaterial3: true,
                 colorScheme: ColorScheme.fromSeed(
                   seedColor: seed,
                   brightness: Brightness.dark,
                 ),
-                textTheme: GoogleFonts.cairoTextTheme(),
+                useMaterial3: true,
+                subThemesData: const FlexSubThemesData(
+                  defaultRadius: 12.0,
+                  inputDecoratorRadius: 12.0,
+                  elevatedButtonRadius: 12.0,
+                  outlinedButtonRadius: 12.0,
+                  cardElevation: 2.0,
+                  blendOnLevel: 20,
+                ),
+                textTheme: GoogleFonts.cairoTextTheme(
+                  ThemeData.dark().textTheme,
+                ),
               ),
               home: widget.startScreen,
             );

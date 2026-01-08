@@ -2,122 +2,113 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class ApiService {
-  // عنوان السيرفر (البروكسي)
+  // ✅ العنوان الصحيح للسيرفر
   static const String baseUrl = 'http://72.60.80.201:3001/api';
-  // الإصدار الحالي للتطبيق
   static const String currentAppVersion = '1.0.0';
 
+  // 🔔 دالة استدعاء (Callback) يتم تنفيذها عند انتهاء صلاحية الجلسة
+  static VoidCallback? onTokenExpired;
+
   // =========================================================================
-  // 🔄 دالة مقارنة الإصدارات (Version Comparison)
+  // 🔄 مقارنة الإصدارات (Version Check)
   // =========================================================================
 
-  /// مقارنة نسختين
-  /// return: -1 إذا كانت v1 < v2، 0 إذا كانت متساوية، 1 إذا كانت v1 > v2
   static int compareVersions(String v1, String v2) {
-    print('📊 [Version] Comparing: $v1 vs $v2');
-
     try {
       final version1 = v1.split('.').map(int.parse).toList();
       final version2 = v2.split('.').map(int.parse).toList();
 
-      // تأكد من أن كلا الإصدارات لهما نفس العدد من الأجزاء
       while (version1.length < version2.length) version1.add(0);
       while (version2.length < version1.length) version2.add(0);
 
       for (int i = 0; i < version1.length; i++) {
-        if (version1[i] < version2[i]) {
-          print('✅ [Version] $v1 < $v2 (Needs Update)');
-          return -1;
-        } else if (version1[i] > version2[i]) {
-          print('✅ [Version] $v1 > $v2 (Up to Date)');
-          return 1;
-        }
+        if (version1[i] < version2[i]) return -1;
+        if (version1[i] > version2[i]) return 1;
       }
-
-      print('✅ [Version] $v1 = $v2 (Same Version)');
       return 0;
     } catch (e) {
-      print('❌ [Version] Error comparing versions: $e');
       return 0;
     }
   }
 
-  /// التحقق مما إذا كان التحديث مطلوباً
   static bool isUpdateRequired(String minRequiredVersion) {
     return compareVersions(currentAppVersion, minRequiredVersion) < 0;
   }
 
-  // دالة مساعدة لجلب الهيدرز (تتضمن التوكن تلقائياً)
+  // =========================================================================
+  // 🔄 أدوات مساعدة (Helpers)
+  // =========================================================================
+
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
-
-    if (token != null) {
-      debugPrint('🔑 [API] Using auth token');
-    } else {
-      debugPrint('⚠️ [API] No auth token found');
-    }
-
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // 🔐 المصادقة (Auth)
-  // ---------------------------------------------------------------------------
+  // ✅ دالة مركزية لمعالجة الاستجابة واكتشاف انتهاء الجلسة (401)
+  static http.Response _handleResponse(http.Response response) {
+    if (response.statusCode == 401) {
+      debugPrint('⛔ [API] Token Expired or Unauthorized (401)');
+      if (onTokenExpired != null) {
+        onTokenExpired!(); // استدعاء دالة الخروج في main.dart
+      }
+      // يمكن رمي استثناء لإيقاف العملية الحالية
+      // throw Exception('انتهت صلاحية الجلسة');
+    }
+    return response;
+  }
+
+  // =========================================================================
+  // 🔐 المصادقة والمستخدمين (Auth & Users)
+  // =========================================================================
+
+  static Future<bool> isLoggedIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey('auth_token');
+  }
 
   static Future<void> login(String email, String password) async {
-    debugPrint('🌐 [API] Sending login request to: $baseUrl/auth/login');
-    debugPrint('📧 [API] Email: $email');
-
+    debugPrint('🌐 [API] Login request: $baseUrl/auth/login');
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      debugPrint('📥 [API] Response status: ${response.statusCode}');
-      debugPrint('📥 [API] Response body: ${response.body}');
+      debugPrint('📥 [API] Login response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final prefs = await SharedPreferences.getInstance();
 
-        // ✅ فحص ما إذا كان المستخدم محظوراً
-        final userData = data['userData'];
-        if (userData != null && userData['isBanned'] == true) {
-          debugPrint('🚫 [API] User is banned! Login rejected.');
+        if (data['userData'] != null && data['userData']['isBanned'] == true) {
           throw Exception('تم حظر هذا الحساب من قبل الإدارة');
         }
 
-        // حفظ الـ token من السيرفر
         final token = data['token'] ?? data['idToken'] ?? '';
         await prefs.setString('auth_token', token);
         await prefs.setString('user_id', data['userId'] ?? data['uid'] ?? '');
         await prefs.setString('user_email', email);
 
-        // حفظ بيانات المستخدم إذا كانت متوفرة
         if (data['userData'] != null) {
           await prefs.setString('user_data', jsonEncode(data['userData']));
         }
-
-        debugPrint('✅ [API] Login successful! Token saved.');
       } else {
-        final error =
-            jsonDecode(response.body)['error'] ??
-            jsonDecode(response.body)['message'] ??
-            'فشل تسجيل الدخول';
-        debugPrint('❌ [API] Login failed: $error');
-        throw Exception(error);
+        final errorData = jsonDecode(response.body);
+        throw Exception(
+          errorData['error'] ?? errorData['message'] ?? 'فشل تسجيل الدخول',
+        );
       }
     } catch (e) {
-      debugPrint('💥 [API] Exception during login: $e');
+      debugPrint('💥 [API] Login Error: $e');
       rethrow;
     }
   }
@@ -126,112 +117,167 @@ class ApiService {
     String email,
     String password,
     String username,
-    String phone,
-  ) async {
-    debugPrint('🌐 [API] Sending signup request to: $baseUrl/auth/signup');
-    debugPrint('📧 [API] Email: $email, Username: $username');
-
+    String phone, {
+    String role = 'user',
+  }) async {
     try {
-      // 1. إنشاء الحساب على السيرفر
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/signup'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-          'username': username,
-          'phone': phone,
-        }),
-      );
-
-      debugPrint('📥 [API] Response status: ${response.statusCode}');
-      debugPrint('📥 [API] Response body: ${response.body}');
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/signup'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'password': password,
+              'username': username,
+              'phone': phone,
+              'role': role,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 201 && response.statusCode != 200) {
-        final error =
-            jsonDecode(response.body)['error'] ??
-            jsonDecode(response.body)['message'] ??
-            'فشل إنشاء الحساب';
-        debugPrint('❌ [API] Signup failed: $error');
-        throw Exception(error);
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'فشل إنشاء الحساب');
       }
-
-      // 2. تسجيل الدخول تلقائياً للحصول على token
-      debugPrint('🔐 [API] Auto-login after signup...');
       try {
         await login(email, password);
-        debugPrint('✅ [API] Auto-login successful!');
-      } catch (loginError) {
-        debugPrint('⚠️ [API] Auto-login failed: $loginError');
-
-        // كخطة بديلة، احفظ البيانات من response الـ signup
-        final data = jsonDecode(response.body);
-        final prefs = await SharedPreferences.getInstance();
-
-        final userId = data['userId'] ?? data['uid'] ?? '';
-        await prefs.setString('user_id', userId);
-        await prefs.setString('user_email', email);
-
-        final userData = {
-          'email': email,
-          'username': username,
-          'phone': phone,
-          'userId': userId,
-        };
-        await prefs.setString('user_data', jsonEncode(userData));
-
-        // حفظ token بسيط كبديل
-        if (data['token'] != null) {
-          await prefs.setString('auth_token', data['token']);
-        }
-      }
-
-      debugPrint('✅ [API] Signup successful!');
+      } catch (_) {}
     } catch (e) {
-      debugPrint('💥 [API] Exception during signup: $e');
+      debugPrint('💥 [API] Signup Error: $e');
       rethrow;
     }
   }
 
   static Future<void> logout() async {
-    debugPrint('🚪 [API] Logging out...');
-
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-
-    debugPrint('✅ [API] Logged out successfully');
+    debugPrint('👋 [API] User logged out and cache cleared.');
   }
 
-  static Future<bool> isLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    final hasToken =
-        prefs.containsKey('auth_token') &&
-        prefs.getString('auth_token')!.isNotEmpty;
-    debugPrint('🔍 [API] User logged in: $hasToken');
-    return hasToken;
-  }
+  static Future<Map<String, dynamic>?> fetchUserProfile(String userId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/users/$userId'),
+        headers: headers,
+      );
 
-  static Future<Map<String, dynamic>?> getCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userDataString = prefs.getString('user_data');
-    if (userDataString != null) {
-      return jsonDecode(userDataString);
+      // هنا لا نستدعي _handleResponse لتجنب التكرار أثناء بدء التطبيق، لكن يمكن إضافتها
+      if (response.statusCode == 200) {
+        final data = Map<String, dynamic>.from(jsonDecode(response.body));
+        if (data['email'] == null) {
+          final prefs = await SharedPreferences.getInstance();
+          final localEmail = prefs.getString('user_email');
+          if (localEmail != null) data['email'] = localEmail;
+        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_data', jsonEncode(data));
+        return data;
+      } else if (response.statusCode == 401) {
+        if (onTokenExpired != null) onTokenExpired!();
+      }
+    } catch (e) {
+      debugPrint('💥 [API] Fetch Profile Error: $e');
     }
     return null;
   }
 
-  // ---------------------------------------------------------------------------
+  // دالة توثيق الحساب (نسخة المستخدم) - قد لا تستخدم ولكن نحتفظ بها
+  static Future<void> toggleUserVerification(
+    String userId,
+    bool isVerified,
+  ) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/admin/users/$userId/verify'),
+        headers: headers,
+        body: jsonEncode({'isVerified': isVerified}),
+      );
+      _handleResponse(response);
+      if (response.statusCode != 200) throw Exception('Failed verification');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<void> updateUserProfile(
+    String userId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/users/$userId'),
+            headers: headers,
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      _handleResponse(response);
+
+      if (response.statusCode == 200) {
+        final prefs = await SharedPreferences.getInstance();
+        String? oldDataStr = prefs.getString('user_data');
+        Map<String, dynamic> mergedData = {};
+        if (oldDataStr != null) {
+          mergedData = Map<String, dynamic>.from(jsonDecode(oldDataStr));
+        }
+        mergedData.addAll(data);
+        await prefs.setString('user_data', jsonEncode(mergedData));
+      } else {
+        throw Exception('فشل التحديث: ${response.statusCode}');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getCurrentUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final str = prefs.getString('user_data');
+    return str != null ? jsonDecode(str) : null;
+  }
+
+  static Future<void> updateFcmToken(String userId, String token) async {
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/users/$userId/fcm'),
+        headers: {'Content-Type': 'application/json', ...(await _getHeaders())},
+        body: jsonEncode({'fcmToken': token}),
+      );
+    } catch (e) {
+      debugPrint('⚠️ [API] Failed to update FCM token: $e');
+    }
+  }
+
+  static Future<void> updateOnlineStatus(String userId, bool isOnline) async {
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/users/$userId/online-status'),
+        headers: {'Content-Type': 'application/json', ...(await _getHeaders())},
+        body: jsonEncode({'isOnline': isOnline}),
+      );
+    } catch (e) {
+      debugPrint('⚠️ [API] Failed to update online status: $e');
+    }
+  }
+
+  // =========================================================================
   // 🏠 العقارات (Properties)
-  // ---------------------------------------------------------------------------
+  // =========================================================================
 
   static Future<List<Map<String, dynamic>>> fetchProperties() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/properties'));
+      final response = await http
+          .get(Uri.parse('$baseUrl/properties'))
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
       }
     } catch (e) {
-      debugPrint('Error fetching properties: $e');
+      debugPrint('💥 [API] Fetch Properties Error: $e');
     }
     return [];
   }
@@ -239,13 +285,40 @@ class ApiService {
   static Future<Map<String, dynamic>?> fetchPropertyDetails(String id) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/properties/$id'));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
+      if (response.statusCode == 200) return jsonDecode(response.body);
     } catch (e) {
       debugPrint('Error fetching property details: $e');
     }
     return null;
+  }
+
+  static Future<void> addProperty(Map<String, dynamic> data) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/properties'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    _handleResponse(response);
+    if (response.statusCode != 201 && response.statusCode != 200) {
+      throw Exception('Failed to add property: ${response.body}');
+    }
+  }
+
+  static Future<void> updateProperty(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    final headers = await _getHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/properties/$id'),
+      headers: headers,
+      body: jsonEncode(data),
+    );
+    _handleResponse(response);
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update property');
+    }
   }
 
   static Future<List<Map<String, dynamic>>> fetchMyProperties(
@@ -264,37 +337,6 @@ class ApiService {
     return [];
   }
 
-  static Future<void> addProperty(Map<String, dynamic> data) async {
-    final headers = await _getHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl/properties'),
-      headers: headers,
-      body: jsonEncode(data),
-    );
-    if (response.statusCode != 201) {
-      throw Exception('Failed to add property: ${response.body}');
-    }
-  }
-
-  static Future<void> updateProperty(
-    String id,
-    Map<String, dynamic> data,
-  ) async {
-    final headers = await _getHeaders();
-    final response = await http.put(
-      Uri.parse('$baseUrl/properties/$id'),
-      headers: headers,
-      body: jsonEncode(data),
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update property');
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // 📂 الأرشيف (Archive)
-  // ---------------------------------------------------------------------------
-
   static Future<List<Map<String, dynamic>>> fetchArchivedProperties(
     String userId,
   ) async {
@@ -304,6 +346,7 @@ class ApiService {
         Uri.parse('$baseUrl/properties/archived?userId=$userId'),
         headers: headers,
       );
+      _handleResponse(response);
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
       }
@@ -315,106 +358,39 @@ class ApiService {
 
   static Future<void> restoreProperty(String id) async {
     final headers = await _getHeaders();
-    await http.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/properties/$id/restore'),
       headers: headers,
     );
+    _handleResponse(response);
   }
 
   static Future<void> deleteArchivedProperty(String id) async {
     final headers = await _getHeaders();
-    await http.delete(Uri.parse('$baseUrl/properties/$id'), headers: headers);
-  }
-
-  // ---------------------------------------------------------------------------
-  // 👤 المستخدمين (Users)
-  // ---------------------------------------------------------------------------
-
-  static Future<Map<String, dynamic>?> fetchUserProfile(String userId) async {
-    try {
-      debugPrint('🔍 [API] Fetching user profile for: $userId');
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/users/$userId'),
-        headers: headers,
-      );
-
-      debugPrint('📥 [API] Profile response status: ${response.statusCode}');
-      debugPrint('📥 [API] Profile response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        debugPrint('✅ [API] Profile fetched successfully');
-        debugPrint('🔍 [API] isBanned value in response: ${data['isBanned']}');
-        return data;
-      } else {
-        debugPrint('❌ [API] Failed to fetch profile: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('💥 [API] Error fetching user profile: $e');
-    }
-    return null;
-  }
-
-  static Future<void> updateUserProfile(
-    String userId,
-    Map<String, dynamic> data,
-  ) async {
-    final headers = await _getHeaders();
-    final response = await http.put(
-      Uri.parse('$baseUrl/users/$userId'),
+    final response = await http.delete(
+      Uri.parse('$baseUrl/properties/$id'),
       headers: headers,
-      body: jsonEncode(data),
     );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update profile');
-    }
-
-    // تحديث البيانات المحلية أيضاً
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_data', jsonEncode(data));
+    _handleResponse(response);
   }
 
-  static Future<void> updateFcmToken(String userId, String token) async {
-    try {
-      await http.post(
-        Uri.parse('$baseUrl/users/$userId/fcm'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'fcmToken': token}),
-      );
-    } catch (e) {
-      debugPrint('Error updating FCM token: $e');
-    }
-  }
-
-  // تحديث حالة الاتصال (متصل/غير متصل)
-  static Future<void> updateOnlineStatus(String userId, bool isOnline) async {
-    try {
-      await http.post(
-        Uri.parse('$baseUrl/users/$userId/online-status'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'isOnline': isOnline}),
-      );
-      debugPrint('✅ [API] Online status updated: $isOnline');
-    } catch (e) {
-      debugPrint('Error updating online status: $e');
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // 💬 المحادثات (Chat)
-  // ---------------------------------------------------------------------------
+  // =========================================================================
+  // 💬 المحادثات (Chats)
+  // =========================================================================
 
   static Future<List<Map<String, dynamic>>> fetchMyChats() async {
     try {
       final headers = await _getHeaders();
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
+      if (userId == null) return [];
 
       final response = await http.get(
         Uri.parse('$baseUrl/chats?userId=$userId'),
         headers: headers,
       );
+      _handleResponse(response);
+
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
       }
@@ -433,6 +409,8 @@ class ApiService {
         Uri.parse('$baseUrl/chats/$chatId/messages'),
         headers: headers,
       );
+      _handleResponse(response);
+
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
       }
@@ -442,77 +420,100 @@ class ApiService {
     return [];
   }
 
+  static Future<Map<String, dynamic>?> fetchChatInfo(String chatId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .get(Uri.parse('$baseUrl/chats/$chatId'), headers: headers)
+          .timeout(const Duration(seconds: 15));
+      _handleResponse(response);
+      if (response.statusCode == 200) return jsonDecode(response.body);
+    } catch (_) {}
+    return null;
+  }
+
   static Future<void> sendMessage(
     String chatId,
     String text,
     String recipientId,
   ) async {
     final headers = await _getHeaders();
-
-    // ✅ جلب معرف المرسل (أنا) من الذاكرة
     final prefs = await SharedPreferences.getInstance();
     final senderId = prefs.getString('user_id');
-
-    if (senderId == null) throw Exception('User ID not found');
-
-    await http.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/chats/$chatId/messages'),
       headers: headers,
       body: jsonEncode({
         'text': text,
         'recipientId': recipientId,
-        'senderId': senderId, // ✅ تم إضافة هذا السطر الضروري
+        'senderId': senderId,
       }),
     );
+    _handleResponse(response);
   }
 
-  // ✅ تم إصلاح هذه الدالة: إضافة قائمة المشاركين
   static Future<String> startChat(String propertyId, String ownerId) async {
     final headers = await _getHeaders();
     final prefs = await SharedPreferences.getInstance();
     final myId = prefs.getString('user_id');
-
-    if (myId == null) throw Exception('User not logged in');
 
     final response = await http.post(
       Uri.parse('$baseUrl/chats'),
       headers: headers,
       body: jsonEncode({
         'propertyId': propertyId,
-        'ownerId': ownerId,
-        'participants': [myId, ownerId], // ✅ إضافة هامة جداً
+        'participants': [myId, ownerId],
       }),
     );
+    _handleResponse(response);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      final data = jsonDecode(response.body);
-      return data['chatId'];
+      return jsonDecode(response.body)['chatId'];
     }
-    throw Exception('Failed to start chat: ${response.body}');
+    throw Exception('Failed to start chat');
   }
 
-  static Future<Map<String, dynamic>?> fetchChatInfo(String chatId) async {
+  // =========================================================================
+  // 🤝 الصفقات والمفضلات والتقييمات
+  // =========================================================================
+
+  static Future<void> submitDealRequest(
+    String propertyId,
+    String sellerId,
+    String dealType,
+  ) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/deals'),
+      headers: headers,
+      body: jsonEncode({
+        'propertyId': propertyId,
+        'sellerId': sellerId,
+        'dealType': dealType,
+      }),
+    );
+    _handleResponse(response);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to submit deal request');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchDeals(
+    String userId,
+    String role,
+  ) async {
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/chats/$chatId'),
+        Uri.parse('$baseUrl/deals?userId=$userId&role=$role'),
         headers: headers,
       );
-
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      }
-
-      debugPrint('Error fetching chat info ($chatId): ${response.body}');
-    } catch (e) {
-      debugPrint('Exception fetching chat info ($chatId): $e');
-    }
-    return null;
+      _handleResponse(response);
+      if (response.statusCode == 200)
+        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (_) {}
+    return [];
   }
-
-  // ---------------------------------------------------------------------------
-  // ⭐ التقييمات والمراجعات (Ratings & Reviews)
-  // ---------------------------------------------------------------------------
 
   static Future<Map<String, dynamic>> fetchUserRatingSummary(
     String userId,
@@ -531,16 +532,12 @@ class ApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/users/$userId/reviews'),
       );
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200)
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
-      }
-    } catch (e) {
-      debugPrint('Error fetching reviews: $e');
-    }
+    } catch (_) {}
     return [];
   }
 
-  // ✅ تم إصلاح هذه الدالة: إضافة معرف المُقيّم
   static Future<void> submitRating(
     String targetUserId,
     double rating,
@@ -549,240 +546,167 @@ class ApiService {
     final headers = await _getHeaders();
     final prefs = await SharedPreferences.getInstance();
     final myId = prefs.getString('user_id');
-
     final response = await http.post(
       Uri.parse('$baseUrl/users/$targetUserId/reviews'),
       headers: headers,
       body: jsonEncode({
         'rating': rating,
         'comment': comment,
-        'reviewerId': myId, // ✅ إرسال المعرف ليظهر التقييم باسمك
+        'reviewerId': myId,
       }),
     );
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to submit rating');
-    }
+    _handleResponse(response);
   }
-
-  // ---------------------------------------------------------------------------
-  // 🤝 الصفقات (Deals)
-  // ---------------------------------------------------------------------------
-
-  static Future<List<Map<String, dynamic>>> fetchDeals(
-    String userId,
-    String role,
-  ) async {
-    try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/deals?userId=$userId&role=$role'),
-        headers: headers,
-      );
-      if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
-      }
-    } catch (e) {
-      debugPrint('Error fetching deals: $e');
-    }
-    return [];
-  }
-
-  static Future<void> submitDealRequest(
-    String propertyId,
-    String sellerId,
-    String dealType,
-  ) async {
-    final headers = await _getHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl/deals'),
-      headers: headers,
-      body: jsonEncode({
-        'propertyId': propertyId,
-        'sellerId': sellerId,
-        'dealType': dealType,
-      }),
-    );
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Failed to submit deal request');
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // ❤️ المفضلة (Favorites)
-  // ---------------------------------------------------------------------------
 
   static Future<List<Map<String, dynamic>>> fetchFavorites(
     String userId,
   ) async {
     try {
       final headers = await _getHeaders();
+      if (userId.isEmpty) return [];
       final response = await http.get(
         Uri.parse('$baseUrl/users/$userId/favorites'),
         headers: headers,
       );
-      if (response.statusCode == 200) {
+      _handleResponse(response);
+      if (response.statusCode == 200)
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
-      }
-    } catch (e) {
-      debugPrint('Error fetching favorites: $e');
-    }
+    } catch (_) {}
     return [];
   }
 
   static Future<void> toggleFavorite(String propertyId) async {
-    final headers = await _getHeaders();
-    await http.post(
-      Uri.parse('$baseUrl/properties/$propertyId/favorite'),
-      headers: headers,
-    );
+    try {
+      final headers = await _getHeaders();
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId == null) throw Exception('User not logged in');
+
+      bool isFavorited = false;
+      try {
+        final favs = await fetchFavorites(userId);
+        isFavorited = favs.any(
+          (f) => (f['id'] ?? f['_id']).toString() == propertyId,
+        );
+      } catch (_) {}
+
+      http.Response response;
+      if (!isFavorited) {
+        response = await http.post(
+          Uri.parse('$baseUrl/users/$userId/favorites'),
+          headers: headers,
+          body: jsonEncode({'propertyId': propertyId}),
+        );
+      } else {
+        response = await http.delete(
+          Uri.parse('$baseUrl/users/$userId/favorites/$propertyId'),
+          headers: headers,
+        );
+      }
+      _handleResponse(response);
+    } catch (e) {
+      rethrow;
+    }
   }
 
-  // ---------------------------------------------------------------------------
-  // 🛡️ لوحة الأدمن (Admin Dashboard)
-  // ---------------------------------------------------------------------------
+  // =========================================================================
+  // 🛠️ الأدمن (Admin)
+  // =========================================================================
 
   static Future<Map<String, dynamic>> fetchAdminStats() async {
     try {
-      print('🌐 [API] جلب الإحصائيات من: $baseUrl/admin/stats');
-      print('🌐 [API] Fetching stats from: $baseUrl/admin/stats');
       final headers = await _getHeaders();
-      print('🔑 [API] Headers prepared for stats request');
-
       final response = await http.get(
         Uri.parse('$baseUrl/admin/stats'),
         headers: headers,
       );
-
-      print('📥 [API] Stats response status: ${response.statusCode}');
-      print('📥 [API] Stats response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final stats = jsonDecode(response.body);
-        print('✅ [API] Stats fetched successfully: $stats');
-        return stats;
-      } else {
-        print('❌ [API] Stats error - Status: ${response.statusCode}');
-        print('❌ [API] Stats error - Body: ${response.body}');
-      }
-    } catch (e) {
-      print('❌ [API] Stats exception: $e');
-    }
-    print('⚠️ [API] Returning default empty stats');
-    return {'users': 0, 'properties': 0, 'chats': 0};
+      _handleResponse(response);
+      if (response.statusCode == 200) return jsonDecode(response.body);
+    } catch (_) {}
+    return {'users': 0, 'properties': 0};
   }
 
-  static Future<List<Map<String, dynamic>>> fetchAllUsers() async {
+  // ✅ هذه الدالة المحدثة التي تدعم Pagination والتي يجب أن تحل محل النسخة القديمة
+  static Future<List<Map<String, dynamic>>> fetchAllUsers({
+    int limit = 20,
+    String? lastCreatedAt,
+    String? searchQuery,
+  }) async {
     try {
-      debugPrint('🌐 [API] Fetching all users from: $baseUrl/admin/users');
       final headers = await _getHeaders();
+      String queryString = 'limit=$limit';
+      if (lastCreatedAt != null && lastCreatedAt.isNotEmpty) {
+        queryString += '&lastCreatedAt=$lastCreatedAt';
+      }
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        queryString += '&search=$searchQuery';
+      }
+
       final response = await http.get(
-        Uri.parse('$baseUrl/admin/users'),
+        Uri.parse('$baseUrl/admin/users?$queryString'),
         headers: headers,
       );
-      debugPrint('📡 [API] Users response status: ${response.statusCode}');
-      debugPrint('📦 [API] Users response body: ${response.body}');
+      _handleResponse(response);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        debugPrint('✅ [API] Successfully fetched ${data.length} users');
-        return List<Map<String, dynamic>>.from(data);
-      } else {
-        debugPrint('❌ [API] Failed to fetch users: ${response.statusCode}');
-        debugPrint('📄 [API] Error body: ${response.body}');
+        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
       }
     } catch (e) {
-      debugPrint('💥 [API] Exception while fetching users: $e');
+      debugPrint('Error fetching users: $e');
     }
     return [];
   }
 
   static Future<void> toggleUserBan(String userId, bool ban) async {
     final headers = await _getHeaders();
-    await http.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/admin/users/$userId/ban'),
       headers: headers,
       body: jsonEncode({'isBanned': ban}),
     );
+    _handleResponse(response);
+  }
+
+  // هذه نسخة الأدمن من التوثيق
+  static Future<void> toggleUserVerificationAdmin(
+    String userId,
+    bool isVerified,
+  ) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/admin/users/$userId/verify'),
+        headers: headers,
+        body: jsonEncode({'isVerified': isVerified}),
+      );
+      _handleResponse(response);
+      if (response.statusCode != 200) throw Exception('Failed verification');
+    } catch (e) {
+      rethrow;
+    }
   }
 
   static Future<void> toggleUserAdmin(String userId, bool makeAdmin) async {
-    debugPrint(
-      '🔧 [API] Toggling admin status for user: $userId to $makeAdmin',
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/users/$userId/admin'),
+      headers: headers,
+      body: jsonEncode({'isAdmin': makeAdmin}),
     );
-    try {
-      final headers = await _getHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/admin/users/$userId/admin'),
-        headers: headers,
-        body: jsonEncode({'isAdmin': makeAdmin}),
-      );
-
-      debugPrint('📥 [API] Response status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        debugPrint('✅ [API] Admin status updated successfully');
-      } else {
-        debugPrint('❌ [API] Failed to update admin status: ${response.body}');
-        throw Exception('فشل تحديث صلاحيات المدير');
-      }
-    } catch (e) {
-      debugPrint('💥 [API] Exception while toggling admin: $e');
-      rethrow;
-    }
-  }
-
-  static Future<void> toggleUserSuperAdmin(
-    String userId,
-    bool makeSuperAdmin,
-  ) async {
-    debugPrint(
-      '👑 [API] Toggling super admin status for user: $userId to $makeSuperAdmin',
-    );
-    try {
-      final headers = await _getHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/admin/users/$userId/super-admin'),
-        headers: headers,
-        body: jsonEncode({'isSuperAdmin': makeSuperAdmin}),
-      );
-
-      debugPrint('📥 [API] Response status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        debugPrint('✅ [API] Super Admin status updated successfully');
-      } else {
-        debugPrint(
-          '❌ [API] Failed to update super admin status: ${response.body}',
-        );
-        throw Exception('فشل تحديث صلاحيات المدير العام');
-      }
-    } catch (e) {
-      debugPrint('💥 [API] Exception while toggling super admin: $e');
-      rethrow;
-    }
+    _handleResponse(response);
   }
 
   static Future<List<Map<String, dynamic>>> fetchAllChats() async {
     try {
-      debugPrint('📥 [API] Fetching all chats with details...');
       final headers = await _getHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/admin/chats'),
         headers: headers,
       );
-      if (response.statusCode == 200) {
-        final chats = List<Map<String, dynamic>>.from(
-          jsonDecode(response.body),
-        );
-        debugPrint('✅ [API] Fetched ${chats.length} chats with details');
-        return chats;
-      }
-      debugPrint('❌ [API] Failed to fetch chats: ${response.statusCode}');
-    } catch (e) {
-      debugPrint('💥 [API] Exception while fetching chats: $e');
-    }
+      _handleResponse(response);
+      if (response.statusCode == 200)
+        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } catch (_) {}
     return [];
   }
 
@@ -790,41 +714,72 @@ class ApiService {
     String chatId,
   ) async {
     try {
-      debugPrint('📥 [API] Fetching messages for chat: $chatId');
       final headers = await _getHeaders();
       final response = await http.get(
         Uri.parse('$baseUrl/admin/chats/$chatId/messages'),
         headers: headers,
       );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        debugPrint('✅ [API] Fetched ${data['totalMessages']} messages');
-        return data;
-      }
-      debugPrint('❌ [API] Failed to fetch messages: ${response.statusCode}');
-    } catch (e) {
-      debugPrint('💥 [API] Exception while fetching messages: $e');
-    }
+      _handleResponse(response);
+      if (response.statusCode == 200) return jsonDecode(response.body);
+    } catch (_) {}
     return null;
+  }
+
+  static Future<bool> updateReportStatus(String reportId, String status) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.put(
+        Uri.parse('$baseUrl/admin/reports/$reportId'),
+        headers: headers,
+        body: jsonEncode({'status': status}),
+      );
+      _handleResponse(response);
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> deleteReport(String reportId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/admin/reports/$reportId'),
+        headers: headers,
+      );
+      _handleResponse(response);
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> deletePropertyAdmin(String propertyId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/properties/$propertyId'),
+        headers: headers,
+      );
+      _handleResponse(response);
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<bool> deleteChat(String chatId) async {
     try {
-      debugPrint('🗑️ [API] Deleting chat: $chatId');
       final headers = await _getHeaders();
       final response = await http.delete(
         Uri.parse('$baseUrl/admin/chats/$chatId'),
         headers: headers,
       );
-      if (response.statusCode == 200) {
-        debugPrint('✅ [API] Chat deleted successfully');
-        return true;
-      }
-      debugPrint('❌ [API] Failed to delete chat: ${response.statusCode}');
-    } catch (e) {
-      debugPrint('💥 [API] Exception while deleting chat: $e');
+      _handleResponse(response);
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
     }
-    return false;
   }
 
   static Future<List<Map<String, dynamic>>> fetchReports() async {
@@ -834,66 +789,46 @@ class ApiService {
         Uri.parse('$baseUrl/admin/reports'),
         headers: headers,
       );
-      if (response.statusCode == 200) {
+      _handleResponse(response);
+      if (response.statusCode == 200)
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
-      }
-    } catch (e) {
-      /* ignore */
-    }
+    } catch (_) {}
     return [];
   }
 
   static Future<void> submitReport(Map<String, dynamic> reportData) async {
     final headers = await _getHeaders();
-    await http.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/reports'),
       headers: headers,
       body: jsonEncode(reportData),
     );
+    _handleResponse(response);
   }
 
   static Future<Map<String, dynamic>> fetchAppSettings() async {
-    debugPrint('🛠️ [API] جلب إعدادات التطبيق...');
     try {
-      // استخدام endpoint عام بدون صلاحيات admin
       final response = await http.get(
         Uri.parse('$baseUrl/admin/settings/public'),
-        headers: {'Content-Type': 'application/json'},
       );
-
-      debugPrint('🛠️ [API] Settings response status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final settings = jsonDecode(response.body);
-        debugPrint('✅ [API] Settings fetched: $settings');
-        return settings;
-      } else {
-        debugPrint('⚠️ [API] Settings fetch failed: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('❌ [API] Error fetching settings: $e');
-    }
+      if (response.statusCode == 200) return jsonDecode(response.body);
+    } catch (_) {}
     return {};
   }
 
   static Future<void> updateAppSettings(Map<String, dynamic> settings) async {
-    final headers = await _getHeaders();
-    debugPrint('🛠️ [API] Updating app settings...');
-    debugPrint('🛠️ [API] Payload: ' + settings.toString());
-    final response = await http.post(
-      Uri.parse('$baseUrl/admin/settings'),
-      headers: headers,
-      body: jsonEncode(settings),
-    );
-    debugPrint('📥 [API] Settings response status: ${response.statusCode}');
-    debugPrint('📥 [API] Settings response body: ${response.body}');
-    if (response.statusCode != 200 && response.statusCode != 204) {
-      String message = 'فشل حفظ الإعدادات';
-      try {
-        final body = jsonDecode(response.body);
-        message = (body['error'] ?? body['message'] ?? message).toString();
-      } catch (_) {}
-      throw Exception(message);
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/admin/settings'),
+        headers: headers,
+        body: jsonEncode(settings),
+      );
+      _handleResponse(response);
+      if (response.statusCode != 200)
+        throw Exception('Failed to update app settings');
+    } catch (e) {
+      rethrow;
     }
   }
 }

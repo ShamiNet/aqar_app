@@ -76,6 +76,9 @@ dependencies:
   app_links: ^6.4.1
   flutter_rating_bar: ^4.0.1
   flutter_zoom_drawer: ^3.1.1
+  web_socket_channel: ^3.0.1
+  intl: ^0.20.2
+  provider: ^6.1.5+1
 
    
 

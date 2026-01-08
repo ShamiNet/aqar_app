@@ -95,10 +95,10 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  // ✅ فحص دوري لحالة الصيانة كل 5 ثوانٍ
+  // ✅ فحص دوري لحالة الصيانة كل 30 ثانية
   void _startMaintenanceCheckTimer() {
-    debugPrint('🛠️ [AuthGate-Timer] بدء الفحص الدوري للصيانة كل 5 ثوانٍ');
-    Future.delayed(const Duration(seconds: 5), () async {
+    debugPrint('🛠️ [AuthGate-Timer] بدء الفحص الدوري للصيانة كل 30 ثانية');
+    Future.delayed(const Duration(seconds: 30), () async {
       debugPrint('🛠️ [AuthGate-Timer] ⏰ تشغيل فحص دوري... mounted=$mounted');
       if (mounted) {
         await _checkMaintenanceOnly();

@@ -24,6 +24,15 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
   bool _isLoading = true;
   String? _error;
 
+  // ألوان التصميم الداكن
+  final Color backgroundColor = const Color(0xFF111827);
+  final Color surfaceColor = const Color(0xFF1F2937);
+  final Color cardColor = const Color(0xFF374151);
+  final Color textPrimary = const Color(0xFFF3F4F6);
+  final Color textSecondary = const Color(0xFF9CA3AF);
+  final Color accentBlue = const Color(0xFF3B82F6);
+  final Color accentOrange = const Color(0xFFF59E0B);
+
   @override
   void initState() {
     super.initState();
@@ -134,18 +143,27 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
         : (widget.chatData['user2'] as Map<String, dynamic>?);
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('🔍 مراقبة المحادثة'),
-        backgroundColor: Colors.blueGrey.shade900,
-        foregroundColor: Colors.white,
+        title: Text(
+          '🔍 مراقبة المحادثة',
+          style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: surfaceColor,
+        elevation: 0,
+        iconTheme: IconThemeData(color: textPrimary),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh_rounded, color: accentBlue),
             onPressed: _loadChatMessages,
             tooltip: 'تحديث',
           ),
+          const SizedBox(width: 8),
           IconButton(
-            icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+            icon: const Icon(
+              Icons.delete_forever_rounded,
+              color: Colors.redAccent,
+            ),
             onPressed: _deleteChat,
             tooltip: 'حذف المحادثة',
           ),
@@ -155,7 +173,16 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
         children: [
           // معلومات المحادثة
           Container(
-            color: Colors.grey.shade200,
+            decoration: BoxDecoration(
+              color: surfaceColor,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,12 +191,23 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                   children: [
                     Expanded(child: _buildUserInfo(user1, 'المستخدم الأول')),
                     const SizedBox(width: 16),
-                    const Icon(Icons.chat_bubble, color: Colors.orange),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: accentOrange.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.chat_bubble_rounded,
+                        color: accentOrange,
+                        size: 24,
+                      ),
+                    ),
                     const SizedBox(width: 16),
                     Expanded(child: _buildUserInfo(user2, 'المستخدم الثاني')),
                   ],
                 ),
-                const Divider(height: 24),
+                Divider(height: 24, color: textSecondary.withOpacity(0.2)),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -217,18 +255,29 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
 
   Widget _buildUserInfo(Map<String, dynamic>? user, String label) {
     if (user == null) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Text(label, style: const TextStyle(fontSize: 12)),
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 12, color: textSecondary),
+          textAlign: TextAlign.center,
         ),
       );
     }
 
-    return Card(
-      elevation: 2,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(4.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -250,18 +299,16 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                     children: [
                       Text(
                         user['username'] ?? 'مستخدم',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
+                          color: textPrimary,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         user['email'] ?? '',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade600,
-                        ),
+                        style: TextStyle(fontSize: 10, color: textSecondary),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -279,12 +326,23 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green,
+                      color: Colors.greenAccent,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      'متصل',
-                      style: TextStyle(color: Colors.white, fontSize: 10),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.circle, size: 6, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          'متصل',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 if (user['isBanned'] == true)
@@ -295,12 +353,23 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.red,
+                      color: Colors.redAccent,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      'محظور',
-                      style: TextStyle(color: Colors.white, fontSize: 10),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.block, size: 10, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          'محظور',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -312,10 +381,28 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
   }
 
   Widget _buildInfoChip(IconData icon, String text) {
-    return Chip(
-      avatar: Icon(icon, size: 16),
-      label: Text(text, style: const TextStyle(fontSize: 12)),
-      backgroundColor: Colors.blue.shade50,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: accentBlue.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accentBlue.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: accentBlue),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: textPrimary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -378,24 +465,59 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
             constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.7,
             ),
-            child: Card(
-              color: isUser1 ? Colors.blue.shade50 : Colors.grey.shade100,
-              elevation: 2,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isUser1
+                      ? [
+                          accentBlue.withOpacity(0.2),
+                          accentBlue.withOpacity(0.1),
+                        ]
+                      : [cardColor, surfaceColor],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isUser1
+                      ? accentBlue.withOpacity(0.3)
+                      : Colors.white.withOpacity(0.05),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
               child: Padding(
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.all(14.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ✅ اسم المرسل من السيرفر
-                    Text(
-                      senderName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: isUser1
-                            ? Colors.blue.shade700
-                            : Colors.grey.shade700,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: isUser1 ? accentBlue : accentOrange,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          senderName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isUser1 ? accentBlue : accentOrange,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     // نص الرسالة - دعم text و content
@@ -405,7 +527,11 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                         true)
                       Text(
                         (message['text'] ?? message['content']).toString(),
-                        style: const TextStyle(fontSize: 14),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textPrimary,
+                          height: 1.4,
+                        ),
                       ),
                     // الصور (إن وجدت) - دعم imageUrls و images
                     if ((message['imageUrls'] ?? message['images']) != null)
@@ -419,9 +545,9 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.access_time,
-                          size: 10,
-                          color: Colors.grey.shade600,
+                          Icons.access_time_rounded,
+                          size: 11,
+                          color: textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -429,8 +555,9 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                             message['timestamp'] ?? message['createdAt'],
                           ),
                           style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey.shade600,
+                            fontSize: 11,
+                            color: textSecondary,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],

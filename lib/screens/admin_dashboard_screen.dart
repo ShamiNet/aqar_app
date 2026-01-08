@@ -1,11 +1,9 @@
 import 'package:aqar_app/screens/auth_gate.dart';
-import 'package:aqar_app/screens/chat_messages_screen.dart';
 import 'package:aqar_app/screens/admin_chat_monitor_screen.dart';
-import 'package:aqar_app/screens/property_details_screen.dart';
-import 'package:aqar_app/screens/public_profile_screen.dart';
-import 'package:aqar_app/services/api_service.dart'; // ✅ استخدام السيرفر
+import 'package:aqar_app/screens/report_details_screen.dart';
+import 'package:aqar_app/services/api_service.dart';
+import 'package:aqar_app/widgets/verified_badge.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 
@@ -20,12 +18,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
+  // --- لوحة الألوان الداكنة (Dark Theme Palette) ---
+  final Color primaryColor = const Color(0xFF3B82F6); // أزرق ساطع للوضع الليلي
+  final Color backgroundColor = const Color(
+    0xFF111827,
+  ); // خلفية سوداء مائلة للكحلي
+  final Color surfaceColor = const Color(0xFF1F2937); // رمادي غامق للبطاقات
+  final Color textPrimary = const Color(0xFFF3F4F6); // أبيض مائل للرمادي
+  final Color textSecondary = const Color(0xFF9CA3AF); // رمادي فاتح
+  final Color inputFillColor = const Color(0xFF374151); // لون حقول الإدخال
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    print('🔴 [AdminDashboard] بدء لوحة القيادة الإدارية!');
-    print('🔴 [AdminDashboard] Admin Dashboard Initialized!');
   }
 
   @override
@@ -47,49 +53,95 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('لوحة القيادة 🛡️'),
-        backgroundColor: Colors.blueGrey.shade900,
-        foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: Colors.orange,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.grey,
-          tabs: const [
-            Tab(text: 'نظرة عامة', icon: Icon(Icons.dashboard)),
-            Tab(text: 'المستخدمين', icon: Icon(Icons.people_alt)),
-            Tab(text: 'التحكم', icon: Icon(Icons.settings_applications)),
-            Tab(text: 'مراقبة الشات', icon: Icon(Icons.chat)),
-            Tab(text: 'البلاغات والأرشيف', icon: Icon(Icons.report_problem)),
-          ],
+        backgroundColor: surfaceColor,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'لوحة الإدارة',
+          style: TextStyle(
+            color: textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
+        iconTheme: IconThemeData(color: textSecondary),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
             onPressed: _signOut,
             tooltip: 'تسجيل الخروج',
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          labelColor: primaryColor,
+          unselectedLabelColor: textSecondary,
+          indicatorColor: primaryColor,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+          dividerColor: Colors.transparent,
+          tabs: const [
+            Tab(text: 'الرئيسية'),
+            Tab(text: 'المستخدمين'),
+            Tab(text: 'الإعدادات'),
+            Tab(text: 'المحادثات'),
+            Tab(text: 'البلاغات'),
+          ],
+        ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
-          _OverviewTab(),
-          _UsersManagementTab(),
-          _AppControlTab(),
-          _ChatMonitoringTab(),
-          _ReportsAndArchiveTab(),
+        children: [
+          _OverviewTab(
+            backgroundColor,
+            surfaceColor,
+            textPrimary,
+            textSecondary,
+          ),
+          // ✅ تم تحديث هذا التبويب ليدعم Pagination
+          _UsersManagementTab(
+            backgroundColor,
+            surfaceColor,
+            textPrimary,
+            textSecondary,
+            inputFillColor,
+          ),
+          _AppControlTab(
+            backgroundColor,
+            surfaceColor,
+            textPrimary,
+            textSecondary,
+            inputFillColor,
+          ),
+          _ChatMonitoringTab(surfaceColor, textPrimary, textSecondary),
+          _ReportsAndArchiveTab(surfaceColor, textPrimary, textSecondary),
         ],
       ),
     );
   }
 }
 
-// --- 1. تبويب نظرة عامة (Overview) ---
+// ==========================================
+// 1. تبويب النظرة العامة
+// ==========================================
 class _OverviewTab extends StatefulWidget {
-  const _OverviewTab();
+  final Color bgColor;
+  final Color surfaceColor;
+  final Color textPrimary;
+  final Color textSecondary;
+
+  const _OverviewTab(
+    this.bgColor,
+    this.surfaceColor,
+    this.textPrimary,
+    this.textSecondary,
+  );
 
   @override
   State<_OverviewTab> createState() => _OverviewTabState();
@@ -101,8 +153,6 @@ class _OverviewTabState extends State<_OverviewTab> {
   @override
   void initState() {
     super.initState();
-    // ✅ جلب الإحصائيات من السيرفر
-    print('🟠 [OverviewTab] بدء تبويب نظرة عامة - جلب الإحصائيات!');
     _statsFuture = ApiService.fetchAdminStats();
   }
 
@@ -122,46 +172,57 @@ class _OverviewTabState extends State<_OverviewTab> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // خريطة البيانات من API
         final apiData = snapshot.data ?? {};
-        final stats = {
-          'users': apiData['totalUsers'] ?? 0,
-          'properties': apiData['totalProperties'] ?? 0,
-          'chats': apiData['totalChats'] ?? 0,
-          'activeUsers': apiData['activeUsers'] ?? 0,
-          'bannedUsers': apiData['bannedUsers'] ?? 0,
-          'reports': apiData['totalReports'] ?? 0,
-        };
+        final totalUsers = apiData['totalUsers'] ?? apiData['users'] ?? 0;
+        final totalProperties =
+            apiData['totalProperties'] ?? apiData['properties'] ?? 0;
+        final totalChats = apiData['totalChats'] ?? apiData['chats'] ?? 0;
 
         return RefreshIndicator(
           onRefresh: _refresh,
+          backgroundColor: widget.surfaceColor,
+          color: Colors.blue,
           child: ListView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(20),
             children: [
-              _buildStatCard(
-                context,
-                icon: Icons.people_alt_outlined,
-                label: 'المستخدمين المسجلين',
-                value: '${stats['users']}',
-                color: Colors.blue,
+              Text(
+                'ملخص النظام',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: widget.textPrimary,
+                ),
               ),
-              const SizedBox(height: 16),
-              _buildStatCard(
-                context,
-                icon: Icons.home_work_outlined,
-                label: 'إجمالي العقارات',
-                value: '${stats['properties']}',
-                color: Colors.orange,
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildInfoCard(
+                      'المستخدمين',
+                      '$totalUsers',
+                      Icons.people_outline,
+                      Colors.blue,
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: _buildInfoCard(
+                      'العقارات',
+                      '$totalProperties',
+                      Icons.home_work_outlined,
+                      Colors.orange,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              _buildStatCard(
-                context,
-                icon: Icons.chat_bubble_outline,
-                label: 'المحادثات النشطة',
-                value: '${stats['chats']}',
-                color: Colors.purple,
+              const SizedBox(height: 15),
+              _buildInfoCard(
+                'المحادثات النشطة',
+                '$totalChats',
+                Icons.chat_bubble_outline,
+                Colors.purpleAccent,
+                isFullWidth: true,
               ),
-              const SizedBox(height: 16),
             ],
           ),
         );
@@ -169,193 +230,252 @@ class _OverviewTabState extends State<_OverviewTab> {
     );
   }
 
-  Widget _buildStatCard(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
+  Widget _buildInfoCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color, {
+    bool isFullWidth = false,
   }) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 32, color: color),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 32,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      height: isFullWidth ? 110 : 170,
+      decoration: BoxDecoration(
+        color: widget.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      child: isFullWidth
+          ? Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 28),
+                ),
+                const SizedBox(width: 20),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: widget.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24,
+                        color: widget.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 28),
+                ),
+                const Spacer(),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 32,
+                    color: widget.textPrimary,
+                  ),
+                ),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: widget.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
 
-// --- 2. تبويب إدارة المستخدمين ---
+// ==========================================
+// 2. إدارة المستخدمين (مع Pagination & Search)
+// ==========================================
 class _UsersManagementTab extends StatefulWidget {
-  const _UsersManagementTab();
+  final Color bgColor;
+  final Color surfaceColor;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color inputFillColor;
+
+  const _UsersManagementTab(
+    this.bgColor,
+    this.surfaceColor,
+    this.textPrimary,
+    this.textSecondary,
+    this.inputFillColor,
+  );
+
   @override
   State<_UsersManagementTab> createState() => _UsersManagementTabState();
 }
 
 class _UsersManagementTabState extends State<_UsersManagementTab> {
-  late Future<List<Map<String, dynamic>>> _usersFuture;
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+
+  List<Map<String, dynamic>> _users = [];
+  bool _isLoading = false;
+  bool _hasMore = true;
+  dynamic _lastCreatedAt; // ✅ يقبل String أو Map (Firestore timestamp)
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _usersFuture = ApiService.fetchAllUsers();
+    _fetchUsers(); // تحميل أولي
+    _scrollController.addListener(_onScroll);
   }
 
-  Future<void> _refreshUsers() async {
-    setState(() {
-      _usersFuture = ApiService.fetchAllUsers();
-    });
-    await _usersFuture;
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
-  void _toggleUserBan(
-    String userId,
-    bool currentStatus,
-    String username,
-  ) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(currentStatus ? 'إلغاء الحظر' : 'حظر المستخدم'),
-        content: Text(
-          'هل تريد ${currentStatus ? "إلغاء حظر" : "حظر"} "$username"؟',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('تأكيد'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        await ApiService.toggleUserBan(userId, !currentStatus);
-        setState(() {
-          _usersFuture = ApiService.fetchAllUsers();
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                currentStatus ? 'تم إلغاء حظر المستخدم' : 'تم حظر المستخدم',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('فشلت العملية: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoading &&
+        _hasMore) {
+      _fetchUsers();
     }
   }
 
-  void _toggleUserAdmin(
-    String userId,
-    bool currentStatus,
-    String username,
-  ) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(currentStatus ? 'إزالة صلاحيات المدير' : 'ترقية لمدير'),
-        content: Text(
-          currentStatus
-              ? 'هل تريد إزالة صلاحيات المدير من "$username"؟'
-              : 'هل تريد منح "$username" صلاحيات المدير؟',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: currentStatus ? Colors.red : Colors.green,
-            ),
-            child: const Text('تأكيد'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _fetchUsers({bool refresh = false}) async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
 
-    if (confirm == true) {
-      try {
-        await ApiService.toggleUserAdmin(userId, !currentStatus);
+    if (refresh) {
+      _users.clear();
+      _lastCreatedAt = null;
+      _hasMore = true;
+    }
+
+    try {
+      final newUsers = await ApiService.fetchAllUsers(
+        limit: 20,
+        lastCreatedAt: _lastCreatedAt,
+        searchQuery: _searchQuery.isEmpty ? null : _searchQuery,
+      );
+
+      if (mounted) {
         setState(() {
-          _usersFuture = ApiService.fetchAllUsers();
+          if (newUsers.isEmpty) {
+            // إذا لم تأتِ بيانات وكان تحديثاً، القائمة فارغة أصلاً
+            // إذا كان تحميل المزيد، فهذا يعني وصلنا للنهاية
+            _hasMore = false;
+          } else {
+            _users.addAll(newUsers);
+            // نحفظ تاريخ آخر عنصر لاستخدامه في الطلب القادم
+            // ✅ يقبل String أو Map (Firestore timestamp)
+            _lastCreatedAt = newUsers.last['createdAt'];
+            debugPrint(
+              '📍 Last createdAt type: ${newUsers.last['createdAt'].runtimeType}',
+            );
+            // إذا جاءت بيانات أقل من الحد المطلوب (20)، فهذا يعني وصلنا للنهاية
+            if (newUsers.length < 20) _hasMore = false;
+          }
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                currentStatus
-                    ? 'تم إزالة صلاحيات المدير'
-                    : 'تم ترقية المستخدم لمدير',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
+      }
+    } catch (e) {
+      debugPrint("❌ خطأ في جلب المستخدمين: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ خطأ: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _refreshUsers() async {
+    _users.clear();
+    _lastCreatedAt = null;
+    _hasMore = true;
+    await _fetchUsers(refresh: true);
+  }
+
+  void _onSearchChanged(String value) {
+    // نستخدم Debounce بسيط لتجنب الطلبات الكثيرة يمكن تطبيقه هنا،
+    // لكن للتبسيط سنطلب عند الكتابة مباشرة أو عند الضغط زر البحث
+    // هنا سنحدث القيمة ونعيد التحميل
+    setState(() => _searchQuery = value);
+    _fetchUsers(refresh: true);
+  }
+
+  Future<void> _handleAction(
+    String userId,
+    String action,
+    bool currentStatus,
+  ) async {
+    try {
+      if (action == 'verify')
+        await ApiService.toggleUserVerification(userId, !currentStatus);
+      if (action == 'ban')
+        await ApiService.toggleUserBan(userId, !currentStatus);
+      if (action == 'admin')
+        await ApiService.toggleUserAdmin(userId, !currentStatus);
+
+      // تحديث الحالة محلياً بدلاً من إعادة تحميل القائمة بالكامل (لتحسين التجربة)
+      setState(() {
+        final index = _users.indexWhere((u) => u['id'] == userId);
+        if (index != -1) {
+          if (action == 'verify') _users[index]['isVerified'] = !currentStatus;
+          if (action == 'ban') _users[index]['isBanned'] = !currentStatus;
+          if (action == 'admin') _users[index]['isAdmin'] = !currentStatus;
         }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('فشلت العملية: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم التحديث بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -364,279 +484,309 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          color: Colors.transparent,
           child: TextField(
-            decoration: const InputDecoration(
-              hintText: 'بحث...',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+            controller: _searchController,
+            style: TextStyle(color: widget.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'بحث عن اسم...',
+              hintStyle: TextStyle(color: widget.textSecondary),
+              prefixIcon: Icon(Icons.search, color: widget.textSecondary),
+              filled: true,
+              fillColor: widget.inputFillColor,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 16,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.blueAccent),
+              ),
             ),
-            onChanged: (val) =>
-                setState(() => _searchQuery = val.toLowerCase()),
+            onChanged: _onSearchChanged,
           ),
         ),
         Expanded(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _usersFuture,
-            builder: (ctx, snapshot) {
-              // Build a child widget based on snapshot and wrap with RefreshIndicator
-              Widget child;
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                child = const Center(child: CircularProgressIndicator());
-              } else if (snapshot.hasError) {
-                child = ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    const SizedBox(height: 80),
-                    const Icon(
-                      Icons.error_outline,
-                      size: 64,
-                      color: Colors.red,
+          child: RefreshIndicator(
+            onRefresh: () => _fetchUsers(refresh: true),
+            backgroundColor: widget.surfaceColor,
+            color: Colors.blue,
+            child: _users.isEmpty && !_isLoading
+                ? Center(
+                    child: Text(
+                      'لا يوجد مستخدمين',
+                      style: TextStyle(color: widget.textSecondary),
                     ),
-                    const SizedBox(height: 16),
-                    Center(
-                      child: Text('خطأ في تحميل المستخدمين: ${snapshot.error}'),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
                     ),
-                    const SizedBox(height: 16),
-                    Center(
-                      child: ElevatedButton(
-                        onPressed: _refreshUsers,
-                        child: const Text('إعادة المحاولة'),
-                      ),
-                    ),
-                  ],
-                );
-              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                child = ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: const [
-                    SizedBox(height: 80),
-                    Icon(Icons.people_outline, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Center(child: Text('لا يوجد مستخدمين.')),
-                    SizedBox(height: 16),
-                  ],
-                );
-              } else {
-                final users = snapshot.data!.where((user) {
-                  final name = (user['username'] ?? '')
-                      .toString()
-                      .toLowerCase();
-                  final email = (user['email'] ?? '').toString().toLowerCase();
-                  return name.contains(_searchQuery) ||
-                      email.contains(_searchQuery);
-                }).toList();
-
-                child = ListView.builder(
-                  itemCount: users.length,
-                  itemBuilder: (ctx, index) {
-                    final user = users[index];
-                    final isBanned = user['isBanned'] == true;
-                    final isAdmin = user['isAdmin'] == true;
-                    final isSuperAdmin = user['isSuperAdmin'] == true;
-                    final isOnline = user['isOnline'] == true;
-                    final lastSeen = user['lastSeen'];
-
-                    // حساب آخر ظهور
-                    String lastSeenText = '';
-                    if (isOnline) {
-                      lastSeenText = 'متصل الآن';
-                    } else if (lastSeen != null) {
-                      try {
-                        final DateTime lastSeenDate = DateTime.parse(
-                          lastSeen.toString(),
+                    itemCount: _users.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (ctx, index) {
+                      if (index == _users.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: Center(child: CircularProgressIndicator()),
                         );
-                        final Duration diff = DateTime.now().difference(
-                          lastSeenDate,
-                        );
-
-                        if (diff.inMinutes < 1) {
-                          lastSeenText = 'منذ لحظات';
-                        } else if (diff.inMinutes < 60) {
-                          lastSeenText = 'منذ ${diff.inMinutes} د';
-                        } else if (diff.inHours < 24) {
-                          lastSeenText = 'منذ ${diff.inHours} ساعة';
-                        } else {
-                          lastSeenText = 'منذ ${diff.inDays} يوم';
-                        }
-                      } catch (e) {
-                        lastSeenText = 'غير متصل';
                       }
-                    } else {
-                      lastSeenText = 'لم يتصل';
-                    }
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      child: ListTile(
-                        leading: Stack(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: isAdmin
-                                  ? Colors.orange
-                                  : Colors.blue,
-                              child: Icon(
-                                isSuperAdmin
-                                    ? Icons.shield
-                                    : isAdmin
-                                    ? Icons.admin_panel_settings
-                                    : Icons.person,
-                                color: Colors.white,
-                              ),
-                            ),
-                            // نقطة خضراء إذا كان متصل
-                            if (isOnline)
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 12,
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    color: Colors.green,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        title: Row(
-                          children: [
-                            Text(user['username'] ?? 'مستخدم'),
-                            if (isSuperAdmin) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'المدير العام',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ] else if (isAdmin) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  'مدير',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(user['email'] ?? ''),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.access_time,
-                                  size: 12,
-                                  color: isOnline ? Colors.green : Colors.grey,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  lastSeenText,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isOnline
-                                        ? Colors.green
-                                        : Colors.grey,
-                                    fontWeight: isOnline
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // زر إدارة صلاحيات المشرف
-                            IconButton(
-                              icon: Icon(
-                                isAdmin
-                                    ? Icons.remove_moderator
-                                    : Icons.add_moderator,
-                                color: isAdmin ? Colors.red : Colors.green,
-                              ),
-                              tooltip: isAdmin
-                                  ? 'إزالة الإشراف'
-                                  : 'ترقية لمشرف',
-                              onPressed: () => _toggleUserAdmin(
-                                user['id'],
-                                isAdmin,
-                                user['username'],
-                              ),
-                            ),
-                            // زر الحظر
-                            IconButton(
-                              icon: Icon(
-                                isBanned ? Icons.block : Icons.check_circle,
-                                color: isBanned ? Colors.red : Colors.grey,
-                              ),
-                              tooltip: isBanned ? 'إلغاء الحظر' : 'حظر',
-                              onPressed: () => _toggleUserBan(
-                                user['id'],
-                                isBanned,
-                                user['username'],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              }
-
-              return RefreshIndicator(onRefresh: _refreshUsers, child: child);
-            },
+                      return _buildUserCard(_users[index]);
+                    },
+                  ),
           ),
         ),
       ],
     );
   }
+
+  Widget _buildUserCard(Map<String, dynamic> user) {
+    final userId = user['id'];
+    final username = user['username'] ?? 'مستخدم';
+    final email = user['email'] ?? '';
+    final profileImage = user['profileImageUrl'];
+    final isBanned = user['isBanned'] == true;
+    final isAdmin = user['isAdmin'] == true;
+    final isVerified = user['isVerified'] == true;
+    final isOnline = user['isOnline'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: widget.surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            Stack(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: widget.inputFillColor, width: 2),
+                  ),
+                  child: CircleAvatar(
+                    radius: 26,
+                    backgroundColor: widget.inputFillColor,
+                    backgroundImage: profileImage != null
+                        ? CachedNetworkImageProvider(profileImage)
+                        : null,
+                    child: profileImage == null
+                        ? Icon(Icons.person, color: widget.textSecondary)
+                        : null,
+                  ),
+                ),
+                if (isOnline)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: widget.surfaceColor,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 16),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          username,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: widget.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      if (isVerified) const VerifiedBadge(size: 16),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    style: TextStyle(color: widget.textSecondary, fontSize: 13),
+                  ),
+
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      if (isAdmin)
+                        _buildStatusChip(
+                          'مشرف',
+                          Colors.amberAccent,
+                          Colors.amber.withOpacity(0.15),
+                          Icons.shield,
+                        ),
+                      if (isBanned)
+                        _buildStatusChip(
+                          'محظور',
+                          Colors.redAccent,
+                          Colors.red.withOpacity(0.15),
+                          Icons.block,
+                        ),
+                      if (isVerified)
+                        _buildStatusChip(
+                          'موثق',
+                          Colors.blueAccent,
+                          Colors.blue.withOpacity(0.15),
+                          Icons.check,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_horiz_rounded, color: widget.textSecondary),
+              color: widget.inputFillColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              onSelected: (value) {
+                if (value == 'verify')
+                  _handleAction(userId, 'verify', isVerified);
+                if (value == 'ban') _handleAction(userId, 'ban', isBanned);
+                if (value == 'admin') _handleAction(userId, 'admin', isAdmin);
+              },
+              itemBuilder: (ctx) => [
+                _buildPopupItem(
+                  'verify',
+                  isVerified ? 'إلغاء التوثيق' : 'توثيق الحساب',
+                  isVerified ? Icons.close : Icons.verified,
+                  false,
+                ),
+                _buildPopupItem(
+                  'ban',
+                  isBanned ? 'فك الحظر' : 'حظر المستخدم',
+                  isBanned ? Icons.check_circle : Icons.block,
+                  !isBanned,
+                ),
+                _buildPopupItem(
+                  'admin',
+                  isAdmin ? 'إزالة مشرف' : 'ترقية لمشرف',
+                  Icons.security,
+                  false,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(
+    String label,
+    Color textColor,
+    Color bgColor,
+    IconData icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: textColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: textColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _buildPopupItem(
+    String value,
+    String text,
+    IconData icon,
+    bool isDestructive,
+  ) {
+    final color = isDestructive ? Colors.redAccent : widget.textPrimary;
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 12),
+          Text(
+            text,
+            style: TextStyle(color: color, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-// --- 3. تبويب التحكم في التطبيق ---
-// --- 3. تبويب التحكم في التطبيق (مفعل) ---
+// ==========================================
+// 3. الإعدادات (داكن)
+// ==========================================
 class _AppControlTab extends StatefulWidget {
-  const _AppControlTab();
+  final Color bgColor;
+  final Color surfaceColor;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color inputFillColor;
+
+  const _AppControlTab(
+    this.bgColor,
+    this.surfaceColor,
+    this.textPrimary,
+    this.textSecondary,
+    this.inputFillColor,
+  );
+
   @override
   State<_AppControlTab> createState() => _AppControlTabState();
 }
@@ -654,15 +804,32 @@ class _AppControlTabState extends State<_AppControlTab> {
   }
 
   Future<void> _loadSettings() async {
-    final settings = await ApiService.fetchAppSettings();
-    if (mounted) {
-      setState(() {
-        _versionController.text = settings['min_version'] ?? '1.0.0';
-        _maintenance = settings['maintenance_mode'] ?? false;
-        _msgController.text = settings['maintenance_message'] ?? '';
-        _loading = false;
-      });
+    try {
+      final settings = await ApiService.fetchAppSettings();
+      if (mounted) {
+        setState(() {
+          _versionController.text = settings['min_version'] ?? '1.0.0';
+          _maintenance = settings['maintenance_mode'] ?? false;
+          _msgController.text = settings['maintenance_message'] ?? '';
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل الإعدادات: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    await _loadSettings();
   }
 
   Future<void> _save() async {
@@ -675,23 +842,18 @@ class _AppControlTabState extends State<_AppControlTab> {
       });
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم الحفظ بنجاح')));
-        if (_maintenance) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('وضع الصيانة مفعّل. لن يظهر للمشرفين.'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ تم الحفظ بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل الحفظ: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('❌ خطأ: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -700,59 +862,160 @@ class _AppControlTabState extends State<_AppControlTab> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
+
+    final inputDecoration = InputDecoration(
+      labelStyle: TextStyle(color: widget.textSecondary),
+      hintStyle: TextStyle(color: widget.textSecondary.withOpacity(0.5)),
+      filled: true,
+      fillColor: widget.inputFillColor,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.blueAccent),
+      ),
+    );
+
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Text(
-                  'إصدار التطبيق الإجباري',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                TextField(
-                  controller: _versionController,
-                  decoration: const InputDecoration(labelText: 'رقم الإصدار'),
-                ),
-              ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildSectionHeader('حالة التطبيق'),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.blueAccent),
+              onPressed: _refresh,
+              tooltip: 'تحديث الإعدادات',
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Text(
+        Container(
+          decoration: BoxDecoration(
+            color: widget.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              SwitchListTile(
+                title: Text(
                   'وضع الصيانة',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: widget.textPrimary,
+                  ),
                 ),
-                SwitchListTile(
-                  title: const Text('تفعيل الصيانة'),
-                  value: _maintenance,
-                  onChanged: (v) => setState(() => _maintenance = v),
+                subtitle: Text(
+                  _maintenance ? 'التطبيق مغلق' : 'التطبيق يعمل',
+                  style: TextStyle(
+                    color: _maintenance ? Colors.redAccent : Colors.greenAccent,
+                  ),
                 ),
-                TextField(
+                value: _maintenance,
+                activeColor: Colors.redAccent,
+                onChanged: (v) => setState(() => _maintenance = v),
+              ),
+              Divider(height: 1, color: widget.textSecondary.withOpacity(0.2)),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
                   controller: _msgController,
-                  decoration: const InputDecoration(labelText: 'رسالة الصيانة'),
+                  style: TextStyle(color: widget.textPrimary),
+                  decoration: inputDecoration.copyWith(
+                    labelText: 'رسالة الصيانة',
+                    prefixIcon: Icon(
+                      Icons.message_outlined,
+                      color: widget.textSecondary,
+                    ),
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 20),
-        ElevatedButton(onPressed: _save, child: const Text('حفظ الإعدادات')),
+        const SizedBox(height: 25),
+        _buildSectionHeader('التحديثات'),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: widget.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'الحد الأدنى للإصدار',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: widget.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _versionController,
+                style: TextStyle(color: widget.textPrimary),
+                decoration: inputDecoration.copyWith(
+                  hintText: '1.0.0',
+                  prefixIcon: Icon(Icons.numbers, color: widget.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 30),
+        ElevatedButton(
+          onPressed: _save,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text(
+            'حفظ الإعدادات',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, right: 5),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: widget.textSecondary,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 }
 
-// --- 4. تبويب مراقبة الشات ---
+// ==========================================
+// 4. مراقبة الشات (داكن)
+// ==========================================
 class _ChatMonitoringTab extends StatefulWidget {
-  const _ChatMonitoringTab();
+  final Color surfaceColor;
+  final Color textPrimary;
+  final Color textSecondary;
+
+  const _ChatMonitoringTab(
+    this.surfaceColor,
+    this.textPrimary,
+    this.textSecondary,
+  );
 
   @override
   State<_ChatMonitoringTab> createState() => _ChatMonitoringTabState();
@@ -760,358 +1023,212 @@ class _ChatMonitoringTab extends StatefulWidget {
 
 class _ChatMonitoringTabState extends State<_ChatMonitoringTab> {
   late Future<List<Map<String, dynamic>>> _chatsFuture;
-  String _searchQuery = '';
-  bool _showOnlineOnly = false;
 
   @override
   void initState() {
     super.initState();
-    // ✅ جلب جميع المحادثات عند بدء التشغيل
     _chatsFuture = ApiService.fetchAllChats();
   }
 
-  void _refreshChats() {
+  Future<void> _refreshChats() async {
     setState(() {
       _chatsFuture = ApiService.fetchAllChats();
     });
-  }
-
-  List<Map<String, dynamic>> _filterChats(List<Map<String, dynamic>> chats) {
-    var filtered = chats;
-
-    if (_searchQuery.isNotEmpty) {
-      filtered = filtered.where((chat) {
-        final user1 = chat['user1'] as Map<String, dynamic>?;
-        final user2 = chat['user2'] as Map<String, dynamic>?;
-        final query = _searchQuery.toLowerCase();
-        return (user1?['username']?.toString().toLowerCase().contains(query) ??
-                false) ||
-            (user1?['email']?.toString().toLowerCase().contains(query) ??
-                false) ||
-            (user2?['username']?.toString().toLowerCase().contains(query) ??
-                false) ||
-            (user2?['email']?.toString().toLowerCase().contains(query) ??
-                false);
-      }).toList();
-    }
-
-    if (_showOnlineOnly) {
-      filtered = filtered.where((chat) {
-        final user1 = chat['user1'] as Map<String, dynamic>?;
-        final user2 = chat['user2'] as Map<String, dynamic>?;
-        return (user1?['isOnline'] == true) || (user2?['isOnline'] == true);
-      }).toList();
-    }
-
-    return filtered;
+    await _chatsFuture;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.grey.shade100,
-          child: Column(
-            children: [
-              TextField(
-                decoration: InputDecoration(
-                  hintText: 'ابحث باسم المستخدم أو البريد الإلكتروني...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-                onChanged: (value) => setState(() => _searchQuery = value),
+    return RefreshIndicator(
+      onRefresh: _refreshChats,
+      backgroundColor: widget.surfaceColor,
+      color: Colors.blue,
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _chatsFuture,
+        builder: (ctx, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting)
+            return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || snapshot.data!.isEmpty)
+            return Center(
+              child: Text(
+                'لا توجد محادثات',
+                style: TextStyle(color: widget.textSecondary),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  FilterChip(
-                    label: const Text('المتصلين فقط'),
-                    selected: _showOnlineOnly,
-                    onSelected: (selected) =>
-                        setState(() => _showOnlineOnly = selected),
-                    avatar: Icon(
-                      Icons.circle,
-                      color: _showOnlineOnly ? Colors.green : Colors.grey,
-                      size: 12,
+            );
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: snapshot.data!.length,
+            itemBuilder: (ctx, index) {
+              final chat = snapshot.data![index];
+              return Card(
+                elevation: 0,
+                color: widget.surfaceColor,
+                margin: const EdgeInsets.only(bottom: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blueAccent.withOpacity(0.2),
+                    child: const Icon(
+                      Icons.chat_bubble,
+                      color: Colors.blueAccent,
                     ),
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _refreshChats,
-                    tooltip: 'تحديث',
+                  title: Text(
+                    'محادثة #${chat['id'].toString().substring(0, 5)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: widget.textPrimary,
+                    ),
                   ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _chatsFuture,
-            builder: (ctx, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.chat_bubble_outline,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text('لا توجد محادثات حالياً'),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _refreshChats,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('تحديث'),
-                      ),
-                    ],
+                  subtitle: Text(
+                    chat['lastMessage'] ?? '...',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: widget.textSecondary),
                   ),
-                );
-              }
-              final filteredChats = _filterChats(snapshot.data!);
-              if (filteredChats.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.search_off,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text('لا توجد نتائج للبحث'),
-                    ],
+                  trailing: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: widget.textSecondary,
                   ),
-                );
-              }
-              return RefreshIndicator(
-                onRefresh: () async => _refreshChats(),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: filteredChats.length,
-                  itemBuilder: (ctx, index) =>
-                      _buildChatCard(filteredChats[index]),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AdminChatMonitorScreen(
+                          chatId: chat['id'],
+                          chatData: chat,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               );
             },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildChatCard(Map<String, dynamic> chat) {
-    final user1 = chat['user1'] as Map<String, dynamic>?;
-    final user2 = chat['user2'] as Map<String, dynamic>?;
-    final messagesCount = chat['messagesCount'] ?? 0;
-    final lastMessage = chat['lastMessage']?.toString() ?? '';
-    final lastMessageTime = chat['lastMessageTimestamp'];
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      elevation: 3,
-      child: InkWell(
-        onTap: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (ctx) =>
-                  AdminChatMonitorScreen(chatId: chat['id'], chatData: chat),
-            ),
           );
-          if (result == true) _refreshChats();
         },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: _buildUserChip(user1)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Icon(Icons.chat, color: Colors.orange, size: 20),
-                  ),
-                  Expanded(child: _buildUserChip(user2)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (lastMessage.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.message, size: 16, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          lastMessage,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Chip(
-                    avatar: const Icon(Icons.chat_bubble, size: 16),
-                    label: Text('$messagesCount رسالة'),
-                    backgroundColor: Colors.blue.shade50,
-                    labelStyle: const TextStyle(fontSize: 11),
-                  ),
-                  const SizedBox(width: 8),
-                  if (lastMessageTime != null)
-                    Chip(
-                      avatar: const Icon(Icons.access_time, size: 16),
-                      label: Text(_formatTimestamp(lastMessageTime)),
-                      backgroundColor: Colors.orange.shade50,
-                      labelStyle: const TextStyle(fontSize: 11),
-                    ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.visibility, color: Colors.blue),
-                    onPressed: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (ctx) => AdminChatMonitorScreen(
-                            chatId: chat['id'],
-                            chatData: chat,
-                          ),
-                        ),
-                      );
-                      if (result == true) _refreshChats();
-                    },
-                    tooltip: 'عرض المحادثة',
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
-  }
-
-  Widget _buildUserChip(Map<String, dynamic>? user) {
-    if (user == null) {
-      return const Chip(
-        label: Text('مستخدم محذوف', style: TextStyle(fontSize: 11)),
-        avatar: Icon(Icons.person_off, size: 16),
-        backgroundColor: Colors.grey,
-      );
-    }
-    final username = user['username']?.toString() ?? 'مستخدم';
-    final isOnline = user['isOnline'] == true;
-    final isBanned = user['isBanned'] == true;
-    return Chip(
-      avatar: CircleAvatar(
-        radius: 12,
-        backgroundImage: user['profileImage'] != null
-            ? CachedNetworkImageProvider(user['profileImage'])
-            : null,
-        child: user['profileImage'] == null
-            ? const Icon(Icons.person, size: 12)
-            : null,
-      ),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              username,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
-            ),
-          ),
-          const SizedBox(width: 4),
-          if (isOnline)
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: Colors.green,
-                shape: BoxShape.circle,
-              ),
-            ),
-          if (isBanned) const Icon(Icons.block, size: 12, color: Colors.red),
-        ],
-      ),
-      backgroundColor: isOnline ? Colors.green.shade50 : Colors.grey.shade200,
-    );
-  }
-
-  String _formatTimestamp(dynamic timestamp) {
-    try {
-      if (timestamp == null) return 'غير معروف';
-      DateTime dateTime;
-      if (timestamp is String) {
-        dateTime = DateTime.parse(timestamp);
-      } else if (timestamp is int) {
-        dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-      } else {
-        return 'غير معروف';
-      }
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
-      if (difference.inMinutes < 1) return 'الآن';
-      if (difference.inMinutes < 60) return 'منذ ${difference.inMinutes} دقيقة';
-      if (difference.inHours < 24) return 'منذ ${difference.inHours} ساعة';
-      if (difference.inDays < 7) return 'منذ ${difference.inDays} يوم';
-      return intl.DateFormat('dd/MM/yyyy').format(dateTime);
-    } catch (e) {
-      return 'غير معروف';
-    }
   }
 }
 
-// --- 5. تبويب البلاغات والأرشيف ---
-class _ReportsAndArchiveTab extends StatelessWidget {
-  const _ReportsAndArchiveTab();
+// ==========================================
+// 5. البلاغات (داكن)
+// ==========================================
+class _ReportsAndArchiveTab extends StatefulWidget {
+  final Color surfaceColor;
+  final Color textPrimary;
+  final Color textSecondary;
+
+  const _ReportsAndArchiveTab(
+    this.surfaceColor,
+    this.textPrimary,
+    this.textSecondary,
+  );
+
+  @override
+  State<_ReportsAndArchiveTab> createState() => _ReportsAndArchiveTabState();
+}
+
+class _ReportsAndArchiveTabState extends State<_ReportsAndArchiveTab> {
+  late Future<List<Map<String, dynamic>>> _reportsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reportsFuture = ApiService.fetchReports();
+  }
+
+  Future<void> _refreshReports() async {
+    setState(() {
+      _reportsFuture = ApiService.fetchReports();
+    });
+    await _reportsFuture;
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: ApiService.fetchReports(),
+      future: _reportsFuture,
       builder: (ctx, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.isEmpty)
-          return const Center(child: Text('لا توجد بلاغات.'));
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.check_circle_outline,
+                  size: 60,
+                  color: Colors.greenAccent.withOpacity(0.5),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'لا توجد بلاغات',
+                  style: TextStyle(color: widget.textSecondary),
+                ),
+              ],
+            ),
+          );
+        }
 
-        return ListView.builder(
-          itemCount: snapshot.data!.length,
-          itemBuilder: (ctx, index) {
-            final report = snapshot.data![index];
-            return ListTile(
-              leading: const Icon(Icons.warning, color: Colors.red),
-              title: Text(report['reason'] ?? 'بلاغ'),
-              subtitle: Text(report['details'] ?? ''),
-            );
-          },
+        return RefreshIndicator(
+          onRefresh: _refreshReports,
+          backgroundColor: widget.surfaceColor,
+          color: Colors.blue,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: snapshot.data!.length,
+            itemBuilder: (ctx, index) {
+              final report = snapshot.data![index];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: widget.surfaceColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border(
+                    left: BorderSide(color: Colors.redAccent, width: 4),
+                  ),
+                ),
+                child: ListTile(
+                  onTap: () async {
+                    // الانتقال لصفحة التفاصيل وانتظار النتيجة (لتحديث القائمة إذا تم الحذف)
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ReportDetailsScreen(report: report),
+                      ),
+                    );
+
+                    // إذا عاد بـ true (يعني تم حذف البلاغ أو تغييره)، قم بتحديث القائمة
+                    if (result == true) {
+                      await _refreshReports();
+                    }
+                  },
+                  title: Text(
+                    report['reason'] ?? 'سبب غير محدد',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: widget.textPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    report['details'] ?? '',
+                    style: TextStyle(color: widget.textSecondary),
+                  ),
+                  trailing: const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.redAccent,
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );
