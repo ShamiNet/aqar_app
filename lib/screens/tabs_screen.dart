@@ -253,21 +253,21 @@ class _TabsScreenState extends State<TabsScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _buildSocialButton(
-                            Icons.language,
-                            'الموقع',
-                            'https://aqarplus.com',
+                            Icons.telegram,
+                            'قناة التطبيق',
+                            'https://t.me/+yj3zSKtT_mYyZmU0',
                           ),
                           const SizedBox(width: 20),
                           _buildSocialButton(
-                            Icons.email_outlined,
-                            'الدعم الفني',
-                            'mailto:support@aqarplus.com',
+                            Icons.send,
+                            '@DevDrond',
+                            'https://t.me/DevDrond',
                           ),
                           const SizedBox(width: 20),
                           _buildSocialButton(
                             Icons.phone_in_talk,
-                            'اتصل بنا',
-                            'tel:+966500000000',
+                            'اتصال',
+                            'tel:+963991260012',
                           ),
                         ],
                       ),
@@ -333,8 +333,15 @@ class _TabsScreenState extends State<TabsScreen> {
   Widget _buildSocialButton(IconData icon, String label, String url) {
     return InkWell(
       onTap: () async {
-        if (await canLaunchUrl(Uri.parse(url))) {
-          await launchUrl(Uri.parse(url));
+        final uri = Uri.parse(url);
+        final opened = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!opened && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر فتح الرابط على هذا الجهاز')),
+          );
         }
       },
       borderRadius: BorderRadius.circular(12),

@@ -1,252 +1,224 @@
+import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class PropertyCard extends StatelessWidget {
-  // ✅ التعديل: استقبال Map بدلاً من QueryDocumentSnapshot
   final Map<String, dynamic> property;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
-  const PropertyCard({super.key, required this.property, required this.onTap});
+  const PropertyCard({super.key, required this.property, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final data = property;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
+    // 1. استخراج الصورة
+    String? firstImageUrl;
+    try {
+      final rawList = property['images'] ?? property['imageUrls'];
+      if (rawList is List && rawList.isNotEmpty) {
+        firstImageUrl = rawList[0].toString();
+      }
+    } catch (e) {
+      debugPrint('Error parsing image in card: $e');
+    }
 
-    final String title = data['title'] ?? 'بدون عنوان';
-    final List<dynamic> images = data['imageUrls'] is List
-        ? data['imageUrls']
-        : [];
-    final String imageUrl = images.isNotEmpty
-        ? images[0]
-        : 'https://placehold.co/600x400/png?text=No+Image';
+    // 2. استخراج البيانات
+    final title = property['title']?.toString() ?? 'بدون عنوان';
+    final priceRaw = property['price'] ?? 0;
+    final price = priceRaw is num
+        ? priceRaw
+        : num.tryParse(priceRaw.toString()) ?? 0;
+    final currency = property['currency']?.toString() ?? '\$';
+    final address = property['address']?.toString() ?? '';
+    final rooms =
+        property['bedrooms']?.toString() ??
+        property['rooms']?.toString() ??
+        '-';
+    final area = property['area']?.toString() ?? '-';
 
-    final double price = double.tryParse(data['price'].toString()) ?? 0.0;
-    final String currency = data['currency'] ?? 'ر.س';
-    final String address = data['address'] ?? 'غير محدد';
-    final int rooms = int.tryParse(data['rooms'].toString()) ?? 0;
-    final int bathrooms = int.tryParse(data['bathrooms'].toString()) ?? 0;
-    final double area = double.tryParse(data['area'].toString()) ?? 0.0;
-    final String type = data['propertyType'] ?? '';
-
-    Color badgeColor = _getBadgeColor(type, colorScheme);
+    final category = property['category']?.toString() ?? 'بيع';
+    final isRent = category.contains('إيجار');
 
     return GestureDetector(
-      onTap: onTap,
-      child:
-          Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isDark ? theme.cardColor : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: isDark
-                      ? Border.all(color: colorScheme.outline.withOpacity(0.2))
-                      : Border.all(color: Colors.grey.withOpacity(0.1)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark
-                          ? Colors.black.withOpacity(0.3)
-                          : Colors.grey.withOpacity(0.15),
-                      spreadRadius: 1,
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+      onTap:
+          onTap ??
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PropertyDetailsScreen(
+                  propertyId: (property['id'] ?? property['_id']).toString(),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // --- قسم الصورة ---
-                    Flexible(
-                      child: Stack(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: AspectRatio(
-                              aspectRatio: 16 / 9,
-                              child: CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  child: const Center(
-                                    child: CircularProgressIndicator.adaptive(),
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    size: 50,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
+              ),
+            );
+          },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12), // تقليل التدaduer
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 🖼️ صورة العقار
+            Stack(
+              children: [
+                SizedBox(
+                  height:
+                      150, // ✅ تم تقليل الارتفاع من 180 إلى 150 لمنع الـ Overflow
+                  width: double.infinity,
+                  child: firstImageUrl != null && firstImageUrl!.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: firstImageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) =>
+                              Container(color: Colors.grey[200]),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.grey[300],
+                            child: const Icon(
+                              Icons.broken_image,
+                              size: 40,
+                              color: Colors.grey,
                             ),
                           ),
-                          if (type.isNotEmpty)
-                            Positioned(
-                              top: 10,
-                              right: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: badgeColor.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: badgeColor.withOpacity(0.4),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  type,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                        )
+                      : Container(
+                          color: Colors.grey[300],
+                          child: const Icon(
+                            Icons.house,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                        ),
+                ),
+                // شارة النوع
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isRent ? Colors.purple : Colors.blue,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      category,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
                       ),
                     ),
+                  ),
+                ),
+                // السعر
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${price.toStringAsFixed(0)} $currency',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
 
-                    // --- قسم التفاصيل ---
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    height: 1.2,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${price.toStringAsFixed(0)} $currency',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  color: colorScheme.primary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          if (address != 'غير محدد')
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.location_on_outlined,
-                                  size: 14,
-                                  color: colorScheme.secondary,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    address,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: colorScheme.onSurface.withOpacity(
-                                        0.7,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          const SizedBox(height: 10),
-                          Divider(
-                            height: 1,
-                            color: colorScheme.outlineVariant.withOpacity(0.3),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              if (rooms > 0)
-                                _buildSpecItem(
-                                  context,
-                                  Icons.bed_outlined,
-                                  '$rooms غرف',
-                                ),
-                              if (bathrooms > 0)
-                                _buildSpecItem(
-                                  context,
-                                  Icons.bathtub_outlined,
-                                  '$bathrooms حمام',
-                                ),
-                              if (area > 0)
-                                _buildSpecItem(
-                                  context,
-                                  Icons.square_foot_outlined,
-                                  '${area.toStringAsFixed(0)} م²',
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
+            // 📝 التفاصيل
+            Padding(
+              padding: const EdgeInsets.all(10.0), // تقليل الحشو الداخلي
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15, // تصغير الخط قليلاً
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
-                  ],
-                ),
-              )
-              .animate()
-              .fadeIn(duration: 300.ms)
-              .slideY(begin: 0.1, curve: Curves.easeOut),
+                  ),
+                  const SizedBox(height: 4),
+                  if (address.isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            address,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 8),
+                  const Divider(height: 1),
+                  const SizedBox(height: 8),
+                  // أيقونات الخصائص
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildFeature(Icons.bed, '$rooms غرف'),
+                      _buildFeature(Icons.square_foot, '$area م²'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Color _getBadgeColor(String type, ColorScheme scheme) {
-    final t = type.trim();
-    if (t.contains('بيت')) return Colors.blue.shade600;
-    if (t.contains('فيلا')) return Colors.purple.shade600;
-    if (t.contains('بناية')) return Colors.indigo.shade600;
-    if (t.contains('شقة')) return Colors.teal.shade600;
-    if (t.contains('مكتب')) return Colors.blueGrey.shade600;
-    if (t.contains('دكان') || t.contains('محل')) return Colors.orange.shade700;
-    if (t.contains('ارض') || t.contains('أرض')) return Colors.brown.shade600;
-    if (t.contains('مزرعة')) return Colors.green.shade600;
-    return scheme.primary;
-  }
-
-  Widget _buildSpecItem(BuildContext context, IconData icon, String text) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+  Widget _buildFeature(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: colorScheme.secondary.withOpacity(0.8)),
+        Icon(icon, size: 16, color: Colors.grey[600]),
         const SizedBox(width: 4),
         Text(
           text,
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: colorScheme.onSurface.withOpacity(0.7),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[800],
           ),
         ),
       ],

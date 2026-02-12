@@ -1,699 +1,608 @@
-import 'package:aqar_app/screens/edit_property_screen.dart';
+import 'package:aqar_app/screens/chats_screen.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
-import 'package:aqar_app/screens/public_profile_screen.dart';
-import 'package:aqar_app/widgets/full_screen_gallery.dart';
-import 'package:aqar_app/widgets/verified_badge.dart';
-import 'package:aqar_app/services/api_service.dart'; // ✅
-import 'package:aqar_app/widgets/report_dialog.dart';
-import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:aqar_app/screens/edit_property_screen.dart';
+import 'package:aqar_app/services/api_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'; // ✅ إضافة مكتبة الخرائط
 import 'package:url_launcher/url_launcher.dart';
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
-  const PropertyDetailsScreen({super.key, required this.propertyId});
   final String propertyId;
+
+  const PropertyDetailsScreen({super.key, required this.propertyId});
 
   @override
   State<PropertyDetailsScreen> createState() => _PropertyDetailsScreenState();
 }
 
 class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
-  late Future<Map<String, dynamic>?> _propertyFuture;
-  bool _isOwner = false;
-  bool _isFavorited = false;
+  Map<String, dynamic>? _property;
+  bool _isLoading = true;
   String? _currentUserId;
-  VideoPlayerController? _videoPlayerController;
-  ChewieController? _chewieController;
-  String _dealStatus = 'none';
+  bool _isOwner = false;
+
+  // ✅ متغيرات الخريطة
+  Set<Marker> _markers = {};
+  LatLng? _propertyLocation;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentUser();
-    _propertyFuture = ApiService.fetchPropertyDetails(widget.propertyId);
-    _checkIfFavorited();
+    _loadData();
   }
 
-  Future<void> _loadCurrentUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _currentUserId = prefs.getString('user_id');
-    });
-  }
+  Future<void> _loadData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
 
-  // التحقق من المفضلة (يمكن تحسينها بجلب القائمة مرة واحدة)
-  Future<void> _checkIfFavorited() async {
-    final prefs = await SharedPreferences.getInstance();
-    final uid = prefs.getString('user_id');
-    if (uid != null) {
-      final favs = await ApiService.fetchFavorites(uid);
+      final data = await ApiService.fetchPropertyDetails(widget.propertyId);
+
       if (mounted) {
         setState(() {
-          _isFavorited = favs.any(
-            (element) => element['id'] == widget.propertyId,
-          );
+          _property = data;
+          _currentUserId = userId;
+
+          if (data != null) {
+            _isOwner = userId != null && data['ownerId'] == userId;
+
+            // ✅ تجهيز إحداثيات الخريطة
+            if (data['latitude'] != null && data['longitude'] != null) {
+              final lat = double.tryParse(data['latitude'].toString());
+              final lng = double.tryParse(data['longitude'].toString());
+
+              if (lat != null && lng != null && lat != 0 && lng != 0) {
+                _propertyLocation = LatLng(lat, lng);
+                _markers.add(
+                  Marker(
+                    markerId: const MarkerId('propertyLocation'),
+                    position: _propertyLocation!,
+                    infoWindow: InfoWindow(
+                      title: data['title'] ?? 'موقع العقار',
+                    ),
+                  ),
+                );
+              }
+            }
+          }
+          _isLoading = false;
         });
       }
-    }
-  }
-
-  Future<void> _toggleFavorite() async {
-    if (_currentUserId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('يرجى تسجيل الدخول')));
-      return;
-    }
-    // تحديث واجهة فوري
-    setState(() => _isFavorited = !_isFavorited);
-    try {
-      await ApiService.toggleFavorite(widget.propertyId);
     } catch (e) {
-      // تراجع عند الخطأ
-      setState(() => _isFavorited = !_isFavorited);
-    }
-  }
-
-  Future<void> _initializeVideoPlayer(String videoUrl) async {
-    if (_videoPlayerController != null) return;
-    try {
-      _videoPlayerController = VideoPlayerController.networkUrl(
-        Uri.parse(videoUrl),
-      );
-      await _videoPlayerController!.initialize();
-      setState(() {
-        _chewieController = ChewieController(
-          videoPlayerController: _videoPlayerController!,
-          autoPlay: false,
-          looping: false,
-          aspectRatio: _videoPlayerController!.value.aspectRatio,
-          errorBuilder: (context, errorMessage) => const Center(
-            child: Text(
-              'فشل تحميل الفيديو',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        );
-      });
-    } catch (e) {
-      debugPrint('Video error: $e');
-    }
-  }
-
-  @override
-  void dispose() {
-    _videoPlayerController?.dispose();
-    _chewieController?.dispose();
-    super.dispose();
-  }
-
-  void _shareProperty(String title, num price, String currency) {
-    Share.share(
-      'فرصة عقارية مميزة: $title\nالسعر: $price $currency\nتطبيق عقار بلص',
-    );
-  }
-
-  void _startOrOpenChat(String ownerId, String ownerName) async {
-    if (_currentUserId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('يرجى تسجيل الدخول')));
-      return;
-    }
-    try {
-      final chatId = await ApiService.startChat(widget.propertyId, ownerId);
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (ctx) => ChatMessagesScreen(
-            chatId: chatId,
-            recipientId: ownerId,
-            recipientName: ownerName,
-          ),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('فشل بدء المحادثة')));
-    }
-  }
-
-  Future<void> _requestDeal(String type, String sellerId) async {
-    if (_currentUserId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('يرجى تسجيل الدخول')));
-      return;
-    }
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('تأكيد طلب $type'),
-        content: Text('هل أنت متأكد من إرسال طلب $type لهذا العقار؟'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('تأكيد'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      setState(() => _dealStatus = 'loading');
-      try {
-        await ApiService.submitDealRequest(widget.propertyId, sellerId, type);
-        setState(() => _dealStatus = 'pending');
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم إرسال الطلب بنجاح!')));
-      } catch (e) {
-        setState(() => _dealStatus = 'none');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('فشل إرسال الطلب')));
+      debugPrint('Error loading property details: $e');
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
 
-  void _showRatingDialog(String sellerId, String sellerName) {
-    double rating = 5;
-    final commentController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('تقييم $sellerName'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RatingBar.builder(
-              initialRating: 5,
-              minRating: 1,
-              itemBuilder: (context, _) =>
-                  const Icon(Icons.star, color: Colors.amber),
-              onRatingUpdate: (r) => rating = r,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: commentController,
-              decoration: const InputDecoration(hintText: 'تعليقك...'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await ApiService.submitRating(
-                  sellerId,
-                  rating,
-                  commentController.text,
-                );
-                if (!mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('تم التقييم')));
-              } catch (e) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('فشل التقييم')));
-              }
-            },
-            child: const Text('إرسال'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    }
   }
 
-  void _launchMapsUrl(double lat, double lon) async {
-    final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lon';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  Future<void> _openWhatsApp(String phoneNumber) async {
+    var phone = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    final Uri launchUri = Uri.parse('https://wa.me/$phone');
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // ✅ دالة فتح الموقع في تطبيق الخرائط الخارجي
+  Future<void> _openMapApp() async {
+    if (_propertyLocation == null) return;
+    final lat = _propertyLocation!.latitude;
+    final lng = _propertyLocation!.longitude;
+    final googleMapsUrl = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
+
+    if (await canLaunchUrl(googleMapsUrl)) {
+      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+    } else {
+      // محاولة بديلة لفتح أي تطبيق خرائط
+      final appleMapsUrl = Uri.parse('https://maps.apple.com/?q=$lat,$lng');
+      if (await canLaunchUrl(appleMapsUrl)) {
+        await launchUrl(appleMapsUrl, mode: LaunchMode.externalApplication);
+      }
+    }
+  }
+
+  void _startChat() async {
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يجب تسجيل الدخول لبدء المحادثة')),
+      );
+      return;
+    }
+
+    try {
+      final chatId = await ApiService.startChat(
+        widget.propertyId,
+        _property!['ownerId'],
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatMessagesScreen(
+            chatId: chatId,
+            recipientId: _property!['ownerId'],
+            recipientName: _property!['sellerInfo']?['username'] ?? 'المعلن',
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error starting chat: $e');
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ChatsScreen()));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_property == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: Text('عذراً، لم يتم العثور على العقار')),
+      );
+    }
+
+    final images =
+        (_property!['images'] ?? _property!['imageUrls'] ?? []) as List;
+    final title = _property!['title'] ?? 'بدون عنوان';
+    final price = _property!['price'] ?? 0;
+    final currency = _property!['currency'] ?? 'ر.س';
+    final description = _property!['description'] ?? '';
+    final address = _property!['address'] ?? '';
+    final date = _property!['createdAt'];
+
+    final bedrooms = _property!['bedrooms'] ?? _property!['rooms'] ?? 0;
+    final bathrooms = _property!['bathrooms'] ?? 0;
+    final area = _property!['area'] ?? 0;
+    final floor = _property!['floor'];
+
+    final livingRooms = _property!['livingRooms'];
+    final streetWidth = _property!['streetWidth'];
+    final age = _property!['age'];
+
+    final featuresList = <Widget>[];
+    if (_property!['isFurnished'] == true)
+      featuresList.add(_buildFeatureChip(Icons.chair, 'مؤثث'));
+    if (_property!['hasKitchen'] == true)
+      featuresList.add(_buildFeatureChip(Icons.kitchen, 'مطبخ'));
+    if (_property!['hasAnnex'] == true)
+      featuresList.add(_buildFeatureChip(Icons.home_work, 'ملحق'));
+    if (_property!['hasCarEntrance'] == true)
+      featuresList.add(_buildFeatureChip(Icons.garage, 'مدخل سيارة'));
+    if (_property!['hasElevator'] == true)
+      featuresList.add(_buildFeatureChip(Icons.elevator, 'مصعد'));
+    if (_property!['hasPool'] == true)
+      featuresList.add(_buildFeatureChip(Icons.pool, 'مسبح'));
+
+    if (_property!['features'] is List) {
+      for (var f in _property!['features']) {
+        featuresList.add(
+          _buildFeatureChip(Icons.check_circle_outline, f.toString()),
+        );
+      }
+    }
+
+    final sellerInfo = _property!['sellerInfo'] ?? {};
+    final sellerName = sellerInfo['username'] ?? 'مستخدم';
+    final sellerPhone = sellerInfo['phone'];
+
     return Scaffold(
-      body: FutureBuilder<Map<String, dynamic>?>(
-        future: _propertyFuture,
-        builder: (ctx, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data == null) {
-            return Scaffold(
-              appBar: AppBar(),
-              body: const Center(child: Text('العقار غير موجود')),
-            );
-          }
-
-          final property = snapshot.data!;
-          final userId = property['userId'];
-          _isOwner = _currentUserId == userId;
-
-          final title = property['title'] ?? 'بدون عنوان';
-          final priceRaw = property['price'] ?? 0;
-          final price = priceRaw is num
-              ? priceRaw
-              : num.tryParse(priceRaw.toString()) ?? 0;
-          final currency = property['currency'] ?? 'ر.س';
-          final description = property['description'] ?? 'لا يوجد وصف متاح';
-          final category = property['category'] ?? 'غير محدد';
-          final rooms = property['rooms'];
-          final area = property['area'];
-          final floor = property['floor'];
-          final imageUrls = property['imageUrls'] as List<dynamic>? ?? [];
-          final videoUrl = property['videoUrl'];
-
-          if (videoUrl != null && _chewieController == null) {
-            _initializeVideoPlayer(videoUrl);
-          }
-
-          double? lat, lng;
-          if (property['location'] is Map) {
-            lat =
-                (property['location']['_latitude'] ??
-                        property['location']['latitude'])
-                    ?.toDouble();
-            lng =
-                (property['location']['_longitude'] ??
-                        property['location']['longitude'])
-                    ?.toDouble();
-          }
-
-          final sellerInfo = property['sellerInfo'] as Map<String, dynamic>?;
-
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                expandedHeight: 300,
-                pinned: true,
-                flexibleSpace: FlexibleSpaceBar(
-                  background: imageUrls.isNotEmpty
-                      ? PageView.builder(
-                          itemCount: imageUrls.length,
-                          itemBuilder: (ctx, index) => GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => FullScreenGallery(
-                                  imageUrls: imageUrls,
-                                  initialIndex: index,
-                                ),
-                              ),
-                            ),
-                            child: CachedNetworkImage(
-                              imageUrl: imageUrls[index],
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        )
-                      : Container(
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.house, size: 64),
-                        ),
-                ),
-                actions: [
-                  _buildAppBarIcon(
-                    icon: Icons.share,
-                    onPressed: () => _shareProperty(title, price, currency),
-                  ),
-
-                  // زر المفضلة المفعل
-                  if (!_isOwner && _currentUserId != null)
-                    _buildAppBarIcon(
-                      icon: _isFavorited
-                          ? Icons.favorite
-                          : Icons.favorite_border,
-                      iconColor: _isFavorited ? Colors.red : Colors.black87,
-                      onPressed: _toggleFavorite,
-                    ),
-
-                  if (_isOwner)
-                    _buildAppBarIcon(
-                      icon: Icons.edit,
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              EditPropertyScreen(propertyId: widget.propertyId),
-                        ),
-                      ),
-                    ),
-                  if (!_isOwner)
-                    _buildAppBarIcon(
-                      icon: Icons.flag,
-                      iconColor: Colors.red,
-                      onPressed: () => showDialog(
-                        context: context,
-                        builder: (_) =>
-                            ReportDialog(propertyId: widget.propertyId),
-                      ),
-                    ),
-                  const SizedBox(width: 8),
-                ],
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 300,
+            pinned: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.share),
+                onPressed: () {
+                  Share.share(
+                    'شاهد هذا العقار المميز: $title \n بسعر $price $currency',
+                  );
+                },
               ),
-              SliverList(
-                delegate: SliverChildListDelegate([
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
+              if (_isOwner)
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (ctx) =>
+                            EditPropertyScreen(propertyId: widget.propertyId),
+                      ),
+                    );
+                    _loadData();
+                  },
+                ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: images.isNotEmpty
+                  ? PageView.builder(
+                      itemCount: images.length,
+                      itemBuilder: (ctx, index) {
+                        return CachedNetworkImage(
+                          imageUrl: images[index].toString(),
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) =>
+                              Container(color: Colors.grey[200]),
+                          errorWidget: (context, url, error) =>
+                              const Icon(Icons.error),
+                        );
+                      },
+                    )
+                  : Container(
+                      color: Colors.grey[200],
+                      child: const Icon(
+                        Icons.image_not_supported,
+                        size: 50,
+                        color: Colors.grey,
+                      ),
+                    ),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Text(
+                        '$price $currency',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          address,
+                          style: const TextStyle(color: Colors.grey),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (date != null) ...[
+                        const SizedBox(width: 16),
+                        const Icon(
+                          Icons.access_time,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'حديثاً',
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
+                            _buildSpecItem(Icons.bed_outlined, '$bedrooms غرف'),
+                            _buildSpecItem(
+                              Icons.bathtub_outlined,
+                              '$bathrooms حمام',
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${price.toStringAsFixed(0)} $currency',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
+                            _buildSpecItem(Icons.square_foot, '$area م²'),
                           ],
                         ),
-                        const SizedBox(height: 20),
-
-                        // ✅ عرض المواصفات (تم استغلال المتغيرات هنا)
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
+                        const SizedBox(height: 16),
+                        const Divider(),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _buildInfoCard(
-                              Icons.category,
-                              'النوع',
-                              category,
-                              Colors.blue,
-                            ),
-                            if (rooms != null)
-                              _buildInfoCard(
-                                Icons.bed,
-                                'الغرف',
-                                '$rooms',
-                                Colors.teal,
+                            if (livingRooms != null &&
+                                int.tryParse(livingRooms.toString()) != 0)
+                              _buildSpecItem(
+                                Icons.chair_outlined,
+                                '$livingRooms صالات',
                               ),
-                            if (area != null)
-                              _buildInfoCard(
-                                Icons.square_foot,
-                                'المساحة',
-                                '$area م²',
-                                Colors.orange,
+                            if (age != null &&
+                                int.tryParse(age.toString()) != 0)
+                              _buildSpecItem(Icons.history, 'عمر $age سنة'),
+                            if (streetWidth != null &&
+                                double.tryParse(streetWidth.toString()) != 0)
+                              _buildSpecItem(
+                                Icons.add_road,
+                                'شارع $streetWidth م',
                               ),
                             if (floor != null)
-                              _buildInfoCard(
-                                Icons.stairs,
-                                'الطابق',
-                                '$floor',
-                                Colors.purple,
+                              _buildSpecItem(
+                                Icons.layers_outlined,
+                                'طابق $floor',
                               ),
                           ],
                         ),
-                        const SizedBox(height: 24),
-
-                        if (_chewieController != null) ...[
-                          const Text(
-                            'جولة فيديو',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              height: 250,
-                              color: Colors.black,
-                              child: Chewie(controller: _chewieController!),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-
-                        // ✅ عرض الوصف (تم استغلال المتغير هنا)
-                        const Text(
-                          'الوصف',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          description,
-                          style: const TextStyle(height: 1.5, fontSize: 15),
-                        ),
-                        const SizedBox(height: 24),
-
-                        if (sellerInfo != null)
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.grey.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 28,
-                                  backgroundImage:
-                                      sellerInfo['profileImageUrl'] != null
-                                      ? CachedNetworkImageProvider(
-                                          sellerInfo['profileImageUrl'],
-                                        )
-                                      : null,
-                                  child: sellerInfo['profileImageUrl'] == null
-                                      ? const Icon(Icons.person)
-                                      : null,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            sellerInfo['username'] ?? 'المعلن',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                          if (sellerInfo['isVerified'] == true)
-                                            const Padding(
-                                              padding: EdgeInsets.only(
-                                                right: 4,
-                                              ),
-                                              child: VerifiedBadge(size: 16),
-                                            ),
-                                        ],
-                                      ),
-                                      Text(
-                                        'التقييم: ${sellerInfo['reputationScore']?.toStringAsFixed(1) ?? "0.0"} ⭐',
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (!_isOwner) ...[
-                                  IconButton.filledTonal(
-                                    onPressed: () => _startOrOpenChat(
-                                      userId,
-                                      sellerInfo['username'] ?? 'المعلن',
-                                    ),
-                                    icon: const Icon(Icons.chat_bubble_outline),
-                                    tooltip: 'مراسلة',
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton.filledTonal(
-                                    onPressed: () => _showRatingDialog(
-                                      userId,
-                                      sellerInfo['username'] ?? 'المعلن',
-                                    ),
-                                    icon: const Icon(Icons.star_outline),
-                                    tooltip: 'تقييم',
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 24),
-
-                        if (!_isOwner && _currentUserId != null)
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: _buildDealButton(category, userId),
-                          ),
-
-                        if (lat != null && lng != null) ...[
-                          const SizedBox(height: 30),
-                          const Text(
-                            'الموقع',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            height: 200,
-                            child: GoogleMap(
-                              initialCameraPosition: CameraPosition(
-                                target: LatLng(lat, lng),
-                                zoom: 15,
-                              ),
-                              markers: {
-                                Marker(
-                                  markerId: const MarkerId('loc'),
-                                  position: LatLng(lat, lng),
-                                ),
-                              },
-                              liteModeEnabled: true,
-                            ),
-                          ),
-                          Center(
-                            child: TextButton.icon(
-                              onPressed: () => _launchMapsUrl(lat!, lng!),
-                              icon: const Icon(Icons.map),
-                              label: const Text('فتح في خرائط جوجل'),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 40),
                       ],
                     ),
                   ),
-                ]),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
 
-  Widget _buildAppBarIcon({
-    required IconData icon,
-    required VoidCallback onPressed,
-    Color iconColor = Colors.black87,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
-        shape: BoxShape.circle,
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: iconColor, size: 20),
-        onPressed: onPressed,
-        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-      ),
-    );
-  }
+                  const SizedBox(height: 24),
 
-  Widget _buildInfoCard(
-    IconData icon,
-    String label,
-    String value,
-    Color color,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 10, color: Colors.grey[700]),
+                  if (featuresList.isNotEmpty) ...[
+                    Text(
+                      'المميزات والخدمات',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(spacing: 8, runSpacing: 8, children: featuresList),
+                    const SizedBox(height: 24),
+                  ],
+
+                  Text(
+                    'تفاصيل العقار',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                      color: Colors.black87,
+                    ),
+                  ),
+
+                  // ✅ 1. إعادة قسم الخريطة
+                  if (_propertyLocation != null) ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'الموقع على الخريطة',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        TextButton.icon(
+                          onPressed: _openMapApp,
+                          icon: const Icon(Icons.map_outlined, size: 18),
+                          label: const Text('فتح في الخرائط'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: _propertyLocation!,
+                            zoom: 14,
+                          ),
+                          markers: _markers,
+                          zoomControlsEnabled: false,
+                          myLocationButtonEnabled: false,
+                          liteModeEnabled:
+                              false, // يمكن تفعيلها إذا أردت خريطة خفيفة
+                          onTap: (_) => _openMapApp(),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 32),
+
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: Colors.grey[200],
+                              backgroundImage:
+                                  sellerInfo['profileImageUrl'] != null
+                                  ? NetworkImage(sellerInfo['profileImageUrl'])
+                                  : null,
+                              child: sellerInfo['profileImageUrl'] == null
+                                  ? const Icon(Icons.person, color: Colors.grey)
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  sellerName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const Text(
+                                  'المعلن',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            if (!_isOwner) ...[
+                              IconButton(
+                                onPressed: () => _startChat(),
+                                icon: const Icon(Icons.chat_bubble_outline),
+                                color: Theme.of(context).primaryColor,
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).primaryColor.withOpacity(0.1),
+                                ),
+                              ),
+                              if (sellerPhone != null)
+                                IconButton(
+                                  onPressed: () => _makePhoneCall(sellerPhone),
+                                  icon: const Icon(Icons.phone),
+                                  color: Colors.green,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.green.withOpacity(
+                                      0.1,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 100),
+                ],
               ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
+      bottomSheet: !_isOwner
+          ? Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: sellerPhone != null
+                          ? () => _openWhatsApp(sellerPhone)
+                          : null,
+                      icon: const Icon(Icons.chat),
+                      label: const Text('تواصل واتساب'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _startChat(),
+                      icon: const Icon(Icons.send),
+                      label: const Text('مراسلة الآن'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : null,
     );
   }
 
-  Widget _buildDealButton(String category, String sellerId) {
-    final isRent = category == 'إيجار';
-    final text = isRent ? 'طلب استئجار' : 'طلب شراء';
-    if (_dealStatus == 'loading')
-      return const Center(child: CircularProgressIndicator());
-    if (_dealStatus == 'pending')
-      return ElevatedButton(
-        onPressed: null,
-        child: const Text('الطلب قيد المراجعة'),
-      );
-    return ElevatedButton.icon(
-      onPressed: () => _requestDeal(isRent ? 'إيجار' : 'شراء', sellerId),
-      icon: Icon(isRent ? Icons.vpn_key : Icons.shopping_bag),
-      label: Text(text),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: isRent ? Colors.purple : Colors.green,
-        foregroundColor: Colors.white,
-      ),
+  Widget _buildSpecItem(IconData icon, String text) {
+    return Column(
+      children: [
+        Icon(icon, color: Theme.of(context).primaryColor, size: 28),
+        const SizedBox(height: 8),
+        Text(
+          text,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureChip(IconData icon, String label) {
+    return Chip(
+      avatar: Icon(icon, size: 18, color: Colors.grey[700]),
+      label: Text(label),
+      backgroundColor: Colors.white,
+      side: BorderSide(color: Colors.grey[300]!),
+      labelStyle: TextStyle(color: Colors.grey[800], fontSize: 12),
     );
   }
 }
