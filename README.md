@@ -65,3 +65,22 @@ Two ways to provide the Directions API key:
 1. `dart_defines.json` (recommended) with `flutter run --dart-define-from-file=dart_defines.json`.
 2. Hardcoded default in `properties_map_screen.dart` (fallback, less secure).
 Secure the key by restricting it to the Directions API and avoid committing real keys publicly.
+
+## آخر التحديثات
+
+يتضمن هذا التحديث تحسينات مهمة على واجهات العقارات وتجربة التواصل داخل التطبيق.
+
+### أبرز التغييرات
+- تحسين مظهر بطاقات العقارات وإضافة مسافات أوضح بين البطاقات.
+- تحسين لون عنوان البطاقة ليظهر بشكل أوضح.
+- معالجة عرض أسماء المستخدمين الطويلة داخل صفحة تفاصيل العقار.
+- جعل اسم المعلن قابلًا للنقر للانتقال مباشرة إلى صفحة البروفايل العام.
+- تحديث قسم “حول التطبيق” وإضافة:
+	- قناة التطبيق على تيليغرام: `https://t.me/+yj3zSKtT_mYyZmU0`
+	- مراسلة المطور عبر تيليغرام: `@DevDrond` و `https://t.me/DevDrond`
+	- الاتصال عبر الرقم السوري: `+963991260012`
+- تحسين فتح الروابط الخارجية (مثل روابط تيليغرام) على أندرويد باستخدام `launchUrl` بوضع `externalApplication`.
+
+### ملاحظات الإصدار
+- هذا التحديث يركز على تحسين تجربة الاستخدام والوضوح في الواجهة.
+- لا توجد خطوات إضافية مطلوبة من المستخدم بعد التحديث.
