@@ -1,8 +1,7 @@
-import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/screens/tabs_screen.dart';
-import 'package:aqar_app/screens/banned_user_screen.dart';
+import 'package:aqar_app/services/api_service.dart';
+import 'package:aqar_app/services/websocket_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_login/flutter_login.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,128 +11,156 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  bool _isBanned = false;
-  String? _bannedEmail;
+  bool _isLoading = false;
 
-  Duration get loginTime => const Duration(milliseconds: 2250);
-
-  // 1. دالة تسجيل الدخول
-  Future<String?> _authUser(LoginData data) async {
-    debugPrint('\n========================================');
-    debugPrint('👤 [UI] المستخدم ضغط على زر الدخول: ${data.name}');
-
+  Future<void> _handleGoogleLogin() async {
+    setState(() => _isLoading = true);
     try {
-      // ✅✅✅ هذا هو السطر الأهم! الاتصال بالسيرفر الوسيط
-      await ApiService.login(data.name, data.password);
+      // 1. بدء عملية تسجيل الدخول (جوجل -> سيرفر)
+      await ApiService.loginWithGoogle();
 
-      debugPrint('✅ [UI] العملية اكتملت بنجاح، سيتم التوجيه للرئيسية.');
-      setState(() {
-        _isBanned = false;
-      });
-      return null; // نجاح
-    } catch (error) {
-      final errorMessage = error.toString().replaceAll('Exception: ', '');
-      debugPrint('⚠️ [UI] حدث خطأ: $errorMessage');
+      // 2. التحقق من النجاح وتوصيل المحادثات الفورية
+      if (await ApiService.isLoggedIn()) {
+        final currentUser = await ApiService.getCurrentUser();
+        if (currentUser != null) {
+          // ربط الويب سوكيت فوراً لاستقبال الرسائل
+          WebSocketService.connect(currentUser['id'] ?? '');
+        }
 
-      // ✅ التحقق من رسالة الحظر المحددة
-      if (errorMessage.contains('تم حظر') ||
-          errorMessage.contains('banned') ||
-          errorMessage.toLowerCase().contains('ban')) {
-        debugPrint('🚫 [UI] تم الكشف عن المستخدم المحظور');
-        setState(() {
-          _isBanned = true;
-          _bannedEmail = data.name;
-        });
-        return null; // لا نعرض رسالة خطأ - نعرض صفحة منفصلة
+        if (mounted) {
+          // الانتقال إلى الشاشة الرئيسية
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (ctx) => const TabsScreen()),
+          );
+        }
       }
-
-      return errorMessage;
+    } catch (e) {
+      if (mounted) {
+        // عرض رسالة خطأ واضحة
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: ${e.toString().replaceAll("Exception:", "")}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  // 2. دالة إنشاء الحساب
-  Future<String?> _signupUser(SignupData data) async {
-    debugPrint('\n========================================');
-    debugPrint('📝 [UI] المستخدم يحاول إنشاء حساب: ${data.name}');
-
-    final username = data.additionalSignupData?['username']?.trim() ?? '';
-    final phone = data.additionalSignupData?['phone']?.trim() ?? '';
-
-    if (username.isEmpty) return 'الرجاء إدخال اسم المستخدم.';
-    if (username.length < 4) return 'اسم المستخدم قصير جداً.';
-
-    try {
-      // ✅ خطوة 1: إنشاء الحساب عبر السيرفر
-      debugPrint('📝 [UI] إنشاء الحساب...');
-      await ApiService.signup(data.name!, data.password!, username, phone);
-
-      debugPrint('✅ [UI] تم إنشاء الحساب وتسجيل الدخول بنجاح!');
-      setState(() {
-        _isBanned = false;
-      });
-      return null;
-    } catch (error) {
-      debugPrint('⚠️ [UI] خطأ في إنشاء الحساب: $error');
-      return error.toString().replaceAll('Exception: ', '');
-    }
-  }
-
-  Future<String?> _recoverPassword(String name) async {
-    return 'هذه الميزة غير مفعلة حالياً عبر السيرفر.';
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ إذا كان المستخدم محظوراً، عرض صفحة الحظر بدلاً من نموذج تسجيل الدخول
-    if (_isBanned && _bannedEmail != null) {
-      return BannedUserScreen(email: _bannedEmail);
-    }
+    // إعدادات الألوان (ثيم داكن)
+    const bgColor = Color(0xFF111827);
+    const surfaceColor = Color(0xFF1F2937);
+    const textColor = Color(0xFFF9FAFB);
 
-    return FlutterLogin(
-      title: 'عقار بلص',
-      logo: const AssetImage('assets/logo.png'),
-      onLogin: _authUser,
-      onSignup: _signupUser,
-      onRecoverPassword: _recoverPassword,
-      onSubmitAnimationCompleted: () {
-        // إذا كان المستخدم محظوراً، لا نذهب للرئيسية
-        if (_isBanned) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => BannedUserScreen(email: _bannedEmail),
-            ),
-          );
-          return;
-        }
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Spacer(),
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const TabsScreen()),
-          );
-        });
-      },
-      userValidator: (value) {
-        if (value == null || !value.contains('@')) return 'البريد غير صالح';
-        return null;
-      },
-      passwordValidator: (value) {
-        if (value == null || value.length < 6) return 'كلمة المرور قصيرة';
-        return null;
-      },
-      additionalSignupFields: [
-        const UserFormField(
-          keyName: 'username',
-          displayName: 'اسم المستخدم',
-          icon: Icon(Icons.person),
+              // الشعار (Logo Icon)
+              Container(
+                height: 120,
+                width: 120,
+                decoration: BoxDecoration(
+                  color: surfaceColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.blueAccent.withOpacity(0.3),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blueAccent.withOpacity(0.1),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.home_work_rounded,
+                  size: 60,
+                  color: Colors.blueAccent,
+                ),
+              ),
+
+              const SizedBox(height: 40),
+
+              // نصوص الترحيب
+              const Text(
+                'أهلاً بك في عقار',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'سجل دخولك بسهولة للمتابعة',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+              ),
+
+              const Spacer(),
+
+              // زر تسجيل الدخول
+              if (_isLoading)
+                const Center(child: CircularProgressIndicator())
+              else
+                ElevatedButton(
+                  onPressed: _handleGoogleLogin,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black87,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // أيقونة جوجل من رابط خارجي لضمان الألوان الصحيحة
+                      Image.network(
+                        'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
+                        height: 24,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                              Icons.g_mobiledata,
+                              size: 28,
+                              color: Colors.blue,
+                            ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'متابعة باستخدام Google',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
-        const UserFormField(
-          keyName: 'phone',
-          displayName: 'رقم الهاتف (اختياري)',
-          icon: Icon(Icons.phone),
-          userType: LoginUserType.phone,
-        ),
-      ],
-      loginProviders: [],
+      ),
     );
   }
 }

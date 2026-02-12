@@ -8,8 +8,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
 
 class PropertyForm extends StatefulWidget {
   final GlobalKey<FormBuilderState> formKey;
@@ -52,13 +50,29 @@ class _PropertyFormState extends State<PropertyForm> {
     super.initState();
     _processedInitialData = _processDataForDisplay(widget.initialData);
 
-    // ✅ معالجة الموقع الأولي (إصلاح الخطأ)
+    // 1. تهيئة الموقع
     _initializeLocation();
 
+    // ✅ 2. تحميل الصور بشكل صحيح عند بدء الشاشة (التعديل الأساسي)
+    // نتحقق من المصدرين المحتملين للصور (images من السيرفر الجديد أو imageUrls)
+    final existingImages =
+        widget.initialData['images'] ?? widget.initialData['imageUrls'];
+    if (existingImages != null && existingImages is List) {
+      // تصفية القيم الفارغة وتحويل الكل إلى نصوص
+      _images.addAll(
+        existingImages
+            .where((e) => e != null)
+            .map((e) => e.toString())
+            .toList(),
+      );
+    }
+
+    // 3. تحميل الفيديو
     if (widget.initialData['videoUrl'] != null) {
       _existingVideoUrl = widget.initialData['videoUrl'];
     }
 
+    // 4. تحميل المسودة (فقط في حالة الإضافة الجديدة)
     if (!widget.isEditMode) {
       _loadDraft();
     }
@@ -68,13 +82,11 @@ class _PropertyFormState extends State<PropertyForm> {
     });
   }
 
-  // ✅ دالة جديدة لتحويل الموقع بأمان
   void _initializeLocation() {
     if (widget.initialData['location'] != null) {
       final loc = widget.initialData['location'];
 
       if (loc is Map) {
-        // إذا جاء من السيرفر كـ Map
         final double? lat = (loc['_latitude'] ?? loc['latitude'])?.toDouble();
         final double? lng = (loc['_longitude'] ?? loc['longitude'])?.toDouble();
         if (lat != null && lng != null) {
@@ -82,10 +94,20 @@ class _PropertyFormState extends State<PropertyForm> {
           _getAddressFromLatLng(_selectedLocation!);
         }
       } else if (loc is LatLng) {
-        // إذا كان أصلاً LatLng
         _selectedLocation = loc;
         _getAddressFromLatLng(_selectedLocation!);
       }
+    } else if (widget.initialData['latitude'] != null &&
+        widget.initialData['longitude'] != null) {
+      // دعم إضافي في حال كانت الإحداثيات مفصولة
+      final double lat = double.parse(
+        widget.initialData['latitude'].toString(),
+      );
+      final double lng = double.parse(
+        widget.initialData['longitude'].toString(),
+      );
+      _selectedLocation = LatLng(lat, lng);
+      _getAddressFromLatLng(_selectedLocation!);
     }
   }
 
@@ -97,12 +119,23 @@ class _PropertyFormState extends State<PropertyForm> {
       'floor',
       'area',
       'discountPercent',
+      'bedrooms',
+      'bathrooms',
+      'livingRooms',
+      'streetWidth',
+      'age',
     ];
     for (var field in numericFields) {
       if (processed[field] != null) {
         processed[field] = processed[field].toString();
       }
     }
+
+    // توحيد مسميات الغرف إذا كانت مختلفة
+    if (processed['rooms'] == null && processed['bedrooms'] != null) {
+      processed['rooms'] = processed['bedrooms'].toString();
+    }
+
     return processed;
   }
 
@@ -173,8 +206,6 @@ class _PropertyFormState extends State<PropertyForm> {
         return;
       }
       if (_selectedLocation == null) {
-        // في حالة التعديل، إذا لم يغير الموقع، نستخدم القديم الموجود في _selectedLocation (الذي هيأناه في initState)
-        // إذا كان لا يزال null، نظهر خطأ
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('الرجاء تحديد موقع العقار على الخريطة.'),
@@ -188,7 +219,9 @@ class _PropertyFormState extends State<PropertyForm> {
       );
 
       data.addAll({
-        'location': _selectedLocation, // نرسل كائن LatLng
+        'location': _selectedLocation,
+        'latitude': _selectedLocation!.latitude,
+        'longitude': _selectedLocation!.longitude,
         'address':
             '${_addressStreet ?? ''}, ${_addressCity ?? ''}, ${_addressCountry ?? ''}',
         'newImages': _images.whereType<XFile>().toList(),
@@ -257,9 +290,7 @@ class _PropertyFormState extends State<PropertyForm> {
 
   @override
   Widget build(BuildContext context) {
-    if (_images.isEmpty && widget.initialData['imageUrls'] != null) {
-      _images.addAll(widget.initialData['imageUrls']);
-    }
+    // تم حذف الكود الذي كان هنا ويسبب المشكلة (إعادة تعيين الصور)
 
     return FormBuilder(
       key: widget.formKey,
@@ -369,12 +400,46 @@ class _PropertyFormState extends State<PropertyForm> {
             validator: FormBuilderValidators.required(errorText: 'مطلوب'),
           ),
           const SizedBox(height: 16),
+
+          // --- الحقول الإضافية الجديدة ---
           FormBuilderSwitch(
             name: 'isFeatured',
             title: const Text('عرض مميز'),
             initialValue: false,
           ),
+          FormBuilderSwitch(
+            name: 'isFurnished',
+            title: const Text('مؤثث'),
+            initialValue: false,
+          ),
+          FormBuilderSwitch(
+            name: 'hasKitchen',
+            title: const Text('يوجد مطبخ'),
+            initialValue: false,
+          ),
+          FormBuilderSwitch(
+            name: 'hasAnnex',
+            title: const Text('يوجد ملحق'),
+            initialValue: false,
+          ),
+          FormBuilderSwitch(
+            name: 'hasCarEntrance',
+            title: const Text('مدخل سيارة'),
+            initialValue: false,
+          ),
+          FormBuilderSwitch(
+            name: 'hasElevator',
+            title: const Text('يوجد مصعد'),
+            initialValue: false,
+          ),
+          FormBuilderSwitch(
+            name: 'hasPool',
+            title: const Text('يوجد مسبح'),
+            initialValue: false,
+          ),
           const SizedBox(height: 16),
+
+          // --------------------------------
           FormBuilderTextField(
             name: 'discountPercent',
             decoration: InputDecoration(
@@ -399,33 +464,104 @@ class _PropertyFormState extends State<PropertyForm> {
             validator: FormBuilderValidators.required(errorText: 'مطلوب'),
           ),
           const SizedBox(height: 16),
+
+          // عرض الحقول حسب نوع العقار
           if (widget.formKey.currentState?.fields['propertyType']?.value !=
                   'ارض' &&
               widget.formKey.currentState?.fields['propertyType']?.value !=
-                  'دكان')
-            FormBuilderTextField(
-              name: 'rooms',
-              decoration: InputDecoration(
-                labelText: 'الغرف',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  'دكان') ...[
+            Row(
+              children: [
+                Expanded(
+                  child: FormBuilderTextField(
+                    name: 'rooms',
+                    decoration: InputDecoration(
+                      labelText: 'غرف النوم',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
                 ),
-              ),
-              keyboardType: TextInputType.number,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FormBuilderTextField(
+                    name: 'livingRooms',
+                    decoration: InputDecoration(
+                      labelText: 'الصالات',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: FormBuilderTextField(
+                    name: 'bathrooms',
+                    decoration: InputDecoration(
+                      labelText: 'دورات المياه',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FormBuilderTextField(
+                    name: 'floor',
+                    decoration: InputDecoration(
+                      labelText: 'الطابق',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 16),
-          if (widget.formKey.currentState?.fields['propertyType']?.value !=
-              'ارض')
-            FormBuilderTextField(
-              name: 'floor',
-              decoration: InputDecoration(
-                labelText: 'الطابق',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+          Row(
+            children: [
+              Expanded(
+                child: FormBuilderTextField(
+                  name: 'streetWidth',
+                  decoration: InputDecoration(
+                    labelText: 'عرض الشارع (م)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
                 ),
               ),
-              keyboardType: TextInputType.number,
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FormBuilderTextField(
+                  name: 'age',
+                  decoration: InputDecoration(
+                    labelText: 'عمر العقار (سنة)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 16),
           FormBuilderTextField(
             name: 'description',

@@ -1,10 +1,10 @@
 import 'dart:io';
+import 'dart:math'; // 1. استيراد المكتبة العشوائية
 import 'package:aqar_app/screens/map_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:aqar_app/controllers/add_property_controller.dart'; // ✅ استيراد الكنترولر
+import 'package:aqar_app/controllers/add_property_controller.dart';
 import 'package:video_player/video_player.dart';
-import 'package:aqar_app/screens/map_screen.dart'; // لاستدعاء الشاشة
-import 'package:google_maps_flutter/google_maps_flutter.dart'; // للتعرف على LatLng
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -14,14 +14,12 @@ class AddPropertyScreen extends StatefulWidget {
 }
 
 class _AddPropertyScreenState extends State<AddPropertyScreen> {
-  // ✅ تعريف الكنترولر
   late final AddPropertyController _controller;
 
   @override
   void initState() {
     super.initState();
     _controller = AddPropertyController();
-    // 🔔 الاستماع للتغييرات لإعادة بناء الواجهة
     _controller.addListener(() {
       if (mounted) setState(() {});
     });
@@ -29,17 +27,140 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   @override
   void dispose() {
-    _controller.dispose(); // ✅ تنظيف الذاكرة تلقائياً
+    _controller.dispose();
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // 🛠️ وظيفة المطور: تعبئة بيانات وهمية
+  // ---------------------------------------------------------------------------
+  void _fillDummyData(String category) {
+    final random = Random();
+
+    // بيانات تعتمد على الفئة
+    String title = '';
+    String price = '';
+    String type = '';
+
+    if (category == 'بيع') {
+      title = 'فيلا مودرن للبيع في حي النرجس';
+      price = '2500000';
+      type = 'فيلا';
+    } else if (category == 'إيجار') {
+      title = 'شقة عوائل للإيجار السنوي';
+      price = '45000';
+      type = 'شقة';
+    } else {
+      title = 'أرض تجارية للاستثمار طويل الأمد';
+      price = '150000';
+      type = 'أرض';
+    }
+
+    // تعبئة النصوص
+    _controller.titleController.text = title;
+    _controller.priceController.text = price;
+    _controller.areaController.text = (150 + random.nextInt(500)).toString();
+    _controller.addressController.text = 'الرياض، طريق الملك سلمان، حي النرجس';
+    _controller.descriptionController.text =
+        'عقار مميز جداً يتميز بالموقع الاستراتيجي والقرب من الخدمات. تشطيب فاخر وضمانات شاملة على السباكة والكهرباء.';
+
+    // تعبئة الأرقام
+    _controller.bedroomsController.text = (2 + random.nextInt(4)).toString();
+    _controller.bathroomsController.text = (2 + random.nextInt(3)).toString();
+    _controller.livingRoomsController.text = (1 + random.nextInt(2)).toString();
+    _controller.streetWidthController.text = [
+      15,
+      20,
+      25,
+    ][random.nextInt(3)].toString();
+    _controller.ageController.text = random.nextInt(10).toString();
+
+    // تعبئة القوائم
+    _controller.setCategory(category);
+    _controller.setType(type);
+
+    // تحديد موقع وهمي (في الرياض)
+    _controller.setLocation(24.7136, 46.6753);
+
+    // تفعيل بعض الميزات عشوائياً
+    if (category != 'استثمار') {
+      if (random.nextBool()) _controller.toggleKitchen(true);
+      if (random.nextBool()) _controller.toggleCarEntrance(true);
+      if (random.nextBool()) _controller.toggleElevator(true);
+    }
+
+    Navigator.pop(context); // إغلاق القائمة
+    setState(() {}); // تحديث الواجهة
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تمت تعبئة بيانات تجريبية لـ ($category) ⚡')),
+    );
+  }
+
+  void _showDevBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          height: 250,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '🛠️ وضع الاختبار السريع',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              const Text('اختر نوع العقار لتوليد بيانات وهمية:'),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildDevButton('بيع', Colors.blue),
+                  _buildDevButton('إيجار', Colors.green),
+                  _buildDevButton('استثمار', Colors.orange),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDevButton(String label, Color color) {
+    return ElevatedButton(
+      onPressed: () => _fillDummyData(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color.withOpacity(0.2),
+        foregroundColor: color,
+        elevation: 0,
+      ),
+      child: Text(label),
+    );
+  }
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    // الألوان من الثيم الحالي
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('إضافة عقار جديد')),
+      appBar: AppBar(
+        title: const Text('إضافة عقار جديد'),
+        // ✅ 2. إضافة الزر هنا في الـ AppBar
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.bug_report_outlined,
+              color: Colors.redAccent,
+            ),
+            tooltip: 'تعبئة بيانات وهمية',
+            onPressed: _showDevBottomSheet,
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           SingleChildScrollView(
@@ -47,12 +168,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 📸 قسم الصور والفيديو
                 _buildMediaSection(colorScheme),
-
                 const SizedBox(height: 20),
 
-                // 📝 الحقول النصية
                 _buildTextField(
                   'عنوان الإعلان *',
                   _controller.titleController,
@@ -83,7 +201,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
                 const SizedBox(height: 16),
 
-                // 🎛️ القوائم المنسدلة (النوع والفئة)
                 Row(
                   children: [
                     Expanded(
@@ -133,7 +250,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
                 const SizedBox(height: 10),
 
-                // 🗺️ زر تحديد الموقع
                 Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey),
@@ -163,19 +279,16 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                           )
                         : const Text('اضغط لفتح الخريطة وتثبيت الدبوس'),
                     onTap: () async {
-                      // ✅ فتح الخريطة وانتظار النتيجة
                       final result = await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (ctx) => MapScreen(
-                            // نمرر الموقع الحالي إذا كان محدداً مسبقاً ليظهر على الخريطة
                             initialLat: _controller.latitude,
                             initialLong: _controller.longitude,
                           ),
                         ),
                       );
 
-                      // ✅ استلام النتيجة وتحديث الكنترولر
                       if (result != null && result is LatLng) {
                         _controller.setLocation(
                           result.latitude,
@@ -200,7 +313,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // 🔢 حقول الأرقام (غرف، حمامات...)
                 Wrap(
                   spacing: 10,
                   runSpacing: 10,
@@ -231,7 +343,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 const SizedBox(height: 20),
                 const Divider(),
 
-                // ✅ الميزات (Checkboxes)
                 Wrap(
                   spacing: 10,
                   children: [
@@ -270,7 +381,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
                 const SizedBox(height: 30),
 
-                // 🔘 زر الحفظ
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -282,10 +392,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                               context,
                             );
                             if (success && mounted) {
-                              Navigator.pop(
-                                context,
-                                'تمت إضافة العقار بنجاح!',
-                              ); // العودة للرئيسية مع رسالة نجاح
+                              Navigator.pop(context, 'تمت إضافة العقار بنجاح!');
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -311,7 +418,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             ),
           ),
 
-          // 🛡️ طبقة التحميل (Loading Overlay)
           if (_controller.isLoading)
             Container(
               color: Colors.black54,
@@ -334,7 +440,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
-  // 🧱 ودجت اختيار الصور والفيديو
   Widget _buildMediaSection(ColorScheme colorScheme) {
     return Column(
       children: [
@@ -342,7 +447,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              // زر إضافة صورة
               GestureDetector(
                 onTap: _controller.pickImages,
                 child: Container(
@@ -367,7 +471,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              // زر إضافة فيديو
               GestureDetector(
                 onTap: _controller.pickVideo,
                 child: Container(
@@ -388,7 +491,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              // عرض الصور المختارة
               ..._controller.selectedImages.asMap().entries.map((entry) {
                 return Stack(
                   children: [
@@ -426,8 +528,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             ],
           ),
         ),
-
-        // عرض الفيديو المختار (مصغر)
         if (_controller.selectedVideo != null &&
             _controller.videoPlayerController != null)
           Container(
@@ -457,7 +557,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
-  // 🧱 ودجت الحقول النصية
   Widget _buildTextField(
     String label,
     TextEditingController controller, {
@@ -481,7 +580,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
-  // 🧱 ودجت الأرقام الصغيرة
   Widget _buildSmallNumberField(
     String label,
     TextEditingController controller,
@@ -501,7 +599,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
-  // 🧱 ودجت الاختيار
   Widget _buildCheckbox(String label, bool value, Function(bool?) onChanged) {
     return FilterChip(
       label: Text(label),

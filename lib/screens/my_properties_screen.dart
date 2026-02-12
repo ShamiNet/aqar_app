@@ -12,7 +12,6 @@ class MyPropertiesScreen extends StatefulWidget {
 }
 
 class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
-  // ✅ جعلناها nullable لتفادي خطأ LateInitializationError
   Future<List<Map<String, dynamic>>>? _myPropertiesFuture;
 
   @override
@@ -21,7 +20,6 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
     _loadProperties();
   }
 
-  // ✅ استخدام SharedPreferences بدلاً من FirebaseAuth
   Future<void> _loadProperties() async {
     final prefs = await SharedPreferences.getInstance();
     final uid = prefs.getString('user_id');
@@ -37,6 +35,11 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
     }
   }
 
+  // دالة للتحديث عند السحب
+  Future<void> _onRefresh() async {
+    await _loadProperties();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_myPropertiesFuture == null) {
@@ -45,21 +48,38 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('عقاراتي')),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _myPropertiesFuture,
-        builder: (ctx, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const PropertiesListSkeleton();
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('حدث خطأ: ${snapshot.error}'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('لم تقم بإضافة أي عقارات بعد.'));
-          }
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _myPropertiesFuture,
+          builder: (ctx, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const PropertiesListSkeleton();
+            }
+            if (snapshot.hasError) {
+              // جعل رسالة الخطأ قابلة للسحب
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                  Center(child: Text('حدث خطأ: ${snapshot.error}')),
+                ],
+              );
+            }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              // جعل الرسالة الفارغة قابلة للسحب
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                  const Center(child: Text('لم تقم بإضافة أي عقارات بعد.')),
+                ],
+              );
+            }
 
-          return PropertiesList(properties: snapshot.data!);
-        },
+            return PropertiesList(properties: snapshot.data!);
+          },
+        ),
       ),
     );
   }

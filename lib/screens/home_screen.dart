@@ -26,11 +26,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchData() async {
     try {
+      // لا نعرض مؤشر التحميل عند التحديث بالسحب للحفاظ على سلاسة التجربة
+      // setState(() => _isLoading = true);
+
       final properties = await ApiService.fetchProperties();
       if (mounted) {
         setState(() {
           _allProperties = properties;
           _isLoading = false;
+          _errorMessage = null; // تصفير الخطأ عند النجاح
         });
       }
     } catch (e) {
@@ -43,14 +47,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // دالة الفلترة المحلية
   List<Map<String, dynamic>> _filterBy(
     bool Function(Map<String, dynamic>) test,
   ) {
     return _allProperties.where(test).take(10).toList();
   }
 
-  // ✅ دالة مساعدة لتحويل القيم إلى أرقام بأمان
   int _parseInt(dynamic value) {
     if (value == null) return 0;
     if (value is int) return value;
@@ -66,20 +68,30 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (_errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      // جعلنا واجهة الخطأ قابلة للسحب أيضاً لإعادة المحاولة
+      return RefreshIndicator(
+        onRefresh: _fetchData,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 50),
-            const SizedBox(height: 10),
-            Text(_errorMessage!),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () {
-                setState(() => _isLoading = true);
-                _fetchData();
-              },
-              child: const Text('إعادة المحاولة'),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                  const SizedBox(height: 10),
+                  Text(_errorMessage!),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() => _isLoading = true);
+                      _fetchData();
+                    },
+                    child: const Text('إعادة المحاولة'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -94,8 +106,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final lands = _filterBy((p) => p['propertyType'] == 'ارض');
     final buildings = _filterBy((p) => p['propertyType'] == 'بناية');
     final shops = _filterBy((p) => p['propertyType'] == 'دكان');
-
-    // ✅ التحقق الآمن من الخصم
     final discounted = _filterBy((p) => _parseInt(p['discountPercent']) > 0);
 
     return Container(
@@ -112,73 +122,78 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (featuredProperties.isNotEmpty)
-              _FeaturedPropertiesCarousel(properties: featuredProperties),
+      // ✅ هنا تمت إضافة RefreshIndicator
+      child: RefreshIndicator(
+        onRefresh: _fetchData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(), // مهم جداً لعمل السحب
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (featuredProperties.isNotEmpty)
+                _FeaturedPropertiesCarousel(properties: featuredProperties),
 
-            HorizontalPropertiesSection(
-              title: 'عقارات للبيع',
-              properties: saleProperties,
-              filterType: 'category',
-              filterValue: 'بيع',
-            ),
-
-            HorizontalPropertiesSection(
-              title: 'عقارات للإيجار',
-              properties: rentProperties,
-              filterType: 'category',
-              filterValue: 'إيجار',
-            ),
-
-            HorizontalPropertiesSection(
-              title: 'بيوت',
-              properties: houses,
-              filterType: 'propertyType',
-              filterValue: 'بيت',
-            ),
-
-            HorizontalPropertiesSection(
-              title: 'فلل',
-              properties: villas,
-              filterType: 'propertyType',
-              filterValue: 'فيلا',
-            ),
-
-            if (lands.isNotEmpty)
               HorizontalPropertiesSection(
-                title: 'أراضي',
-                properties: lands,
-                filterType: 'propertyType',
-                filterValue: 'ارض',
+                title: 'عقارات للبيع',
+                properties: saleProperties,
+                filterType: 'category',
+                filterValue: 'بيع',
               ),
 
-            HorizontalPropertiesSection(
-              title: 'بنايات',
-              properties: buildings,
-              filterType: 'propertyType',
-              filterValue: 'بناية',
-            ),
-
-            if (shops.isNotEmpty)
               HorizontalPropertiesSection(
-                title: 'دكاكين',
-                properties: shops,
-                filterType: 'propertyType',
-                filterValue: 'دكان',
+                title: 'عقارات للإيجار',
+                properties: rentProperties,
+                filterType: 'category',
+                filterValue: 'إيجار',
               ),
 
-            HorizontalPropertiesSection(
-              title: 'عقارات بخصم',
-              properties: discounted,
-              filterType: 'hasDiscount',
-              filterValue: true,
-            ),
+              HorizontalPropertiesSection(
+                title: 'بيوت',
+                properties: houses,
+                filterType: 'propertyType',
+                filterValue: 'بيت',
+              ),
 
-            const SizedBox(height: 55),
-          ],
+              HorizontalPropertiesSection(
+                title: 'فلل',
+                properties: villas,
+                filterType: 'propertyType',
+                filterValue: 'فيلا',
+              ),
+
+              if (lands.isNotEmpty)
+                HorizontalPropertiesSection(
+                  title: 'أراضي',
+                  properties: lands,
+                  filterType: 'propertyType',
+                  filterValue: 'ارض',
+                ),
+
+              HorizontalPropertiesSection(
+                title: 'بنايات',
+                properties: buildings,
+                filterType: 'propertyType',
+                filterValue: 'بناية',
+              ),
+
+              if (shops.isNotEmpty)
+                HorizontalPropertiesSection(
+                  title: 'دكاكين',
+                  properties: shops,
+                  filterType: 'propertyType',
+                  filterValue: 'دكان',
+                ),
+
+              HorizontalPropertiesSection(
+                title: 'عقارات بخصم',
+                properties: discounted,
+                filterType: 'hasDiscount',
+                filterValue: true,
+              ),
+
+              const SizedBox(height: 55),
+            ],
+          ),
         ),
       ),
     );

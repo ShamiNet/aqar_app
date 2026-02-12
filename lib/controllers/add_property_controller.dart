@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'package:aqar_app/services/api_service.dart';
-import 'package:aqar_app/config/cloudinary_config.dart';
 
 // ✅ كلاس التحكم المسؤول عن منطق إضافة العقار
 class AddPropertyController extends ChangeNotifier {
@@ -114,65 +113,70 @@ class AddPropertyController extends ChangeNotifier {
 
   // 🚀 رفع البيانات (العملية الرئيسية)
   Future<bool> submitProperty(BuildContext context) async {
+    // 1. التحقق من المدخلات
     if (!_validateInputs(context)) return false;
+
+    // 2. التحقق من الموقع
+    if (latitude == null || longitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى تحديد موقع العقار على الخريطة'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return false;
+    }
 
     isLoading = true;
     notifyListeners();
 
     try {
-      // 1. رفع الصور
-      List<String> imageUrls = [];
-      if (selectedImages.isNotEmpty) {
-        imageUrls = await CloudinaryConfig.uploadImages(selectedImages);
-      }
+      // 3. تحويل الخيارات إلى قائمة نصوص (للعرض فقط)
+      List<String> featuresList = [];
+      if (isFurnished) featuresList.add('مؤثثة');
+      if (hasKitchen) featuresList.add('مطبخ');
+      if (hasAnnex) featuresList.add('ملحق');
+      if (hasCarEntrance) featuresList.add('مدخل سيارة');
+      if (hasElevator) featuresList.add('مصعد');
+      if (hasPool) featuresList.add('مسبح');
 
-      // 2. رفع الفيديو (إن وجد)
-      String? videoUrl;
-      if (selectedVideo != null) {
-        videoUrl = await CloudinaryConfig.uploadVideo(selectedVideo!);
-      }
-
-      // 3. جلب بيانات المستخدم
-      final user = await ApiService.getCurrentUser();
-      final userId = user?['id'] ?? user?['uid'];
-
-      if (userId == null) {
-        throw Exception('المستخدم غير مسجل دخول');
-      }
-
-      // 4. تجهيز كائن البيانات (Data Object)
-      final propertyData = {
-        'title': titleController.text,
-        'price': double.tryParse(priceController.text) ?? 0.0,
-        'area': double.tryParse(areaController.text) ?? 0.0,
-        'description': descriptionController.text,
-        'address': addressController.text,
-        'type': selectedType,
-        'category': selectedCategory,
-        'bedrooms': int.tryParse(bedroomsController.text) ?? 0,
-        'bathrooms': int.tryParse(bathroomsController.text) ?? 0,
-        'livingRooms': int.tryParse(livingRoomsController.text) ?? 0,
-        'streetWidth': double.tryParse(streetWidthController.text) ?? 0.0,
-        'age': int.tryParse(ageController.text) ?? 0,
-        'isFurnished': isFurnished,
-        'hasKitchen': hasKitchen,
-        'hasAnnex': hasAnnex,
-        'hasCarEntrance': hasCarEntrance,
-        'hasElevator': hasElevator,
-        'hasPool': hasPool,
-        'images': imageUrls,
-        'videoUrl': videoUrl,
-        'userId': userId,
-        'createdAt': DateTime.now().toIso8601String(),
-        'status': 'pending', // بانتظار الموافقة
-      };
-
-      // 5. إرسال للسيرفر
-      await ApiService.addProperty(propertyData);
+      // 4. الاستدعاء الصحيح لـ ApiService مع تمرير كل الحقول الجديدة
+      // ✅ هنا تم تمرير جميع المعاملات المطلوبة بالأسماء الصحيحة (Named Parameters)
+      final success = await ApiService.addProperty(
+        title: titleController.text,
+        price: priceController.text,
+        description: descriptionController.text,
+        address: addressController.text,
+        latitude: latitude!,
+        longitude: longitude!,
+        category: selectedCategory,
+        bedrooms: bedroomsController.text,
+        bathrooms: bathroomsController.text,
+        area: areaController.text,
+        features: featuresList, // القائمة النصية
+        images: selectedImages, // قائمة الملفات
+        video: selectedVideo, // ملف الفيديو
+        // ✅ الحقول الإضافية
+        livingRooms: livingRoomsController.text,
+        streetWidth: streetWidthController.text,
+        age: ageController.text,
+        isFurnished: isFurnished,
+        hasKitchen: hasKitchen,
+        hasAnnex: hasAnnex,
+        hasCarEntrance: hasCarEntrance,
+        hasElevator: hasElevator,
+        hasPool: hasPool,
+      );
 
       isLoading = false;
       notifyListeners();
-      return true; // ✅ نجاح
+
+      if (success) {
+        resetForm(); // مسح البيانات بعد النجاح
+        return true;
+      } else {
+        throw Exception('فشل الحفظ في السيرفر');
+      }
     } catch (e) {
       debugPrint('💥 [Controller] خطأ أثناء رفع العقار: $e');
       isLoading = false;
@@ -181,12 +185,14 @@ class AddPropertyController extends ChangeNotifier {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('فشل إضافة العقار: $e'),
+            content: Text(
+              'فشل إضافة العقار: ${e.toString().replaceAll("Exception:", "")}',
+            ),
             backgroundColor: Colors.red,
           ),
         );
       }
-      return false; // ❌ فشل
+      return false;
     }
   }
 
@@ -259,5 +265,38 @@ class AddPropertyController extends ChangeNotifier {
   void togglePool(bool? val) {
     hasPool = val ?? false;
     notifyListeners();
+  }
+
+  // 🔄 مسح جميع الحقول
+  void resetForm() {
+    debugPrint('🔄 [Controller] Resetting form');
+    titleController.clear();
+    priceController.clear();
+    areaController.clear();
+    descriptionController.clear();
+    addressController.clear();
+    bedroomsController.clear();
+    bathroomsController.clear();
+    livingRoomsController.clear();
+    streetWidthController.clear();
+    ageController.clear();
+
+    selectedType = 'شقة';
+    selectedCategory = 'بيع';
+    isFurnished = false;
+    hasKitchen = false;
+    hasAnnex = false;
+    hasCarEntrance = false;
+    hasElevator = false;
+    hasPool = false;
+
+    selectedImages.clear();
+    removeVideo();
+
+    latitude = null;
+    longitude = null;
+
+    notifyListeners();
+    debugPrint('✅ [Controller] Form reset completed');
   }
 }

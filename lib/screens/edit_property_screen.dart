@@ -1,10 +1,10 @@
-import 'dart:io'; // ضروري لاستخدام File
+import 'dart:io';
 import 'package:aqar_app/screens/property_form.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:aqar_app/config/cloudinary_config.dart'; // الكلاس المحدث
+import 'package:aqar_app/config/cloudinary_config.dart';
 
 class EditPropertyScreen extends StatefulWidget {
   const EditPropertyScreen({super.key, required this.propertyId});
@@ -49,7 +49,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 1. رفع الصور الجديدة باستخدام الطريقة الجديدة
+      // 1. رفع الصور الجديدة
       final newImageUrls = await _uploadImages(data['newImages']);
       final List<dynamic> finalImageUrls = [
         ...data['existingImageUrls'],
@@ -68,13 +68,12 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         videoUrl = null;
       }
       if (data['newVideo'] != null) {
-        // ✅ استخدام دالة رفع الفيديو الثابتة من CloudinaryConfig
         videoUrl = await CloudinaryConfig.uploadVideo(
           File((data['newVideo'] as XFile).path),
         );
       }
 
-      // 3. تجهيز البيانات للتحديث
+      // 3. تجهيز البيانات للتحديث - ✅ تم إضافة الحقول الجديدة
       final updateData = {
         'title': data['title'],
         'price': data['price'],
@@ -83,14 +82,29 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         'propertyType': data['propertyType'],
         'subscriptionPeriod': data['subscriptionPeriod'],
         'currency': data['currency'],
-        'isFeatured': data['isFeatured'],
+        //'isFeatured': data['isFeatured'], // عادة لا يتم تعديله من هنا
         'discountPercent': data['discountPercent'],
         'area': data['area'],
-        'rooms': data['rooms'],
+        'rooms': data['rooms'], // قد يكون bedrooms
+        'bedrooms': data['rooms'], // للتأكيد
+        'bathrooms': data['bathrooms'],
         'floor': data['floor'],
-        'imageUrls': finalImageUrls,
+        'images': finalImageUrls, // ✅ تعديل الاسم ليطابق السيرفر
         'videoUrl': videoUrl,
         'address': data['address'],
+        'latitude': data['latitude'],
+        'longitude': data['longitude'],
+        'features': data['features'], // المميزات (مكيف، واي فاي..)
+        // ✅ الحقول الجديدة
+        'livingRooms': data['livingRooms'],
+        'streetWidth': data['streetWidth'],
+        'age': data['age'],
+        'isFurnished': data['isFurnished'],
+        'hasKitchen': data['hasKitchen'],
+        'hasAnnex': data['hasAnnex'],
+        'hasCarEntrance': data['hasCarEntrance'],
+        'hasElevator': data['hasElevator'],
+        'hasPool': data['hasPool'],
       };
 
       // 4. الإرسال للسيرفر
@@ -110,7 +124,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('حدث خطأ: ${e.toString()}'),
+            content: Text('فشل التحديث: تأكد من الاتصال بالإنترنت'),
             backgroundColor: Colors.red,
           ),
         );
@@ -122,7 +136,6 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     final List<String> imageUrls = [];
     for (final image in images) {
       try {
-        // ✅ استخدام دالة رفع الصور الثابتة من CloudinaryConfig
         final url = await CloudinaryConfig.uploadImage(File(image.path));
         if (url != null) {
           imageUrls.add(url);
