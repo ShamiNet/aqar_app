@@ -1,10 +1,39 @@
-# aqar_app
+# Aqar Plus (عقار بلص) 🏠
 
-A new Flutter project.
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ShamiNet/aqar_app/releases)
+[![Flutter](https://img.shields.io/badge/Flutter-3.9.0+-02569B.svg)](https://flutter.dev/)
+[![Firebase](https://img.shields.io/badge/Firebase-Enabled-orange.svg)](https://firebase.google.com/)
 
-## Getting Started
+منصة عقارات متكاملة باللغة العربية - A comprehensive real estate platform in Arabic.
 
-This project is a starting point for a Flutter application.
+## 📱 About | نبذة عن التطبيق
+
+تطبيق عقار بلص هو منصة شاملة لإدارة وعرض العقارات مع ميزات متقدمة مثل الخرائط التفاعلية، نظام الإشعارات الآلي، ولوحة تحكم للمديرين.
+
+Aqar Plus is a comprehensive platform for managing and displaying real estate properties with advanced features like interactive maps, automated notifications, and an admin dashboard.
+
+## 🎉 Latest Release | آخر إصدار
+
+**Current Version:** v1.0.0 (Released: February 12, 2026)
+
+[📥 Download Latest Release](https://github.com/ShamiNet/aqar_app/releases/latest) | [📝 Release Notes](RELEASE_NOTES.md) | [📋 Changelog](CHANGELOG.md)
+
+## ✨ Key Features | الميزات الرئيسية
+
+- 🏘️ Complete property management system
+- 🗺️ Advanced Google Maps integration
+- 👤 User authentication & profiles
+- 👨‍💼 Admin dashboard with analytics
+- 🔔 Automated notifications (Telegram & WhatsApp)
+- 📱 Multi-platform support (Android, iOS, Web, Desktop)
+- 🎨 Modern and responsive UI/UX
+- 🔒 Secure with Firebase App Check
+
+## Getting Started | البدء السريع
+
+للحصول على دليل البدء السريع، راجع [QUICKSTART.md](QUICKSTART.md)
+
+This project is a Flutter application for real estate management.
 
 A few resources to get you started if this is your first Flutter project:
 
