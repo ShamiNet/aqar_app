@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:aqar_app/screens/ratings_screen.dart';
 import 'package:aqar_app/services/notification_service.dart';
 import 'package:aqar_app/screens/auth_gate.dart';
-import 'package:aqar_app/services/api_service.dart'; // ✅
+import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/services/websocket_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -19,10 +20,14 @@ import 'package:form_builder_validators/localization/l10n.dart';
 import 'package:app_links/app_links.dart';
 import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:aqar_app/screens/onboarding_screen.dart';
-import 'package:provider/provider.dart'; // ✅ إضافة
-import 'package:aqar_app/providers/user_provider.dart'; // ✅ إضافة
-import 'package:aqar_app/providers/chat_provider.dart'; // ✅ إضافة الـ Provider الجديد للمحادثات
+import 'package:provider/provider.dart';
+import 'package:aqar_app/providers/user_provider.dart';
+import 'package:aqar_app/providers/chat_provider.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
+
+// ✅ استيراد مكتبات معالجة الأخطاء المتقدمة
+import 'dart:ui';
+import 'dart:async';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -35,47 +40,103 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(widgetsBinding: binding);
+  // ✅ 1. اصطياد الأخطاء الحرجة قبل تشغيل التطبيق (Zone Guard)
+  runZonedGuarded(
+    () async {
+      final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
+      FlutterNativeSplash.preserve(widgetsBinding: binding);
 
-  await ThemeController.initialize();
+      // ✅ 2. اصطياد أخطاء واجهة المستخدم (Flutter Errors)
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        debugPrint('🚨 [UI Error Caught]: ${details.exceptionAsString()}');
+        // يمكنك هنا إرسال الخطأ إلى خدمة مثل Firebase Crashlytics أو Sentry
+      };
 
-  debugPrint("🔵 [System] Initializing Firebase...");
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint("🟢 [System] Firebase Initialized.");
+      // ✅ 3. اصطياد الأخطاء غير المتزامنة (Async Errors) لمنع إغلاق التطبيق فجأة
+      PlatformDispatcher.instance.onError = (error, stack) {
+        debugPrint('🚨 [Async Error Caught]: $error');
+        debugPrint('StackTrace: $stack');
+        return true; // إرجاع true يخبر فلاتر أننا قمنا بمعالجة الخطأ ولن ينهار التطبيق
+      };
 
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // ✅ 4. استبدال الشاشة الحمراء المرعبة بشاشة خطأ أنيقة
+      ErrorWidget.builder = (FlutterErrorDetails details) {
+        return Material(
+          color: Colors.white,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 60),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'عذراً، حدث خطأ غير متوقع!',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'لقد قمنا بتسجيل الخطأ وجاري العمل على حله.',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      };
 
-  await NotificationService.initialize();
+      await ThemeController.initialize();
 
-  final prefs = await SharedPreferences.getInstance();
-  final bool seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
+      debugPrint("🔵 [System] Initializing Firebase...");
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint("🟢 [System] Firebase Initialized.");
 
-  // ✅ التحقق من حالة تسجيل الدخول
-  final bool isLoggedIn = await ApiService.isLoggedIn();
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+      await NotificationService.initialize();
 
-  debugPrint(
-    '🔐 [Main] seen_onboarding: $seenOnboarding, isLoggedIn: $isLoggedIn',
-  );
+      final prefs = await SharedPreferences.getInstance();
+      final bool seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
+      final bool isLoggedIn = await ApiService.isLoggedIn();
 
-  // إخفاء الـ splash screen بعد اكتمال التهيئة
-  FlutterNativeSplash.remove();
+      debugPrint(
+        '🔐 [Main] seen_onboarding: $seenOnboarding, isLoggedIn: $isLoggedIn',
+      );
 
-  runApp(
-    // ✅ تغليف التطبيق بـ MultiProvider
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => UserProvider()..loadUserData()),
-        ChangeNotifierProvider(
-          create: (_) => ChatProvider(),
-        ), // ✅ تسجيل الـ Provider الجديد
-      ],
-      child: AqarApp(
-        startScreen: (seenOnboarding || isLoggedIn)
-            ? const AuthGate()
-            : const OnboardingScreen(),
-      ),
-    ),
+      FlutterNativeSplash.remove();
+
+      runApp(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(
+              create: (_) => UserProvider()..loadUserData(),
+            ),
+            ChangeNotifierProvider(create: (_) => ChatProvider()),
+          ],
+          child: AqarApp(
+            startScreen: (seenOnboarding || isLoggedIn)
+                ? const AuthGate()
+                : const OnboardingScreen(),
+          ),
+        ),
+      );
+    },
+    (error, stackTrace) {
+      // ✅ 5. اصطياد أي خطأ يهرب من الطبقات السابقة
+      debugPrint('🔥 [Fatal Error Caught by Zone]: $error');
+    },
   );
 }
 
@@ -89,6 +150,7 @@ class AqarApp extends StatefulWidget {
 
 class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
   late AppLinks _appLinks;
+  Timer? _onlineStatusTimer; // ✅ Timer للتحديث الدوري
 
   @override
   void initState() {
@@ -117,10 +179,12 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
     _updateTokenOnStart();
     _setUserOnline(true);
     _checkUserBanStatus();
+    _startOnlineStatusTimer(); // ✅ بدء التحديث الدوري
   }
 
   @override
   void dispose() {
+    _onlineStatusTimer?.cancel(); // ✅ إيقاف التحديث الدوري
     WidgetsBinding.instance.removeObserver(this);
     _setUserOnline(false);
     super.dispose();
@@ -131,49 +195,76 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _setUserOnline(true);
+      _startOnlineStatusTimer(); // ✅ بدء التحديث عند فتح التطبيق
       if (mounted) {
         Provider.of<UserProvider>(context, listen: false).loadUserData();
       }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
+      _onlineStatusTimer?.cancel(); // ✅ إيقاف التحديث عند إغلاق التطبيق
       _setUserOnline(false);
     }
   }
 
   Future<void> _setUserOnline(bool isOnline) async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id');
-    if (userId != null) {
-      await ApiService.updateOnlineStatus(userId, isOnline);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId != null) {
+        await ApiService.updateOnlineStatus(userId, isOnline);
+        debugPrint('🟢 [Online Status] Updated: $isOnline');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Online Status Error]: $e');
     }
   }
 
+  // ✅ تحديث دوري لحالة lastSeen كل 3 دقائق
+  void _startOnlineStatusTimer() {
+    _onlineStatusTimer?.cancel(); // إلغاء أي timer سابق
+
+    _onlineStatusTimer = Timer.periodic(
+      const Duration(minutes: 3), // تحديث كل 3 دقائق
+      (timer) async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final userId = prefs.getString('user_id');
+          if (userId != null) {
+            await ApiService.updateOnlineStatus(userId, true);
+            debugPrint('🔄 [Online Status] Auto-updated at ${DateTime.now()}');
+          }
+        } catch (e) {
+          debugPrint('⚠️ [Online Status Timer Error]: $e');
+        }
+      },
+    );
+  }
+
   Future<void> _updateTokenOnStart() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id');
-    if (userId != null) {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        ApiService.updateFcmToken(userId, token);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId != null) {
+        final token = await FirebaseMessaging.instance.getToken();
+        if (token != null) {
+          ApiService.updateFcmToken(userId, token);
+        }
       }
+    } catch (e) {
+      debugPrint('⚠️ [FCM Token Error]: $e');
     }
   }
 
   Future<void> _checkUserBanStatus() async {
     try {
       final isLoggedIn = await ApiService.isLoggedIn();
-      debugPrint(
-        '🔍 [BanCheck] Checking ban status (Startup)... User logged in: $isLoggedIn',
-      );
       if (!isLoggedIn) return;
 
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('user_id');
       if (userId == null) return;
-      if (userId != null) {
-        WebSocketService.connect(userId);
-      }
 
+      WebSocketService.connect(userId);
       final remoteUser = await ApiService.fetchUserProfile(userId);
 
       if (remoteUser != null) {
@@ -181,10 +272,6 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
       }
 
       if (remoteUser != null && remoteUser['isBanned'] == true) {
-        debugPrint(
-          '🚫🚫🚫 [BanCheck] USER IS BANNED! Starting logout procedure...',
-        );
-
         await ApiService.logout();
 
         if (mounted) {
@@ -214,22 +301,31 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
   }
 
   Future<void> _initDeepLinks() async {
-    _appLinks = AppLinks();
-    final Uri? initialUri = await _appLinks.getInitialLink();
-    if (initialUri != null) {
-      _handleLink(initialUri);
-    }
-    _appLinks.uriLinkStream.listen((Uri? uri) {
-      if (uri != null) {
-        _handleLink(uri);
+    try {
+      _appLinks = AppLinks();
+      final Uri? initialUri = await _appLinks.getInitialLink();
+      if (initialUri != null) {
+        _handleLink(initialUri);
       }
-    });
+      _appLinks.uriLinkStream.listen(
+        (Uri? uri) {
+          if (uri != null) {
+            _handleLink(uri);
+          }
+        },
+        onError: (err) {
+          debugPrint('⚠️ [DeepLink Error]: $err');
+        },
+      );
+    } catch (e) {
+      debugPrint('⚠️ [Init DeepLink Error]: $e');
+    }
   }
 
   void _setupFirebaseMessaging() {
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      if (message.notification != null) {
-        if (navigatorKey.currentState != null) {
+    try {
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        if (message.notification != null && navigatorKey.currentState != null) {
           ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
             SnackBar(
               content: Text(message.notification!.title ?? "إشعار جديد"),
@@ -238,90 +334,101 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
             ),
           );
         }
-      }
-    });
+      });
 
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _handleNotificationData(message.data);
-    });
-
-    FirebaseMessaging.instance.getInitialMessage().then((
-      RemoteMessage? message,
-    ) {
-      if (message != null) {
+      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         _handleNotificationData(message.data);
-      }
-    });
+      });
+
+      FirebaseMessaging.instance.getInitialMessage().then((
+        RemoteMessage? message,
+      ) {
+        if (message != null) {
+          _handleNotificationData(message.data);
+        }
+      });
+    } catch (e) {
+      debugPrint('⚠️ [Firebase Messaging Setup Error]: $e');
+    }
   }
 
   void _handleNotificationData(Map<String, dynamic> data) {
-    final propertyId = data['propertyId'];
-    final String? screenType = data['screen'];
+    try {
+      final propertyId = data['propertyId'];
+      final String? screenType = data['screen'];
 
-    if (data['type'] == 'new_rating') {
-      final myId = FirebaseAuth.instance.currentUser?.uid;
-      if (myId != null) {
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (_) =>
-                RatingsScreen(targetUserId: myId, targetUserName: 'تقييماتي'),
-          ),
-        );
+      if (data['type'] == 'new_rating') {
+        final myId = FirebaseAuth.instance.currentUser?.uid;
+        if (myId != null) {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  RatingsScreen(targetUserId: myId, targetUserName: 'تقييماتي'),
+            ),
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    if (screenType == 'chat') {
-      final String? chatId = data['chatId'];
-      final String? recipientId = data['recipientId'];
-      final String? recipientName = data['recipientName'];
+      if (screenType == 'chat') {
+        final String? chatId = data['chatId'];
+        final String? recipientId = data['recipientId'];
+        final String? recipientName = data['recipientName'];
 
-      if (chatId != null && recipientId != null) {
+        if (chatId != null && recipientId != null) {
+          Future.delayed(const Duration(milliseconds: 500), () {
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (context) => ChatMessagesScreen(
+                  chatId: chatId,
+                  recipientId: recipientId,
+                  recipientName: recipientName ?? 'مستخدم',
+                ),
+              ),
+            );
+          });
+          return;
+        }
+      }
+
+      if (propertyId != null) {
         Future.delayed(const Duration(milliseconds: 500), () {
           navigatorKey.currentState?.push(
             MaterialPageRoute(
-              builder: (context) => ChatMessagesScreen(
-                chatId: chatId,
-                recipientId: recipientId,
-                recipientName: recipientName ?? 'مستخدم',
-              ),
+              builder: (context) =>
+                  PropertyDetailsScreen(propertyId: propertyId),
             ),
           );
         });
-        return;
       }
-    }
-
-    if (propertyId != null) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (context) => PropertyDetailsScreen(propertyId: propertyId),
-          ),
-        );
-      });
+    } catch (e) {
+      debugPrint('⚠️ [Handle Notification Error]: $e');
     }
   }
 
   void _handleLink(Uri uri) {
-    String? propertyId;
-    if (uri.pathSegments.contains('properties')) {
-      final index = uri.pathSegments.indexOf('properties');
-      if (index + 1 < uri.pathSegments.length) {
-        propertyId = uri.pathSegments[index + 1];
+    try {
+      String? propertyId;
+      if (uri.pathSegments.contains('properties')) {
+        final index = uri.pathSegments.indexOf('properties');
+        if (index + 1 < uri.pathSegments.length) {
+          propertyId = uri.pathSegments[index + 1];
+        }
+      } else if (uri.pathSegments.isNotEmpty) {
+        propertyId = uri.pathSegments.last;
       }
-    } else if (uri.pathSegments.isNotEmpty) {
-      propertyId = uri.pathSegments.last;
-    }
 
-    if (propertyId != null) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (ctx) => PropertyDetailsScreen(propertyId: propertyId!),
-          ),
-        );
-      });
+      if (propertyId != null) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (ctx) => PropertyDetailsScreen(propertyId: propertyId!),
+            ),
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ [Handle Link Error]: $e');
     }
   }
 

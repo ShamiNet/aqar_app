@@ -39,11 +39,24 @@ router.get('/:id', async (req, res) => {
         await db.collection('users').doc(userId).update(updates);
     }
 
+    // ✅ تحويل Firestore Timestamps إلى format واضح للتطبيق
+    const formatTimestamp = (timestamp) => {
+      if (!timestamp) return null;
+      if (timestamp._seconds !== undefined) {
+        return {
+          _seconds: timestamp._seconds,
+          _nanoseconds: timestamp._nanoseconds || 0
+        };
+      }
+      return timestamp;
+    };
+
     const publicProfile = {
       id: doc.id,
       username: data.username || 'مستخدم',
       bio: data.bio || '',
-      phone: data.phone || '',
+      phone: data.phone || data.phoneNumber || '',
+      phoneNumber: data.phoneNumber || data.phone || '',
       email: data.email || '', // إضافة الإيميل
       profileImageUrl: data.profileImageUrl,
       isVerified: data.isVerified || false,
@@ -53,10 +66,26 @@ router.get('/:id', async (req, res) => {
       isBanned: data.isBanned || false,
       isAdmin: data.isAdmin || false,
       isOnline: data.isOnline || false,
-      lastSeen: data.lastSeen,
-      createdAt: data.createdAt, // ✅ إضافة التاريخ للرد
-      joinedAt: data.createdAt     // ✅ احتياطي لتجنب المشاكل
+      lastSeen: formatTimestamp(data.lastSeen),
+      createdAt: formatTimestamp(data.createdAt), // ✅ تحويل التاريخ
+      joinedAt: formatTimestamp(data.createdAt),  // ✅ احتياطي لتجنب المشاكل
+      uid: doc.id,              // ✅ إضافة uid
+      userId: doc.id            // ✅ إضافة userId
     };
+
+    console.log(`✅ [USER-PROFILE] Fetched profile for user: ${userId}`, {
+      hasUsername: !!publicProfile.username,
+      hasEmail: !!publicProfile.email,
+      hasPhone: !!publicProfile.phone,
+      hasBio: !!publicProfile.bio,
+      isVerified: publicProfile.isVerified,
+      isAdmin: publicProfile.isAdmin,
+      isBanned: publicProfile.isBanned,
+      hasProfileImage: !!publicProfile.profileImageUrl,
+      hasCreatedAt: !!publicProfile.createdAt,
+      createdAtType: publicProfile.createdAt ? typeof publicProfile.createdAt : 'null',
+      hasLastSeen: !!publicProfile.lastSeen,
+    });
 
     res.status(200).json(publicProfile);
   } catch (error) {
@@ -202,6 +231,12 @@ router.post('/:userId/online-status', verifyToken, async (req, res) => {
         };
 
         await db.collection('users').doc(userId).update(updateData);
+        
+        console.log(`🔄 [ONLINE-STATUS] User ${userId} status updated:`, {
+          isOnline,
+          timestamp: new Date().toISOString()
+        });
+        
         res.json({ message: 'Online status updated' });
     } catch (error) {
         console.error('Error updating online status:', error);
@@ -288,6 +323,53 @@ router.delete('/:id/favorites/:propertyId', verifyToken, async (req, res) => {
   } catch (e) {
     console.error('[Favorites][DELETE] error', e);
     return res.status(500).json({ message: 'فشل الحذف من المفضلة' });
+  }
+});
+
+// ✅ جلب العقارات المشاهدة
+router.get('/:id/viewed-properties', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit } = req.query;
+    
+    // ✅ التحقق من الصلاحيات (يجب أن يكون المستخدم نفسه أو أدمن)
+    if (!canAccessUser(req, id))
+      return res.status(403).json({ message: 'صلاحيات غير كافية' });
+    
+    console.log(`📊 [VIEWED-PROPERTIES] Fetching for user: ${id}`);
+    
+    // جلب قائمة العقارات المشاهدة
+    let query = db
+      .collection('users')
+      .doc(id)
+      .collection('viewedProperties')
+      .orderBy('viewedAt', 'desc');
+    
+    if (limit) {
+      query = query.limit(parseInt(limit));
+    } else {
+      query = query.limit(20); // افتراضياً 20 عقار
+    }
+    
+    const viewedSnap = await query.get();
+    const propertyIds = viewedSnap.docs.map(d => d.data().propertyId);
+    
+    if (!propertyIds.length) return res.json([]);
+
+    // جلب تفاصيل العقارات
+    const propDocs = await Promise.all(
+      propertyIds.map(pid => db.collection('properties').doc(pid).get())
+    );
+
+    const result = propDocs
+      .filter(d => d.exists)
+      .map(d => ({ id: d.id, ...d.data() }));
+
+    console.log(`✅ [VIEWED-PROPERTIES] Found ${result.length} properties for user ${id}`);
+    return res.json(result);
+  } catch (e) {
+    console.error('[Viewed Properties][GET] error', e);
+    return res.status(500).json({ message: 'فشل جلب العقارات المشاهدة' });
   }
 });
 

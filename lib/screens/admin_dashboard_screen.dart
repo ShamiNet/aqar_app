@@ -1,6 +1,7 @@
 import 'package:aqar_app/screens/auth_gate.dart';
 import 'package:aqar_app/screens/admin_chat_monitor_screen.dart';
 import 'package:aqar_app/screens/report_details_screen.dart';
+import 'package:aqar_app/screens/profile_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/widgets/verified_badge.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -432,6 +433,58 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
     await _fetchUsers(refresh: true);
   }
 
+  // جلب البيانات الكاملة للمستخدم وفتح البروفايل
+  Future<void> _openUserProfile(String userId) async {
+    try {
+      // إظهار مؤشر التحميل
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      // جلب البيانات الكاملة للمستخدم
+      final fullUserData = await ApiService.fetchUserProfile(userId);
+
+      // إغلاق مؤشر التحميل
+      if (mounted) Navigator.pop(context);
+
+      if (fullUserData == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('فشل في تحميل بيانات المستخدم'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // فتح صفحة البروفايل بالبيانات الكاملة
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfileScreen(otherUserData: fullUserData),
+          ),
+        );
+      }
+    } catch (e) {
+      // إغلاق مؤشر التحميل إذا كان مفتوحاً
+      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        );
+      }
+      debugPrint('❌ Error opening user profile: $e');
+    }
+  }
+
   void _onSearchChanged(String value) {
     // نستخدم Debounce بسيط لتجنب الطلبات الكثيرة يمكن تطبيقه هنا،
     // لكن للتبسيط سنطلب عند الكتابة مباشرة أو عند الضغط زر البحث
@@ -561,155 +614,177 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
     final isVerified = user['isVerified'] == true;
     final isOnline = user['isOnline'] == true;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: widget.surfaceColor,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: widget.inputFillColor, width: 2),
+    return InkWell(
+      onTap: () => _openUserProfile(userId),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: widget.surfaceColor,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: widget.inputFillColor,
+                        width: 2,
+                      ),
+                    ),
+                    child: CircleAvatar(
+                      radius: 26,
+                      backgroundColor: widget.inputFillColor,
+                      backgroundImage: profileImage != null
+                          ? CachedNetworkImageProvider(profileImage)
+                          : null,
+                      child: profileImage == null
+                          ? Icon(Icons.person, color: widget.textSecondary)
+                          : null,
+                    ),
                   ),
-                  child: CircleAvatar(
-                    radius: 26,
-                    backgroundColor: widget.inputFillColor,
-                    backgroundImage: profileImage != null
-                        ? CachedNetworkImageProvider(profileImage)
-                        : null,
-                    child: profileImage == null
-                        ? Icon(Icons.person, color: widget.textSecondary)
-                        : null,
-                  ),
-                ),
-                if (isOnline)
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: widget.surfaceColor,
-                          width: 2,
+                  if (isOnline)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.greenAccent,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: widget.surfaceColor,
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 16),
+                ],
+              ),
+              const SizedBox(width: 16),
 
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          username,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: widget.textPrimary,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            username,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: widget.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(width: 4),
+                        if (isVerified) const VerifiedBadge(size: 16),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      email,
+                      style: TextStyle(
+                        color: widget.textSecondary,
+                        fontSize: 13,
                       ),
-                      const SizedBox(width: 4),
-                      if (isVerified) const VerifiedBadge(size: 16),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    email,
-                    style: TextStyle(color: widget.textSecondary, fontSize: 13),
-                  ),
+                    ),
 
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    children: [
-                      if (isAdmin)
-                        _buildStatusChip(
-                          'مشرف',
-                          Colors.amberAccent,
-                          Colors.amber.withOpacity(0.15),
-                          Icons.shield,
-                        ),
-                      if (isBanned)
-                        _buildStatusChip(
-                          'محظور',
-                          Colors.redAccent,
-                          Colors.red.withOpacity(0.15),
-                          Icons.block,
-                        ),
-                      if (isVerified)
-                        _buildStatusChip(
-                          'موثق',
-                          Colors.blueAccent,
-                          Colors.blue.withOpacity(0.15),
-                          Icons.check,
-                        ),
-                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        if (isAdmin)
+                          _buildStatusChip(
+                            'مشرف',
+                            Colors.amberAccent,
+                            Colors.amber.withOpacity(0.15),
+                            Icons.shield,
+                          ),
+                        if (isBanned)
+                          _buildStatusChip(
+                            'محظور',
+                            Colors.redAccent,
+                            Colors.red.withOpacity(0.15),
+                            Icons.block,
+                          ),
+                        if (isVerified)
+                          _buildStatusChip(
+                            'موثق',
+                            Colors.blueAccent,
+                            Colors.blue.withOpacity(0.15),
+                            Icons.check,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_horiz_rounded,
+                  color: widget.textSecondary,
+                ),
+                color: widget.inputFillColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                onSelected: (value) {
+                  if (value == 'profile') {
+                    _openUserProfile(userId);
+                  }
+                  if (value == 'verify')
+                    _handleAction(userId, 'verify', isVerified);
+                  if (value == 'ban') _handleAction(userId, 'ban', isBanned);
+                  if (value == 'admin') _handleAction(userId, 'admin', isAdmin);
+                },
+                itemBuilder: (ctx) => [
+                  _buildPopupItem(
+                    'profile',
+                    'عرض البروفايل',
+                    Icons.person_outline,
+                    false,
+                  ),
+                  _buildPopupItem(
+                    'verify',
+                    isVerified ? 'إلغاء التوثيق' : 'توثيق الحساب',
+                    isVerified ? Icons.close : Icons.verified,
+                    false,
+                  ),
+                  _buildPopupItem(
+                    'ban',
+                    isBanned ? 'فك الحظر' : 'حظر المستخدم',
+                    isBanned ? Icons.check_circle : Icons.block,
+                    !isBanned,
+                  ),
+                  _buildPopupItem(
+                    'admin',
+                    isAdmin ? 'إزالة مشرف' : 'ترقية لمشرف',
+                    Icons.security,
+                    false,
                   ),
                 ],
               ),
-            ),
-
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_horiz_rounded, color: widget.textSecondary),
-              color: widget.inputFillColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              onSelected: (value) {
-                if (value == 'verify')
-                  _handleAction(userId, 'verify', isVerified);
-                if (value == 'ban') _handleAction(userId, 'ban', isBanned);
-                if (value == 'admin') _handleAction(userId, 'admin', isAdmin);
-              },
-              itemBuilder: (ctx) => [
-                _buildPopupItem(
-                  'verify',
-                  isVerified ? 'إلغاء التوثيق' : 'توثيق الحساب',
-                  isVerified ? Icons.close : Icons.verified,
-                  false,
-                ),
-                _buildPopupItem(
-                  'ban',
-                  isBanned ? 'فك الحظر' : 'حظر المستخدم',
-                  isBanned ? Icons.check_circle : Icons.block,
-                  !isBanned,
-                ),
-                _buildPopupItem(
-                  'admin',
-                  isAdmin ? 'إزالة مشرف' : 'ترقية لمشرف',
-                  Icons.security,
-                  false,
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

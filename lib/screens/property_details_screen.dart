@@ -29,7 +29,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   String? _currentUserId;
   bool _isOwner = false;
   bool _isAdmin = false;
-  bool _isFavorite = false; // ✅ حالة المفضلة
+  bool _isFavorite = false;
 
   Set<Marker> _markers = {};
   LatLng? _propertyLocation;
@@ -86,7 +86,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           _isLoading = false;
         });
 
-        // ✅ بعد تحميل البيانات، نتحقق مما إذا كان العقار في المفضلة
         if (_currentUserId != null) {
           _checkFavoriteStatus();
         }
@@ -96,7 +95,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
-  // ✅ دالة التحقق من المفضلة
   Future<void> _checkFavoriteStatus() async {
     try {
       final favs = await ApiService.fetchFavorites(_currentUserId!);
@@ -112,7 +110,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
-  // ✅ دالة الإضافة/الإزالة من المفضلة
   Future<void> _toggleFavorite() async {
     if (_currentUserId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,14 +119,14 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
 
     setState(() {
-      _isFavorite = !_isFavorite; // تغيير فوري للشكل لتجربة مستخدم سريعة
+      _isFavorite = !_isFavorite;
     });
 
     try {
       await ApiService.toggleFavorite(widget.propertyId);
     } catch (e) {
       setState(() {
-        _isFavorite = !_isFavorite; // التراجع في حال حدوث خطأ
+        _isFavorite = !_isFavorite;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -189,6 +186,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             chatId: chatId,
             recipientId: _property!['ownerId'],
             recipientName: _property!['sellerInfo']?['username'] ?? 'المعلن',
+            propertyId: widget.propertyId,
+            propertyTitle: _property!['title'],
+            propertyImage: (_property!['images'] as List?)?.isNotEmpty == true
+                ? _property!['images'][0]
+                : null,
+            propertyPrice: '${_property!['price']} ر.س',
           ),
         ),
       );
@@ -209,6 +212,19 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         appBar: AppBar(),
         body: const Center(child: Text('عذراً، لم يتم العثور على العقار')),
       );
+
+    // ✅ متغيرات الثيم (الألوان تتغير تلقائياً حسب الوضع الفاتح أو الليلي)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subTextColor = isDark ? Colors.grey.shade400 : Colors.grey.shade600;
+    final containerBgColor = isDark
+        ? Colors.grey.shade900
+        : Colors.grey.shade50;
+    final borderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade200;
+    final cardBgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final iconBgColor = isDark
+        ? Colors.black.withOpacity(0.5)
+        : Colors.white.withOpacity(0.9);
 
     final canEdit = _isOwner || _isAdmin;
 
@@ -233,22 +249,23 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 
     final featuresList = <Widget>[];
     if (_property!['isFurnished'] == true)
-      featuresList.add(_buildFeatureChip(Icons.chair, 'مؤثث'));
+      featuresList.add(_buildFeatureChip(Icons.chair, 'مؤثث', isDark));
     if (_property!['hasKitchen'] == true)
-      featuresList.add(_buildFeatureChip(Icons.kitchen, 'مطبخ'));
+      featuresList.add(_buildFeatureChip(Icons.kitchen, 'مطبخ', isDark));
     if (_property!['hasAnnex'] == true)
-      featuresList.add(_buildFeatureChip(Icons.home_work, 'ملحق'));
+      featuresList.add(_buildFeatureChip(Icons.home_work, 'ملحق', isDark));
     if (_property!['hasCarEntrance'] == true)
-      featuresList.add(_buildFeatureChip(Icons.garage, 'مدخل سيارة'));
+      featuresList.add(_buildFeatureChip(Icons.garage, 'مدخل سيارة', isDark));
     if (_property!['hasElevator'] == true)
-      featuresList.add(_buildFeatureChip(Icons.elevator, 'مصعد'));
+      featuresList.add(_buildFeatureChip(Icons.elevator, 'مصعد', isDark));
     if (_property!['hasPool'] == true)
-      featuresList.add(_buildFeatureChip(Icons.pool, 'مسبح'));
+      featuresList.add(_buildFeatureChip(Icons.pool, 'مسبح', isDark));
     if (_property!['features'] is List) {
-      for (var f in _property!['features'])
+      for (var f in _property!['features']) {
         featuresList.add(
-          _buildFeatureChip(Icons.check_circle_outline, f.toString()),
+          _buildFeatureChip(Icons.check_circle_outline, f.toString(), isDark),
         );
+      }
     }
 
     final sellerInfo = _property!['sellerInfo'] ?? {};
@@ -262,11 +279,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             expandedHeight: 300,
             pinned: true,
             actions: [
-              // ✅ زر المفضلة محسّن
+              // زر المفضلة
               Container(
                 margin: const EdgeInsets.only(right: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: iconBgColor,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -279,17 +296,19 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                 child: IconButton(
                   icon: Icon(
                     _isFavorite ? Icons.favorite : Icons.favorite_border,
-                    color: _isFavorite ? Colors.red : Colors.grey[700],
+                    color: _isFavorite
+                        ? Colors.red
+                        : (isDark ? Colors.white : Colors.grey[700]),
                     size: 28,
                   ),
                   onPressed: _toggleFavorite,
                 ),
               ),
-              // ✅ زر المشاركة محسّن
+              // زر المشاركة
               Container(
                 margin: const EdgeInsets.only(right: 8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: iconBgColor,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
@@ -300,18 +319,22 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ],
                 ),
                 child: IconButton(
-                  icon: Icon(Icons.share, color: Colors.blue[700], size: 28),
+                  icon: Icon(
+                    Icons.share,
+                    color: isDark ? Colors.blue[300] : Colors.blue[700],
+                    size: 28,
+                  ),
                   onPressed: () => Share.share(
                     'شاهد هذا العقار المميز: $title \n بسعر $price $currency',
                   ),
                 ),
               ),
-              // ✅ زر التعديل محسّن
+              // زر التعديل
               if (canEdit)
                 Container(
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
+                    color: iconBgColor,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
@@ -322,7 +345,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     ],
                   ),
                   child: IconButton(
-                    icon: Icon(Icons.edit, color: Colors.orange[700], size: 28),
+                    icon: Icon(
+                      Icons.edit,
+                      color: isDark ? Colors.orange[400] : Colors.orange[700],
+                      size: 28,
+                    ),
                     onPressed: () async {
                       await Navigator.of(context).push(
                         MaterialPageRoute(
@@ -334,12 +361,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     },
                   ),
                 ),
-              // ✅ زر الإبلاغ عن مخالفة
+              // زر الإبلاغ
               if (!canEdit)
                 Container(
                   margin: const EdgeInsets.only(right: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
+                    color: iconBgColor,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
@@ -350,7 +377,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     ],
                   ),
                   child: IconButton(
-                    icon: Icon(Icons.flag, color: Colors.red[600], size: 28),
+                    icon: Icon(
+                      Icons.flag,
+                      color: isDark ? Colors.red[400] : Colors.red[600],
+                      size: 28,
+                    ),
                     tooltip: 'إبلاغ عن مخالفة',
                     onPressed: () {
                       Navigator.of(context).push(
@@ -365,7 +396,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ),
                 ),
             ],
-            // ...existing code...
             flexibleSpace: FlexibleSpaceBar(
               background: images.isNotEmpty
                   ? PropertyImageGallery(
@@ -373,11 +403,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       propertyTitle: title,
                     )
                   : Container(
-                      color: Colors.grey[200],
-                      child: const Icon(
+                      color: isDark ? Colors.grey[800] : Colors.grey[200],
+                      child: Icon(
                         Icons.image_not_supported,
                         size: 50,
-                        color: Colors.grey,
+                        color: isDark ? Colors.grey[600] : Colors.grey,
                       ),
                     ),
             ),
@@ -389,6 +419,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // العنوان والسعر
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -396,7 +427,10 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                         child: Text(
                           title,
                           style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
                         ),
                       ),
                       Text(
@@ -411,34 +445,32 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
 
+                  // العنوان والمشاهدات
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.location_on_outlined,
                         size: 16,
-                        color: Colors.grey,
+                        color: subTextColor,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           address,
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(color: subTextColor),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Icon(
+                      Icon(
                         Icons.visibility_outlined,
                         size: 16,
-                        color: Colors.grey,
+                        color: subTextColor,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         '$views مشاهدة',
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: subTextColor, fontSize: 12),
                       ),
                       if (isEdited) ...[
                         const SizedBox(width: 8),
@@ -458,7 +490,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.orange.shade100,
+                              color: isDark
+                                  ? Colors.orange.withOpacity(0.2)
+                                  : Colors.orange.shade100,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Row(
@@ -466,13 +500,17 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                                 Icon(
                                   Icons.history_edu,
                                   size: 12,
-                                  color: Colors.orange.shade800,
+                                  color: isDark
+                                      ? Colors.orange[300]
+                                      : Colors.orange.shade800,
                                 ),
                                 const SizedBox(width: 2),
                                 Text(
                                   'مُعدّل',
                                   style: TextStyle(
-                                    color: Colors.orange.shade800,
+                                    color: isDark
+                                        ? Colors.orange[300]
+                                        : Colors.orange.shade800,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -486,28 +524,38 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ),
                   const SizedBox(height: 24),
 
+                  // مواصفات العقار (الغرف والمساحة)
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.grey[50],
+                      color: containerBgColor,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[200]!),
+                      border: Border.all(color: borderColor),
                     ),
                     child: Column(
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _buildSpecItem(Icons.bed_outlined, '$bedrooms غرف'),
+                            _buildSpecItem(
+                              Icons.bed_outlined,
+                              '$bedrooms غرف',
+                              textColor,
+                            ),
                             _buildSpecItem(
                               Icons.bathtub_outlined,
                               '$bathrooms حمام',
+                              textColor,
                             ),
-                            _buildSpecItem(Icons.square_foot, '$area م²'),
+                            _buildSpecItem(
+                              Icons.square_foot,
+                              '$area م²',
+                              textColor,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
-                        const Divider(),
+                        Divider(color: borderColor),
                         const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -517,20 +565,27 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                               _buildSpecItem(
                                 Icons.chair_outlined,
                                 '$livingRooms صالات',
+                                textColor,
                               ),
                             if (age != null &&
                                 int.tryParse(age.toString()) != 0)
-                              _buildSpecItem(Icons.history, 'عمر $age سنة'),
+                              _buildSpecItem(
+                                Icons.history,
+                                'عمر $age سنة',
+                                textColor,
+                              ),
                             if (streetWidth != null &&
                                 double.tryParse(streetWidth.toString()) != 0)
                               _buildSpecItem(
                                 Icons.add_road,
                                 'شارع $streetWidth م',
+                                textColor,
                               ),
                             if (floor != null)
                               _buildSpecItem(
                                 Icons.layers_outlined,
                                 'طابق $floor',
+                                textColor,
                               ),
                           ],
                         ),
@@ -539,11 +594,13 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ),
                   const SizedBox(height: 24),
 
+                  // المميزات الإضافية (رقاقات)
                   if (featuresList.isNotEmpty) ...[
                     Text(
                       'المميزات والخدمات',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
+                        color: textColor,
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -551,22 +608,25 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     const SizedBox(height: 24),
                   ],
 
+                  // التفاصيل النصية
                   Text(
                     'تفاصيل العقار',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: textColor,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     description,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
-                      color: Colors.black87,
+                      color: textColor,
                     ),
                   ),
 
+                  // الخريطة
                   if (_propertyLocation != null) ...[
                     const SizedBox(height: 24),
                     Row(
@@ -575,7 +635,10 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                         Text(
                           'الموقع على الخريطة',
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
                         ),
                         TextButton.icon(
                           onPressed: _openMapApp,
@@ -589,7 +652,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       height: 200,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.grey[300]!),
+                        border: Border.all(color: borderColor),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
@@ -612,11 +675,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cardBgColor,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -626,12 +689,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: Colors.grey[200],
+                          backgroundColor: containerBgColor,
                           backgroundImage: sellerInfo['profileImageUrl'] != null
                               ? NetworkImage(sellerInfo['profileImageUrl'])
                               : null,
                           child: sellerInfo['profileImageUrl'] == null
-                              ? const Icon(Icons.person, color: Colors.grey)
+                              ? Icon(Icons.person, color: subTextColor)
                               : null,
                         ),
                         const SizedBox(width: 12),
@@ -640,15 +703,16 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                           children: [
                             Text(
                               sellerName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
+                                color: textColor,
                               ),
                             ),
-                            const Text(
+                            Text(
                               'المعلن',
                               style: TextStyle(
-                                color: Colors.grey,
+                                color: subTextColor,
                                 fontSize: 12,
                               ),
                             ),
@@ -690,10 +754,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           ? Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(
+                  context,
+                ).scaffoldBackgroundColor, // يعتمد على الثيم الأساسي للشاشة
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, -4),
                   ),
@@ -729,26 +795,41 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     );
   }
 
-  Widget _buildSpecItem(IconData icon, String text) {
+  // ✅ دالة المواصفات أصبحت تقبل لون النص
+  Widget _buildSpecItem(IconData icon, String text, Color textColor) {
     return Column(
       children: [
         Icon(icon, color: Theme.of(context).primaryColor, size: 28),
         const SizedBox(height: 8),
         Text(
           text,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            color: textColor,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildFeatureChip(IconData icon, String label) {
+  // ✅ دالة المميزات (الرقاقات) أصبحت تتفاعل مع الثيم الليلي
+  Widget _buildFeatureChip(IconData icon, String label, bool isDark) {
     return Chip(
-      avatar: Icon(icon, size: 18, color: Colors.grey[700]),
+      avatar: Icon(
+        icon,
+        size: 18,
+        color: isDark ? Colors.blue.shade300 : Colors.blue.shade700,
+      ),
       label: Text(label),
-      backgroundColor: Colors.white,
-      side: BorderSide(color: Colors.grey[300]!),
-      labelStyle: TextStyle(color: Colors.grey[800], fontSize: 12),
+      backgroundColor: isDark ? Colors.grey.shade800 : Colors.white,
+      side: BorderSide(
+        color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+      ),
+      labelStyle: TextStyle(
+        color: isDark ? Colors.white : Colors.grey.shade800,
+        fontSize: 12,
+      ),
     );
   }
 }

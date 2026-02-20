@@ -2,7 +2,8 @@ import 'package:aqar_app/screens/login_screen.dart';
 import 'package:aqar_app/screens/tabs_screen.dart';
 import 'package:aqar_app/screens/maintenance_screen.dart';
 import 'package:aqar_app/screens/update_required_screen.dart';
-import 'package:aqar_app/services/api_service.dart'; // ✅ الخدمة الجديدة
+import 'package:aqar_app/services/api_service.dart';
+import 'package:aqar_app/config/app_constants.dart'; // ✅ تم إضافة استيراد ملف الثوابت المركزي
 import 'package:flutter/material.dart';
 
 class AuthGate extends StatefulWidget {
@@ -25,7 +26,7 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     _checkLoginStatus();
-    _startMaintenanceCheckTimer(); // ✅ فحص دوري كل 5 ثوانٍ
+    _startMaintenanceCheckTimer(); // ✅ فحص دوري كل 30 ثانية
   }
 
   // فحص حالة تسجيل الدخول محلياً من SharedPreferences + التحقق من الحظر
@@ -122,8 +123,9 @@ class _AuthGateState extends State<AuthGate> {
       final minVersion = settings['min_version'] ?? '1.0.0';
       final updateRequired = ApiService.isUpdateRequired(minVersion);
 
+      // ✅ تم الإصلاح: استخدام AppConstants لقراءة الإصدار الحالي
       print(
-        '📱 [Version Check] Current: ${ApiService.currentAppVersion}, Required: $minVersion',
+        '📱 [Version Check] Current: ${AppConstants.currentAppVersion}, Required: $minVersion',
       );
       print('🔄 [Version Check] Update Required: $updateRequired');
 
@@ -173,7 +175,7 @@ class _AuthGateState extends State<AuthGate> {
     if (_updateRequired) {
       print('🔴 [AuthGate-Build] عرض شاشة التحديث الإجباري');
       return UpdateRequiredScreen(
-        currentVersion: ApiService.currentAppVersion,
+        currentVersion: AppConstants.currentAppVersion, // ✅ تم الإصلاح
         requiredVersion: _requiredVersion,
       );
     }

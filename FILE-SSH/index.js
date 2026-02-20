@@ -7,6 +7,7 @@ const WebSocket = require('ws');
 const url = require('url');
 const { db } = require('./firebaseConfig');
 const admin = require('firebase-admin'); // ✅ تم الإصلاح: إضافة تعريف admin
+const redis = require('redis'); // ✅ إضافة مكتبة Redis
 
 // استيراد المسارات
 const propertiesRoutes = require('./routes/properties');
@@ -36,10 +37,28 @@ function sendToUser(targetUserId, message) {
 }
 
 // ==========================================
-// 2. Middleware
+// 2. إعداد Redis (التخزين المؤقت)
+// ==========================================
+const redisClient = redis.createClient({
+    // تأكد من ضبط رابط Redis في ملف .env إذا كان مختلفاً
+    url: process.env.REDIS_URL || 'redis://127.0.0.1:6379'
+});
+
+redisClient.on('error', (err) => console.error('❌ [Redis] خطأ في الاتصال:', err));
+redisClient.on('connect', () => console.log('✅ [Redis] تم الاتصال بنجاح ⚡'));
+
+// الاتصال بخادم Redis
+(async () => {
+    await redisClient.connect();
+})();
+
+// ==========================================
+// 3. Middleware
 // ==========================================
 app.use((req, res, next) => {
   req.sendToUser = sendToUser;
+  // ✅ تمرير كائن Redis لجميع الطلبات لسهولة استخدامه في ملفات المسارات الأخرى
+  req.redisClient = redisClient; 
   next();
 });
 
@@ -49,7 +68,7 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
-// 3. ربط مسارات API
+// 4. ربط مسارات API
 // ==========================================
 app.use('/api/properties', propertiesRoutes);
 app.use('/api/auth', authRoutes);
@@ -60,11 +79,11 @@ app.use('/api/deals', dealRoutes);
 app.use('/api/reports', reportsRoutes);
 
 app.get('/', (req, res) => {
-  res.status(200).send('🚀 Aqar Proxy Server is Running with WebSocket!');
+  res.status(200).send('🚀 Aqar Proxy Server is Running with WebSocket & Redis!');
 });
 
 // ==========================================
-// 4. تشغيل السيرفر وإعداد WebSocket
+// 5. تشغيل السيرفر وإعداد WebSocket
 // ==========================================
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -76,23 +95,23 @@ wss.on('connection', async (ws, req) => {
 
   // التحقق من التوكن
   if (!token) {
-    console.log('❌ [WebSocket] No token provided');
+    console.log('❌ [WebSocket] لم يتم تقديم توكن');
     ws.close(4001, "Unauthorized");
     return;
   }
 
   try {
-    // ✅ الآن هذا السطر سيعمل بشكل صحيح لأن admin تم تعريفه
+    // ✅ التحقق من صحة التوكن عبر Firebase Admin
     await admin.auth().verifyIdToken(token);
   } catch (e) {
-    console.error("❌ [WebSocket] Token invalid:", e.message);
+    console.error("❌ [WebSocket] التوكن غير صالح:", e.message);
     ws.close(4001, "Unauthorized");
     return;
   }
 
   if (userId) {
     clients.set(userId, ws);
-    console.log(`✅ [WebSocket] User connected: ${userId}`);
+    console.log(`✅ [WebSocket] متصل: ${userId}`);
   }
 
   ws.on('message', async (message) => {
@@ -105,14 +124,14 @@ wss.on('connection', async (ws, req) => {
         }));
       }
     } catch (e) {
-      console.error('❌ [WebSocket] Message Error:', e);
+      console.error('❌ [WebSocket] خطأ في الرسالة:', e);
     }
   });
 
   ws.on('close', () => {
     if (userId) {
       clients.delete(userId);
-      console.log(`❌ [WebSocket] User disconnected: ${userId}`);
+      console.log(`❌ [WebSocket] غير متصل: ${userId}`);
     }
   });
 });

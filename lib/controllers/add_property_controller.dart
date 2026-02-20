@@ -19,14 +19,14 @@ class AddPropertyController extends ChangeNotifier {
   final ageController = TextEditingController();
 
   // 🎛️ المتغيرات (State)
-  String selectedType = 'بيت'; // القيمة الافتراضية
+  String selectedType = 'بيت';
   String selectedCategory = 'بيع';
   bool isFurnished = false;
   bool hasKitchen = false;
   bool hasAnnex = false;
   bool hasCarEntrance = false;
   bool hasElevator = false;
-  bool hasPool = false; // إضافة المسبح كخيار شائع
+  bool hasPool = false;
 
   bool isLoading = false;
   List<File> selectedImages = [];
@@ -68,7 +68,7 @@ class AddPropertyController extends ChangeNotifier {
       final List<XFile> pickedFiles = await _picker.pickMultiImage();
       if (pickedFiles.isNotEmpty) {
         selectedImages.addAll(pickedFiles.map((e) => File(e.path)));
-        notifyListeners(); // 🔔 تحديث الواجهة
+        notifyListeners();
       }
     } catch (e) {
       debugPrint('❌ [Controller] خطأ في اختيار الصور: $e');
@@ -87,7 +87,7 @@ class AddPropertyController extends ChangeNotifier {
         selectedVideo = File(pickedFile.path);
         videoPlayerController = VideoPlayerController.file(selectedVideo!)
           ..initialize().then((_) {
-            notifyListeners(); // 🔔 تحديث الواجهة عند جاهزية الفيديو
+            notifyListeners();
           });
       }
     } catch (e) {
@@ -111,7 +111,7 @@ class AddPropertyController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 🚀 رفع البيانات (العملية الرئيسية)
+  // 🚀 رفع البيانات (العملية الرئيسية مع الضغط)
   Future<bool> submitProperty(BuildContext context) async {
     // 1. التحقق من المدخلات
     if (!_validateInputs(context)) return false;
@@ -140,8 +140,7 @@ class AddPropertyController extends ChangeNotifier {
       if (hasElevator) featuresList.add('مصعد');
       if (hasPool) featuresList.add('مسبح');
 
-      // 4. الاستدعاء الصحيح لـ ApiService مع تمرير كل الحقول الجديدة
-      // ✅ هنا تم تمرير جميع المعاملات المطلوبة بالأسماء الصحيحة (Named Parameters)
+      // 4. الاستدعاء الصحيح لـ ApiService مع تمرير الصور (التي سيتم ضغطها هناك)
       final success = await ApiService.addProperty(
         title: titleController.text,
         price: priceController.text,
@@ -154,10 +153,10 @@ class AddPropertyController extends ChangeNotifier {
         bedrooms: bedroomsController.text,
         bathrooms: bathroomsController.text,
         area: areaController.text,
-        features: featuresList, // القائمة النصية
-        images: selectedImages, // قائمة الملفات
-        video: selectedVideo, // ملف الفيديو
-        // ✅ الحقول الإضافية
+        features: featuresList,
+        images:
+            selectedImages, // ✅ هذه الصور سيتم ضغطها قبل الرفع في ApiService -> CloudinaryConfig
+        video: selectedVideo,
         livingRooms: livingRoomsController.text,
         streetWidth: streetWidthController.text,
         age: ageController.text,
@@ -173,7 +172,7 @@ class AddPropertyController extends ChangeNotifier {
       notifyListeners();
 
       if (success) {
-        resetForm(); // مسح البيانات بعد النجاح
+        resetForm();
         return true;
       } else {
         throw Exception('فشل الحفظ في السيرفر');
@@ -223,7 +222,6 @@ class AddPropertyController extends ChangeNotifier {
     return true;
   }
 
-  // دوال مساعدة لتحديث القيم المنطقية (checkboxes/switches)
   void setType(String? val) {
     if (val != null) {
       selectedType = val;

@@ -14,9 +14,20 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Map<String, dynamic>> _allProperties = [];
   bool _isLoading = true;
   String? _errorMessage;
+
+  // ✅ 1. فصلنا القوائم كمتغيرات حالة (State) لكي لا يتم حسابها مع كل إعادة رسم (يحسن الأداء جداً)
+  List<Map<String, dynamic>> _featuredProperties = [];
+  List<Map<String, dynamic>> _saleProperties = [];
+  List<Map<String, dynamic>> _rentProperties = [];
+  List<Map<String, dynamic>> _houses = [];
+  List<Map<String, dynamic>> _villas = [];
+  List<Map<String, dynamic>> _lands = [];
+  List<Map<String, dynamic>> _buildings = [];
+  List<Map<String, dynamic>> _shops = [];
+  List<Map<String, dynamic>> _discounted = [];
+  List<Map<String, dynamic>> _topViewed = [];
 
   @override
   void initState() {
@@ -24,17 +35,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchData();
   }
 
+  // ✅ 2. دالة مخصصة لجلب البيانات (مبدأ المسؤولية الواحدة: جلب البيانات فقط)
   Future<void> _fetchData() async {
     try {
-      // لا نعرض مؤشر التحميل عند التحديث بالسحب للحفاظ على سلاسة التجربة
-      // setState(() => _isLoading = true);
-
-      final properties = await ApiService.fetchProperties();
+      final properties = await ApiService.fetchProperties(limit: 150);
       if (mounted) {
+        _categorizeProperties(
+          properties,
+        ); // تصنيف البيانات فور وصولها مرة واحدة
         setState(() {
-          _allProperties = properties;
           _isLoading = false;
-          _errorMessage = null; // تصفير الخطأ عند النجاح
+          _errorMessage = null;
         });
       }
     } catch (e) {
@@ -47,10 +58,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _filterBy(
-    bool Function(Map<String, dynamic>) test,
-  ) {
-    return _allProperties.where(test).take(10).toList();
+  // ✅ 3. دالة مخصصة لفرز البيانات وتصنيفها (تم إخراجها من دالة الـ build)
+  void _categorizeProperties(List<Map<String, dynamic>> allProperties) {
+    List<Map<String, dynamic>> filterBy(
+      bool Function(Map<String, dynamic>) test,
+    ) {
+      return allProperties.where(test).take(10).toList();
+    }
+
+    _featuredProperties = filterBy((p) => p['isFeatured'] == true);
+    _saleProperties = filterBy((p) => p['category'] == 'بيع');
+    _rentProperties = filterBy((p) => p['category'] == 'إيجار');
+    _houses = filterBy((p) => p['propertyType'] == 'بيت');
+    _villas = filterBy((p) => p['propertyType'] == 'فيلا');
+    _lands = filterBy((p) => p['propertyType'] == 'ارض');
+    _buildings = filterBy((p) => p['propertyType'] == 'بناية');
+    _shops = filterBy((p) => p['propertyType'] == 'دكان');
+    _discounted = filterBy((p) => _parseInt(p['discountPercent']) > 0);
+
+    final mostViewedList = List<Map<String, dynamic>>.from(allProperties);
+    mostViewedList.sort(
+      (a, b) => ((b['views'] ?? 0) as num).compareTo((a['views'] ?? 0) as num),
+    );
+    _topViewed = mostViewedList
+        .where((p) => (p['views'] ?? 0) > 0)
+        .take(10)
+        .toList();
   }
 
   int _parseInt(dynamic value) {
@@ -59,66 +92,61 @@ class _HomeScreenState extends State<HomeScreen> {
     return int.tryParse(value.toString()) ?? 0;
   }
 
+  // ✅ 4. دالة مساعدة لبناء الأقسام (تمنع تكرار الكود وتجعل الـ build قصيراً)
+  Widget _buildSection(
+    String title,
+    List<Map<String, dynamic>> properties,
+    String filterType,
+    dynamic filterValue,
+  ) {
+    if (properties.isEmpty) return const SizedBox.shrink();
+    return HorizontalPropertiesSection(
+      title: title,
+      properties: properties,
+      filterType: filterType,
+      filterValue: filterValue,
+    );
+  }
+
+  // ✅ 5. دالة مساعدة لبناء واجهة الخطأ
+  Widget _buildErrorState() {
+    return RefreshIndicator(
+      onRefresh: _fetchData,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                const SizedBox(height: 10),
+                Text(_errorMessage!),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() => _isLoading = true);
+                    _fetchData();
+                  },
+                  child: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ 6. دالة الـ build أصبحت مجرد "خريطة" للعرض بدلاً من مكان لحساب البيانات!
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_errorMessage != null) return _buildErrorState();
 
-    if (_errorMessage != null) {
-      // جعلنا واجهة الخطأ قابلة للسحب أيضاً لإعادة المحاولة
-      return RefreshIndicator(
-        onRefresh: _fetchData,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 50),
-                  const SizedBox(height: 10),
-                  Text(_errorMessage!),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() => _isLoading = true);
-                      _fetchData();
-                    },
-                    child: const Text('إعادة المحاولة'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final featuredProperties = _filterBy((p) => p['isFeatured'] == true);
-    final saleProperties = _filterBy((p) => p['category'] == 'بيع');
-    final rentProperties = _filterBy((p) => p['category'] == 'إيجار');
-    final houses = _filterBy((p) => p['propertyType'] == 'بيت');
-    final villas = _filterBy((p) => p['propertyType'] == 'فيلا');
-    final lands = _filterBy((p) => p['propertyType'] == 'ارض');
-    final buildings = _filterBy((p) => p['propertyType'] == 'بناية');
-    final shops = _filterBy((p) => p['propertyType'] == 'دكان');
-    final discounted = _filterBy((p) => _parseInt(p['discountPercent']) > 0);
-    // ✅ استخراج العقارات الأكثر مشاهدة
-    final mostViewedList = List<Map<String, dynamic>>.from(_allProperties);
-    mostViewedList.sort((a, b) {
-      final viewsA = (a['views'] ?? 0) as num;
-      final viewsB = (b['views'] ?? 0) as num;
-      return viewsB.compareTo(viewsA);
-    });
-    // نأخذ أعلى 10 عقارات مشاهدة (بشرط أن يكون لها مشاهدات أكبر من 0)
-    final topViewed = mostViewedList
-        .where((p) => (p['views'] ?? 0) > 0)
-        .take(10)
-        .toList();
     return Container(
       decoration: BoxDecoration(
         gradient: isDark
@@ -133,82 +161,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
       ),
-      // ✅ هنا تمت إضافة RefreshIndicator
       child: RefreshIndicator(
         onRefresh: _fetchData,
         child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(), // مهم جداً لعمل السحب
+          physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (featuredProperties.isNotEmpty)
-                _FeaturedPropertiesCarousel(properties: featuredProperties),
+              if (_featuredProperties.isNotEmpty)
+                _FeaturedPropertiesCarousel(properties: _featuredProperties),
 
-              HorizontalPropertiesSection(
-                title: 'عقارات للبيع',
-                properties: saleProperties,
-                filterType: 'category',
-                filterValue: 'بيع',
+              _buildSection('عقارات للبيع', _saleProperties, 'category', 'بيع'),
+              _buildSection(
+                'عقارات للإيجار',
+                _rentProperties,
+                'category',
+                'إيجار',
               ),
-
-              HorizontalPropertiesSection(
-                title: 'عقارات للإيجار',
-                properties: rentProperties,
-                filterType: 'category',
-                filterValue: 'إيجار',
-              ),
-
-              HorizontalPropertiesSection(
-                title: 'بيوت',
-                properties: houses,
-                filterType: 'propertyType',
-                filterValue: 'بيت',
-              ),
-
-              HorizontalPropertiesSection(
-                title: 'فلل',
-                properties: villas,
-                filterType: 'propertyType',
-                filterValue: 'فيلا',
-              ),
-
-              if (lands.isNotEmpty)
-                HorizontalPropertiesSection(
-                  title: 'أراضي',
-                  properties: lands,
-                  filterType: 'propertyType',
-                  filterValue: 'ارض',
-                ),
-
-              HorizontalPropertiesSection(
-                title: 'بنايات',
-                properties: buildings,
-                filterType: 'propertyType',
-                filterValue: 'بناية',
-              ),
-
-              if (shops.isNotEmpty)
-                HorizontalPropertiesSection(
-                  title: 'دكاكين',
-                  properties: shops,
-                  filterType: 'propertyType',
-                  filterValue: 'دكان',
-                ),
-
-              HorizontalPropertiesSection(
-                title: 'عقارات بخصم',
-                properties: discounted,
-                filterType: 'hasDiscount',
-                filterValue: true,
-              ),
-              // ✅ قسم العقارات الأكثر مشاهدة
-              if (topViewed.isNotEmpty)
-                HorizontalPropertiesSection(
-                  title: 'الأكثر مشاهدة 🔥',
-                  properties: topViewed,
-                  filterType: 'views', // لا تهم هنا لأننا نرسل القائمة جاهزة
-                  filterValue: 'high',
-                ),
+              _buildSection('الأكثر مشاهدة 🔥', _topViewed, 'views', 'high'),
+              _buildSection('بيوت', _houses, 'propertyType', 'بيت'),
+              _buildSection('فلل', _villas, 'propertyType', 'فيلا'),
+              _buildSection('أراضي', _lands, 'propertyType', 'ارض'),
+              _buildSection('بنايات', _buildings, 'propertyType', 'بناية'),
+              _buildSection('دكاكين', _shops, 'propertyType', 'دكان'),
+              _buildSection('عقارات بخصم', _discounted, 'hasDiscount', true),
 
               const SizedBox(height: 55),
             ],
@@ -219,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+// كلاس الكاروسيل يبقى كما هو لأنه يمثل Widget منفصلة ومرتبة أصلاً
 class _FeaturedPropertiesCarousel extends StatelessWidget {
   final List<Map<String, dynamic>> properties;
 

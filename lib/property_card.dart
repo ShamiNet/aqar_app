@@ -1,16 +1,17 @@
 import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:aqar_app/config/cloudinary_config.dart';
 
 class PropertyCard extends StatelessWidget {
   final Map<String, dynamic> property;
   final VoidCallback? onTap;
 
-  const PropertyCard({super.key, required this.property, this.onTap});
+  const PropertyCard({super.key, required this.property, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    // 1. استخراج الصورة
+    // 1. استخراج الصورة وتحسينها سحابياً
     String? firstImageUrl;
     try {
       final rawList = property['images'] ?? property['imageUrls'];
@@ -18,7 +19,15 @@ class PropertyCard extends StatelessWidget {
         firstImageUrl = rawList[0].toString();
       }
     } catch (e) {
-      debugPrint('Error parsing image in card: $e');
+      debugPrint('Error parsing image: $e');
+    }
+
+    String optimizedImageUrl = '';
+    if (firstImageUrl != null && firstImageUrl.isNotEmpty) {
+      optimizedImageUrl = CloudinaryConfig.getOptimizedImageUrl(
+        firstImageUrl,
+        width: 600,
+      );
     }
 
     // 2. استخراج البيانات
@@ -28,13 +37,12 @@ class PropertyCard extends StatelessWidget {
         ? priceRaw
         : num.tryParse(priceRaw.toString()) ?? 0;
     final currency = property['currency']?.toString() ?? '\$';
-    final address = property['address']?.toString() ?? '';
+    final address = property['address']?.toString() ?? 'لا يوجد عنوان';
     final rooms =
         property['bedrooms']?.toString() ??
         property['rooms']?.toString() ??
         '-';
     final area = property['area']?.toString() ?? '-';
-
     final category = property['category']?.toString() ?? 'بيع';
     final isRent = category.contains('إيجار');
 
@@ -52,155 +60,175 @@ class PropertyCard extends StatelessWidget {
             );
           },
       child: Container(
-        // ✅ تم تقليل الهامش العمودي قليلاً لمنع التداخل
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              spreadRadius: 2,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🖼️ صورة العقار
-            Stack(
-              children: [
-                SizedBox(
-                  height:
-                      105, // ✅ تم تقليل الارتفاع إلى 135 لحل مشكلة الـ Overflow نهائياً
-                  width: double.infinity,
-                  child: firstImageUrl != null && firstImageUrl!.isNotEmpty
+            // ==========================================
+            // 🖼️ القسم العلوي: الصورة
+            // أضفنا Expanded هنا فقط لكي تأخذ الصورة المساحة المتبقية بمرونة
+            // ==========================================
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // الصورة المحسنة
+                  optimizedImageUrl.isNotEmpty
                       ? CachedNetworkImage(
-                          imageUrl: firstImageUrl,
+                          imageUrl: optimizedImageUrl,
                           fit: BoxFit.cover,
-                          placeholder: (context, url) =>
-                              Container(color: Colors.grey[200]),
-                          errorWidget: (context, url, error) => Container(
-                            color: Colors.grey[300],
-                            child: const Icon(
-                              Icons.broken_image,
-                              size: 40,
-                              color: Colors.grey,
+                          placeholder: (context, url) => Container(
+                            color: Colors.grey.shade100,
+                            child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           ),
+                          errorWidget: (context, url, error) =>
+                              _buildPlaceholder(),
                         )
-                      : Container(
-                          color: Colors.grey[300],
-                          child: const Icon(
-                            Icons.house,
-                            size: 40,
-                            color: Colors.grey,
-                          ),
+                      : _buildPlaceholder(),
+
+                  // تدرج لوني خفيف أسفل الصورة
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 50,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            Colors.black.withOpacity(0.7),
+                            Colors.transparent,
+                          ],
                         ),
-                ),
-                // شارة النوع
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isRent ? Colors.purple : Colors.blue,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      category,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
                       ),
                     ),
                   ),
-                ),
-                // السعر
-                Positioned(
-                  bottom: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+
+                  // شارة النوع (بيع / إيجار)
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isRent
+                            ? Colors.purple.withOpacity(0.9)
+                            : Colors.blue.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        category,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
+                  ),
+
+                  // السعر
+                  Positioned(
+                    bottom: 10,
+                    left: 10,
                     child: Text(
                       '${price.toStringAsFixed(0)} $currency',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        shadows: [
+                          Shadow(
+                            blurRadius: 4,
+                            color: Colors.black45,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
 
-            // 📝 التفاصيل
+            // ==========================================
+            // 📝 القسم السفلي: التفاصيل
+            // قمنا بإزالة الـ Expanded من هنا لكي يأخذ هذا القسم مساحته الطبيعية التي يحتاجها فقط
+            // ==========================================
             Padding(
-              // ✅ تم تقليل الـ Padding الداخلي إلى 8 لتوفير مساحة إضافية
-              padding: const EdgeInsets.all(6.0),
+              padding: const EdgeInsets.all(12.0),
               child: Column(
+                mainAxisSize:
+                    MainAxisSize.min, // ✅ هذا السطر يمنع الـ Overflow نهائياً
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // العنوان
                   Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  if (address.isNotEmpty)
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on_outlined,
-                          size: 14,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            address,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
+
+                  const SizedBox(height: 6), // مسافة آمنة بدلاً من SpaceBetween
+                  // العنوان والموقع
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on_rounded,
+                        size: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          address,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 13,
                           ),
                         ),
-                      ],
-                    ),
-                  const SizedBox(
-                    height: 4,
-                  ), // ✅ تقليل المسافة لتفادي تجاوز المساحة
-                  const Divider(height: 1),
-                  const SizedBox(height: 4), // ✅ تقليل المسافة
-                  // أيقونات الخصائص
+                      ),
+                    ],
+                  ),
+
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6.0),
+                    child: Divider(height: 1, thickness: 0.5),
+                  ),
+
+                  // الخصائص السفلية (الغرف والمساحة)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildFeature(Icons.bed, '$rooms غرف'),
-                      _buildFeature(Icons.square_foot, '$area م²'),
+                      _buildFeatureIcon(Icons.king_bed_rounded, '$rooms غرف'),
+                      _buildFeatureIcon(Icons.square_foot_rounded, '$area م²'),
                     ],
                   ),
                 ],
@@ -212,20 +240,53 @@ class PropertyCard extends StatelessWidget {
     );
   }
 
-  Widget _buildFeature(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[800],
+  // ودجت فرعي لترتيب أيقونات الخصائص السفلية
+  Widget _buildFeatureIcon(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.blue.shade700),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade800,
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // صورة بديلة
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey.shade200,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.holiday_village_rounded,
+              size: 40,
+              color: Colors.grey.shade400,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'لا توجد صورة',
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
