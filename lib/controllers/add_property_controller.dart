@@ -19,7 +19,7 @@ class AddPropertyController extends ChangeNotifier {
   final ageController = TextEditingController();
 
   // 🎛️ المتغيرات (State)
-  String selectedType = 'شقة'; // القيمة الافتراضية
+  String selectedType = 'بيت'; // القيمة الافتراضية
   String selectedCategory = 'بيع';
   bool isFurnished = false;
   bool hasKitchen = false;
@@ -150,6 +150,7 @@ class AddPropertyController extends ChangeNotifier {
         latitude: latitude!,
         longitude: longitude!,
         category: selectedCategory,
+        propertyType: selectedType,
         bedrooms: bedroomsController.text,
         bathrooms: bathroomsController.text,
         area: areaController.text,
@@ -281,7 +282,7 @@ class AddPropertyController extends ChangeNotifier {
     streetWidthController.clear();
     ageController.clear();
 
-    selectedType = 'شقة';
+    selectedType = 'بيت';
     selectedCategory = 'بيع';
     isFurnished = false;
     hasKitchen = false;

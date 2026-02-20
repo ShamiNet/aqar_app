@@ -47,13 +47,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       price = '2500000';
       type = 'فيلا';
     } else if (category == 'إيجار') {
-      title = 'شقة عوائل للإيجار السنوي';
-      price = '45000';
-      type = 'شقة';
+      title = 'بيت عوائل للبيع';
+      price = '450000';
+      type = 'بيت';
     } else {
-      title = 'أرض تجارية للاستثمار طويل الأمد';
+      title = 'ارض تجارية للاستثمار طويل الأمد';
       price = '150000';
-      type = 'أرض';
+      type = 'ارض';
     }
 
     // تعبئة النصوص
@@ -212,7 +212,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        items: ['شقة', 'فيلا', 'أرض', 'عمارة', 'استراحة']
+                        items: ['بيت', 'فيلا', 'بناية', 'ارض', 'دكان']
                             .map(
                               (e) => DropdownMenuItem(value: e, child: Text(e)),
                             )

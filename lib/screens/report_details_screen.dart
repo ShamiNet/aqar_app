@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'property_details_screen.dart'; // تأكد من المسار
+import 'profile_screen.dart';
 
 class ReportDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> report;
 
-  const ReportDetailsScreen({Key? key, required this.report}) : super(key: key);
+  const ReportDetailsScreen({super.key, required this.report});
 
   @override
-  _ReportDetailsScreenState createState() => _ReportDetailsScreenState();
+  State<ReportDetailsScreen> createState() => _ReportDetailsScreenState();
 }
 
 class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
@@ -30,12 +31,22 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    debugPrint('📋 [ReportDetailsScreen] Report data:');
+    debugPrint('   - ID: ${widget.report['id']}');
+    debugPrint('   - Property ID: ${widget.report['propertyId']}');
+    debugPrint('   - Property Title: ${widget.report['propertyTitle']}');
+    debugPrint('   - Reason: ${widget.report['reason']}');
+    debugPrint('   - Description: ${widget.report['description']}');
+    debugPrint('   - Reporter Name: ${widget.report['reporterName']}');
+    debugPrint('   - Status: ${widget.report['status']}');
+    debugPrint('   - Timestamp: ${widget.report['timestamp']}');
     _fetchReportedProperty();
   }
 
   // جلب تفاصيل العقار المبلغ عنه
   Future<void> _fetchReportedProperty() async {
     final propertyId = widget.report['propertyId'];
+    debugPrint('🔍 [ReportDetailsScreen] Fetching property: $propertyId');
     if (propertyId != null) {
       final data = await ApiService.fetchPropertyDetails(propertyId);
       if (mounted) {
@@ -43,8 +54,10 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
           _propertyData = data;
           _isLoadingProperty = false;
         });
+        debugPrint('✅ [ReportDetailsScreen] Property data loaded');
       }
     } else {
+      debugPrint('❌ [ReportDetailsScreen] No propertyId found');
       setState(() => _isLoadingProperty = false);
     }
   }
@@ -116,6 +129,51 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تم حظر المستخدم')));
+    }
+  }
+
+  void _openReporterProfile() async {
+    final reporterId = widget.report['reporterId'];
+
+    if (reporterId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('معرف المستخدم غير متوفر')),
+        );
+      }
+      return;
+    }
+
+    debugPrint('🎬 Opening reporter profile: $reporterId');
+
+    try {
+      // جلب بيانات المستخدم
+      final userData = await ApiService.fetchUserProfile(reporterId);
+
+      if (userData == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('فشل في تحميل بيانات المستخدم')),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProfileScreen(otherUserData: userData),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Error opening profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('خطأ في فتح البروفايل')));
+      }
     }
   }
 
@@ -290,7 +348,9 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                           ),
                           _buildInfoRow(
                             'التفاصيل:',
-                            report['details'] ?? 'لا يوجد تفاصيل إضافية',
+                            report['description'] ??
+                                report['details'] ??
+                                'لا يوجد تفاصيل إضافية',
                           ),
                         ],
                       ),
@@ -321,6 +381,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.all(16),
+                      onTap: _openReporterProfile,
                       leading: CircleAvatar(
                         radius: 28,
                         backgroundColor: primaryColor.withOpacity(0.1),

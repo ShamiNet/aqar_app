@@ -1,0 +1,18 @@
+الفئة,الملف,النوع,الوصف,الأهمية
+Frontend,lib/main.dart,Entry Point,نقطة دخول التطبيق والإعدادات الأساسية,حرج
+Frontend,lib/screens/,UI Screens,جميع شاشات التطبيق (34 شاشة),حرج
+Frontend,lib/widgets/,Widgets,مكونات قابلة لإعادة الاستخدام,حرج
+Frontend,lib/providers/,Providers,State Management,حرج
+Frontend,lib/config/,Configuration,إعدادات ولوحة تحكم المواضيع,مهم
+Services,lib/services/api_service.dart,API Handler,التعامل مع جميع طلبات API والمصادقة,حرج
+Services,lib/services/websocket_service.dart,Realtime Communication,اتصالات Websocket للمحادثات الفورية,حرج
+Services,lib/services/notification_service.dart,Notifications,معالجة الإشعارات FCM,مهم
+Backend,functions/src/index.ts,Firebase Functions,Cloud Functions للعمليات المعقدة,مهم
+Backend,admin_routes_improved.js,Admin API,جميع endpoints لوحة الإدارة,حرج
+Backend,FILE-SSH/auth.js,Authentication,معالجة المصادقة والتوكن,حرج
+Bots,whatsapp-bot.js,WhatsApp Bot,بوت WhatsApp للتسويق التلقائي,مهم
+Bots,noteShami.py,Telegram Bot,بوت Telegram مع Firestore monitoring,مهم
+Bots,get_qr.py,QR Generator,استخراج QR Code,متوسط
+Configuration,pubspec.yaml,Dependencies,جميع اعتماديات Flutter,حرج
+Configuration,firebase.json,Firebase Config,إعدادات Firebase,مهم
+Configuration,config.env,Environment,متغيرات البيئة والمفاتيح,حرج

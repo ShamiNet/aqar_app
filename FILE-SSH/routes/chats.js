@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// 2. جلب محادثات المستخدم (GET /api/chats?userId=...)
+// 2. جلب محادثات المستخدم مع حساب الرسائل غير المقروءة (GET /api/chats?userId=...)
 router.get('/', async (req, res) => {
     try {
         const userId = req.query.userId;
@@ -78,9 +78,53 @@ router.get('/', async (req, res) => {
             .get();
 
         const chats = [];
-        snapshot.forEach(doc => chats.push({ id: doc.id, ...doc.data() }));
+        
+        // ✅ حساب عدد الرسائل غير المقروءة لكل محادثة
+        for (const doc of snapshot.docs) {
+            const chatData = doc.data();
+            const chatId = doc.id;
+            
+            // جلب آخر وقت قراءة للمستخدم
+            const lastReadTime = chatData[`lastRead_${userId}`] || null;
+            
+            // حساب عدد الرسائل غير المقروءة (طريقة مبسطة)
+            let unreadCount = 0;
+            try {
+                const allMessages = await db.collection('chats')
+                    .doc(chatId)
+                    .collection('messages')
+                    .orderBy('createdAt', 'desc')
+                    .get();
+                
+                // عد الرسائل غير المقروءة يدوياً
+                allMessages.forEach(msgDoc => {
+                    const msgData = msgDoc.data();
+                    const msgSenderId = msgData.senderId;
+                    const msgTime = msgData.createdAt;
+                    
+                    // إذا لم يكن المرسل هو المستخدم الحالي
+                    if (msgSenderId && msgSenderId !== userId) {
+                        // إذا لم يكن هناك وقت قراءة، أو الرسالة أحدث من آخر قراءة
+                        if (!lastReadTime || (msgTime && msgTime.toMillis() > lastReadTime.toMillis())) {
+                            unreadCount++;
+                        }
+                    }
+                });
+            } catch (countError) {
+                console.error(`Error counting unread for chat ${chatId}:`, countError);
+                unreadCount = 0;
+            }
+            
+            chats.push({ 
+                id: chatId, 
+                ...chatData,
+                unreadCount: unreadCount 
+            });
+        }
+        
         res.json(chats);
     } catch (error) {
+        console.error('Error fetching chats:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -125,6 +169,27 @@ router.get('/:id/messages', async (req, res) => {
         const messages = [];
         snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
         res.json(messages);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// 4.1. تحديد المحادثة كمقروءة (POST /api/chats/:id/mark-as-read)
+router.post('/:id/mark-as-read', async (req, res) => {
+    try {
+        const chatId = req.params.id;
+        const { userId } = req.body;
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'userId is required' });
+        }
+        
+        // تحديث وقت آخر قراءة للمستخدم
+        await db.collection('chats').doc(chatId).update({
+            [`lastRead_${userId}`]: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        res.status(200).json({ message: 'Marked as read' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

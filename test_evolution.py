@@ -142,7 +142,7 @@ def test_send_message():
     
     payload = {
         "number": TEST_NUMBER,
-        "text": f"🤖 رسالة اختبار من عقار بلص\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n✅ Evolution API يعمل بنجاح!"
+        "text": f"🤖 رسالة اختبار من عقار بلس\n⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n✅ Evolution API يعمل بنجاح!"
     }
     
     try:

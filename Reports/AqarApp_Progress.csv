@@ -1,0 +1,18 @@
+المرحلة,البند,التفصيل,الحالة
+الأساسية,المصادقة,Google Sign-in + Email/Password,✅ مكتملة
+الأساسية,إدارة العقارات,CRUD Operations + الأرشفة,✅ مكتملة
+الأساسية,نظام المحادثات,Websocket + Firebase,✅ مكتملة
+الأساسية,الخرائط,Google Maps + Directions API,✅ مكتملة
+الأساسية,لوحة الإدارة,User Management + Settings,✅ مكتملة
+المتقدمة,البوتات,WhatsApp + Telegram,✅ مكتملة (يحتاج تجربة)
+المتقدمة,نظام الإشعارات,FCM + Local Notifications,✅ مكتملة
+المتقدمة,التقييمات والآراء,Rating System,✅ مكتملة
+المتقدمة,المفضلة,Save/Unsave Properties,✅ مكتملة
+المتقدمة,Deep Links,Routing + Intent Filters,✅ مكتملة
+التحسينات,Caching,Redis + Local Cache,⏳ لم يتم بعد
+التحسينات,Offline Support,SQLite Sync,⏳ لم يتم بعد
+التحسينات,Advanced Search,Elasticsearch,⏳ لم يتم بعد
+التحسينات,Testing,Unit + Integration Tests,⏳ لم يتم بعد
+المستقبل,AI Recommendations,Machine Learning,🔄 في المراحل المبكرة
+المستقبل,Virtual Tour,360 Photography,🔄 في المراحل المبكرة
+المستقبل,Mortgage Calculator,حاسبة التمويل,🔄 في المراحل المبكرة

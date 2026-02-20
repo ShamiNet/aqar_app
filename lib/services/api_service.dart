@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
-import 'package:cloudinary_public/cloudinary_public.dart'; // تأكد من إضافة المكتبة
+import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'websocket_service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:aqar_app/config/cloudinary_config.dart'; // تأكد من المسار
+import 'package:aqar_app/config/cloudinary_config.dart';
 
 class ApiService {
   // ✅ العنوان الأساسي للسيرفر
@@ -101,11 +101,19 @@ class ApiService {
     switch (method) {
       case 'POST':
         return http
-            .post(uri, headers: headers, body: jsonEncode(body))
+            .post(
+              uri,
+              headers: headers,
+              body: body != null ? jsonEncode(body) : null,
+            )
             .timeout(defaultTimeout);
       case 'PUT':
         return http
-            .put(uri, headers: headers, body: jsonEncode(body))
+            .put(
+              uri,
+              headers: headers,
+              body: body != null ? jsonEncode(body) : null,
+            )
             .timeout(defaultTimeout);
       case 'DELETE':
         return http.delete(uri, headers: headers).timeout(defaultTimeout);
@@ -236,7 +244,7 @@ class ApiService {
   }
 
   // =========================================================================
-  // 🏠 العقارات (Properties) - ✅ تم التعديل لتوافق الكنترولر
+  // 🏠 العقارات (Properties)
   // =========================================================================
   static Future<bool> addProperty({
     required String title,
@@ -246,13 +254,13 @@ class ApiService {
     required double latitude,
     required double longitude,
     required String category,
+    required String propertyType,
     required String bedrooms,
     required String bathrooms,
     required String area,
     required List<String> features,
-    required List<File> images, // يقبل ملفات
-    File? video, // يقبل ملف
-    // الحقول الإضافية
+    required List<File> images,
+    File? video,
     String? livingRooms,
     String? streetWidth,
     String? age,
@@ -267,7 +275,6 @@ class ApiService {
       List<String> imageUrls = [];
       String? videoUrl;
 
-      // 1. رفع الوسائط إلى Cloudinary
       try {
         debugPrint('☁️ [API] Uploading images...');
         imageUrls = await CloudinaryConfig.uploadImages(images);
@@ -282,7 +289,6 @@ class ApiService {
         return false;
       }
 
-      // 2. إرسال البيانات للسيرفر
       final response = await _sendRequest(
         'POST',
         '/properties',
@@ -294,6 +300,7 @@ class ApiService {
           'latitude': latitude,
           'longitude': longitude,
           'category': category,
+          'propertyType': propertyType,
           'bedrooms': bedrooms,
           'bathrooms': bathrooms,
           'area': area,
@@ -380,6 +387,26 @@ class ApiService {
     await _sendRequest('DELETE', '/properties/$id');
   }
 
+  // ✅ تم تحسين هذه الدالة لتعيد حالة النجاح وتسجيل تفاصيل الاستجابة
+  static Future<bool> incrementPropertyViews(String propertyId) async {
+    try {
+      final response = await _sendRequest(
+        'POST',
+        '/properties/$propertyId/view',
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return true;
+      }
+      debugPrint(
+        'Failed incrementing views: ${response.statusCode} - ${response.body}',
+      );
+      return false;
+    } catch (e) {
+      debugPrint('Error incrementing views: $e');
+      return false;
+    }
+  }
+
   // =========================================================================
   // 👤 المستخدمين
   // =========================================================================
@@ -396,6 +423,21 @@ class ApiService {
       return data;
     }
     return null;
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchUserProperties(
+    String userId,
+  ) async {
+    if (userId.isEmpty) return [];
+    try {
+      final response = await _sendRequest('GET', '/properties?userId=$userId');
+      if (response.statusCode == 200) {
+        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+      }
+    } catch (e) {
+      debugPrint('❌ Error fetching user properties: $e');
+    }
+    return [];
   }
 
   static Future<void> updateUserProfile(
@@ -475,6 +517,23 @@ class ApiService {
       '/chats/$chatId/messages',
       body: {'text': text, 'recipientId': recipientId, 'senderId': senderId},
     );
+  }
+
+  // ✅ تحديد المحادثة كمقروءة
+  static Future<void> markChatAsRead(String chatId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    if (userId == null) return;
+
+    try {
+      await _sendRequest(
+        'POST',
+        '/chats/$chatId/mark-as-read',
+        body: {'userId': userId},
+      );
+    } catch (e) {
+      debugPrint('Error marking chat as read: $e');
+    }
   }
 
   static Future<String> startChat(String propertyId, String ownerId) async {
@@ -669,16 +728,45 @@ class ApiService {
   }
 
   static Future<void> submitReport(Map<String, dynamic> reportData) async {
-    await _sendRequest('POST', '/reports', body: reportData);
+    debugPrint('📤 [ApiService] Submitting report: $reportData');
+    try {
+      await _sendRequest('POST', '/reports', body: reportData);
+      debugPrint('✅ [ApiService] Report submitted successfully');
+    } catch (e) {
+      debugPrint('❌ [ApiService] Report submission failed: $e');
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchReport(String reportId) async {
+    debugPrint('📥 [ApiService] Fetching report: $reportId');
+    try {
+      final response = await _sendRequest('GET', '/reports/$reportId');
+      if (response.statusCode == 200) {
+        debugPrint('✅ [ApiService] Report fetched successfully');
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ [ApiService] Failed to fetch report: $e');
+      return null;
+    }
   }
 
   static Future<bool> updateReportStatus(String reportId, String status) async {
-    final response = await _sendRequest(
-      'PUT',
-      '/admin/reports/$reportId',
-      body: {'status': status},
-    );
-    return response.statusCode == 200;
+    debugPrint('🔄 [ApiService] Updating report status: $reportId -> $status');
+    try {
+      final response = await _sendRequest(
+        'PUT',
+        '/admin/reports/$reportId',
+        body: {'status': status},
+      );
+      debugPrint('✅ [ApiService] Report status updated');
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ [ApiService] Failed to update report status: $e');
+      return false;
+    }
   }
 
   static Future<bool> deleteReport(String reportId) async {

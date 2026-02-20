@@ -100,7 +100,15 @@ class _PublicProfileScreenState extends State<PublicProfileScreen> {
                       if (phone != null && phone.toString().isNotEmpty) ...[
                         const SizedBox(height: 16),
                         FilledButton.icon(
-                          onPressed: () => launchUrl(Uri.parse('tel:$phone')),
+                          onPressed: () async {
+                            final uri = Uri.parse('tel:$phone');
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(
+                                uri,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            }
+                          },
                           icon: const Icon(Icons.phone),
                           label: const Text('اتصال'),
                         ),

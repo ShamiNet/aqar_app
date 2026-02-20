@@ -36,7 +36,7 @@ async function sendToTelegram(propertyData, propertyId) {
         const deepLink = `${APP_DOMAIN}/property/${propertyId}`;
         
         const caption = `
-🌟 *فرصة عقارية جديدة في عقار بلص!* 🌟
+🌟 *فرصة عقارية جديدة في عقار بلس!* 🌟
 
 🏠 *${title}*
 
@@ -99,7 +99,7 @@ async function sendToWhatsApp(propertyData, propertyId) {
         const deepLink = `${APP_DOMAIN}/property/${propertyId}`;
         
         const message = `
-🌟 *فرصة عقارية جديدة في عقار بلص!* 🌟
+🌟 *فرصة عقارية جديدة في عقار بلس!* 🌟
 
 🏠 *${title}*
 
@@ -246,7 +246,7 @@ function startFirestoreListener() {
 // بدء التطبيق
 async function main() {
     console.log('═'.repeat(60));
-    console.log('🚀 بوت عقار بلص - نظام النشر التلقائي');
+    console.log('🚀 بوت عقار بلس - نظام النشر التلقائي');
     console.log('═'.repeat(60));
     
     // الاتصال بالواتساب

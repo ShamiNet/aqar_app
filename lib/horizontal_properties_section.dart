@@ -60,7 +60,7 @@ class HorizontalPropertiesSection extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 280,
+          height: 240,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -70,7 +70,7 @@ class HorizontalPropertiesSection extends StatelessWidget {
               final propertyId = propertyData['id'] ?? 'unknown';
 
               return SizedBox(
-                width: 280,
+                width: 240,
                 child: PropertyCard(
                   property: propertyData,
                   onTap: () {

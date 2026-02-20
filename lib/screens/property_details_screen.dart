@@ -1,13 +1,18 @@
 import 'package:aqar_app/screens/chats_screen.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
 import 'package:aqar_app/screens/edit_property_screen.dart';
+import 'package:aqar_app/screens/edit_history_screen.dart';
+import 'package:aqar_app/screens/report_property_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart'; // ✅ إضافة مكتبة الخرائط
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:aqar_app/providers/user_provider.dart';
+import 'package:aqar_app/widgets/property_image_gallery.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
   final String propertyId;
@@ -23,15 +28,26 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   bool _isLoading = true;
   String? _currentUserId;
   bool _isOwner = false;
+  bool _isAdmin = false;
+  bool _isFavorite = false; // ✅ حالة المفضلة
 
-  // ✅ متغيرات الخريطة
   Set<Marker> _markers = {};
   LatLng? _propertyLocation;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _isAdmin = Provider.of<UserProvider>(context, listen: false).isAdmin;
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    try {
+      await ApiService.incrementPropertyViews(widget.propertyId);
+    } catch (e) {
+      debugPrint('View increment failed: $e');
+    }
+    await _loadData();
   }
 
   Future<void> _loadData() async {
@@ -49,7 +65,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           if (data != null) {
             _isOwner = userId != null && data['ownerId'] == userId;
 
-            // ✅ تجهيز إحداثيات الخريطة
             if (data['latitude'] != null && data['longitude'] != null) {
               final lat = double.tryParse(data['latitude'].toString());
               final lng = double.tryParse(data['longitude'].toString());
@@ -70,20 +85,63 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           }
           _isLoading = false;
         });
+
+        // ✅ بعد تحميل البيانات، نتحقق مما إذا كان العقار في المفضلة
+        if (_currentUserId != null) {
+          _checkFavoriteStatus();
+        }
       }
     } catch (e) {
-      debugPrint('Error loading property details: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ✅ دالة التحقق من المفضلة
+  Future<void> _checkFavoriteStatus() async {
+    try {
+      final favs = await ApiService.fetchFavorites(_currentUserId!);
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isFavorite = favs.any(
+            (f) => (f['id'] ?? f['_id']).toString() == widget.propertyId,
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching favorites: $e');
+    }
+  }
+
+  // ✅ دالة الإضافة/الإزالة من المفضلة
+  Future<void> _toggleFavorite() async {
+    if (_currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يجب تسجيل الدخول لإضافة العقار للمفضلة')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isFavorite = !_isFavorite; // تغيير فوري للشكل لتجربة مستخدم سريعة
+    });
+
+    try {
+      await ApiService.toggleFavorite(widget.propertyId);
+    } catch (e) {
+      setState(() {
+        _isFavorite = !_isFavorite; // التراجع في حال حدوث خطأ
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('حدث خطأ أثناء تحديث المفضلة')),
+        );
       }
     }
   }
 
   Future<void> _makePhoneCall(String phoneNumber) async {
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(launchUri)) {
-      await launchUrl(launchUri);
-    }
+    if (await canLaunchUrl(launchUri)) await launchUrl(launchUri);
   }
 
   Future<void> _openWhatsApp(String phoneNumber) async {
@@ -94,7 +152,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
-  // ✅ دالة فتح الموقع في تطبيق الخرائط الخارجي
   Future<void> _openMapApp() async {
     if (_propertyLocation == null) return;
     final lat = _propertyLocation!.latitude;
@@ -106,7 +163,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     if (await canLaunchUrl(googleMapsUrl)) {
       await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
     } else {
-      // محاولة بديلة لفتح أي تطبيق خرائط
       final appleMapsUrl = Uri.parse('https://maps.apple.com/?q=$lat,$lng');
       if (await canLaunchUrl(appleMapsUrl)) {
         await launchUrl(appleMapsUrl, mode: LaunchMode.externalApplication);
@@ -121,15 +177,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       );
       return;
     }
-
     try {
       final chatId = await ApiService.startChat(
         widget.propertyId,
         _property!['ownerId'],
       );
-
       if (!mounted) return;
-
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ChatMessagesScreen(
@@ -140,27 +193,24 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         ),
       );
     } catch (e) {
-      debugPrint('Error starting chat: $e');
-      if (mounted) {
+      if (mounted)
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const ChatsScreen()));
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isLoading)
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (_property == null) {
+    if (_property == null)
       return Scaffold(
         appBar: AppBar(),
         body: const Center(child: Text('عذراً، لم يتم العثور على العقار')),
       );
-    }
+
+    final canEdit = _isOwner || _isAdmin;
 
     final images =
         (_property!['images'] ?? _property!['imageUrls'] ?? []) as List;
@@ -169,13 +219,14 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     final currency = _property!['currency'] ?? 'ر.س';
     final description = _property!['description'] ?? '';
     final address = _property!['address'] ?? '';
-    final date = _property!['createdAt'];
+    final views = _property!['views'] ?? 0;
+    final isEdited = _property!['isEdited'] ?? false;
+    final editHistory = _property!['editHistory'] ?? [];
 
     final bedrooms = _property!['bedrooms'] ?? _property!['rooms'] ?? 0;
     final bathrooms = _property!['bathrooms'] ?? 0;
     final area = _property!['area'] ?? 0;
     final floor = _property!['floor'];
-
     final livingRooms = _property!['livingRooms'];
     final streetWidth = _property!['streetWidth'];
     final age = _property!['age'];
@@ -193,13 +244,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       featuresList.add(_buildFeatureChip(Icons.elevator, 'مصعد'));
     if (_property!['hasPool'] == true)
       featuresList.add(_buildFeatureChip(Icons.pool, 'مسبح'));
-
     if (_property!['features'] is List) {
-      for (var f in _property!['features']) {
+      for (var f in _property!['features'])
         featuresList.add(
           _buildFeatureChip(Icons.check_circle_outline, f.toString()),
         );
-      }
     }
 
     final sellerInfo = _property!['sellerInfo'] ?? {};
@@ -213,42 +262,115 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             expandedHeight: 300,
             pinned: true,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.share),
-                onPressed: () {
-                  Share.share(
-                    'شاهد هذا العقار المميز: $title \n بسعر $price $currency',
-                  );
-                },
+              // ✅ زر المفضلة محسّن
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    _isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: _isFavorite ? Colors.red : Colors.grey[700],
+                    size: 28,
+                  ),
+                  onPressed: _toggleFavorite,
+                ),
               ),
-              if (_isOwner)
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (ctx) =>
-                            EditPropertyScreen(propertyId: widget.propertyId),
+              // ✅ زر المشاركة محسّن
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: Icon(Icons.share, color: Colors.blue[700], size: 28),
+                  onPressed: () => Share.share(
+                    'شاهد هذا العقار المميز: $title \n بسعر $price $currency',
+                  ),
+                ),
+              ),
+              // ✅ زر التعديل محسّن
+              if (canEdit)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                    );
-                    _loadData();
-                  },
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.edit, color: Colors.orange[700], size: 28),
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (ctx) =>
+                              EditPropertyScreen(propertyId: widget.propertyId),
+                        ),
+                      );
+                      _loadData();
+                    },
+                  ),
+                ),
+              // ✅ زر الإبلاغ عن مخالفة
+              if (!canEdit)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.flag, color: Colors.red[600], size: 28),
+                    tooltip: 'إبلاغ عن مخالفة',
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (ctx) => ReportPropertyScreen(
+                            propertyId: widget.propertyId,
+                            propertyTitle: title,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
             ],
+            // ...existing code...
             flexibleSpace: FlexibleSpaceBar(
               background: images.isNotEmpty
-                  ? PageView.builder(
-                      itemCount: images.length,
-                      itemBuilder: (ctx, index) {
-                        return CachedNetworkImage(
-                          imageUrl: images[index].toString(),
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) =>
-                              Container(color: Colors.grey[200]),
-                          errorWidget: (context, url, error) =>
-                              const Icon(Icons.error),
-                        );
-                      },
+                  ? PropertyImageGallery(
+                      imageUrls: (images).cast<String>().toList(),
+                      propertyTitle: title,
                     )
                   : Container(
                       color: Colors.grey[200],
@@ -305,19 +427,58 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (date != null) ...[
-                        const SizedBox(width: 16),
-                        const Icon(
-                          Icons.access_time,
-                          size: 16,
+                      const Icon(
+                        Icons.visibility_outlined,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$views مشاهدة',
+                        style: const TextStyle(
                           color: Colors.grey,
+                          fontSize: 12,
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'حديثاً',
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
+                      ),
+                      if (isEdited) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    EditHistoryScreen(editHistory: editHistory),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade100,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.history_edu,
+                                  size: 12,
+                                  color: Colors.orange.shade800,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  'مُعدّل',
+                                  style: TextStyle(
+                                    color: Colors.orange.shade800,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
@@ -376,7 +537,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 24),
 
                   if (featuresList.isNotEmpty) ...[
@@ -407,7 +567,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     ),
                   ),
 
-                  // ✅ 1. إعادة قسم الخريطة
                   if (_propertyLocation != null) ...[
                     const SizedBox(height: 24),
                     Row(
@@ -442,8 +601,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                           markers: _markers,
                           zoomControlsEnabled: false,
                           myLocationButtonEnabled: false,
-                          liteModeEnabled:
-                              false, // يمكن تفعيلها إذا أردت خريطة خفيفة
                           onTap: (_) => _openMapApp(),
                         ),
                       ),
@@ -451,7 +608,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ],
 
                   const SizedBox(height: 32),
-
+                  // كارت المعلن
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -465,67 +622,60 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
+                    child: Row(
                       children: [
-                        Row(
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: sellerInfo['profileImageUrl'] != null
+                              ? NetworkImage(sellerInfo['profileImageUrl'])
+                              : null,
+                          child: sellerInfo['profileImageUrl'] == null
+                              ? const Icon(Icons.person, color: Colors.grey)
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundColor: Colors.grey[200],
-                              backgroundImage:
-                                  sellerInfo['profileImageUrl'] != null
-                                  ? NetworkImage(sellerInfo['profileImageUrl'])
-                                  : null,
-                              child: sellerInfo['profileImageUrl'] == null
-                                  ? const Icon(Icons.person, color: Colors.grey)
-                                  : null,
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  sellerName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                const Text(
-                                  'المعلن',
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Spacer(),
-                            if (!_isOwner) ...[
-                              IconButton(
-                                onPressed: () => _startChat(),
-                                icon: const Icon(Icons.chat_bubble_outline),
-                                color: Theme.of(context).primaryColor,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Theme.of(
-                                    context,
-                                  ).primaryColor.withOpacity(0.1),
-                                ),
+                            Text(
+                              sellerName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
                               ),
-                              if (sellerPhone != null)
-                                IconButton(
-                                  onPressed: () => _makePhoneCall(sellerPhone),
-                                  icon: const Icon(Icons.phone),
-                                  color: Colors.green,
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.green.withOpacity(
-                                      0.1,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                            ),
+                            const Text(
+                              'المعلن',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
                           ],
                         ),
+                        const Spacer(),
+                        if (!_isOwner) ...[
+                          IconButton(
+                            onPressed: () => _startChat(),
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            color: Theme.of(context).primaryColor,
+                            style: IconButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).primaryColor.withOpacity(0.1),
+                            ),
+                          ),
+                          if (sellerPhone != null)
+                            IconButton(
+                              onPressed: () => _makePhoneCall(sellerPhone),
+                              icon: const Icon(Icons.phone),
+                              color: Colors.green,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.green.withOpacity(0.1),
+                              ),
+                            ),
+                        ],
                       ],
                     ),
                   ),
@@ -536,7 +686,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           ),
         ],
       ),
-      bottomSheet: !_isOwner
+      bottomSheet: (!_isOwner)
           ? Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -561,7 +711,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF25D366),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
                   ),
@@ -571,9 +720,6 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       onPressed: () => _startChat(),
                       icon: const Icon(Icons.send),
                       label: const Text('مراسلة الآن'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
                     ),
                   ),
                 ],

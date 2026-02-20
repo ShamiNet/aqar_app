@@ -63,7 +63,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'نحن في "عقار بلص" نأخذ خصوصيتك على محمل الجد. توضح هذه السياسة كيف نجمع ونستخدم ونحمي معلوماتك الشخصية عند استخدامك لتطبيقنا.',
+                    'نحن في "عقار بلس" نأخذ خصوصيتك على محمل الجد. توضح هذه السياسة كيف نجمع ونستخدم ونحمي معلوماتك الشخصية عند استخدامك لتطبيقنا.',
                     style: TextStyle(fontSize: 15, height: 1.6),
                   ),
                   const SizedBox(height: 24),
@@ -137,7 +137,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   const SizedBox(height: 40),
                   Center(
                     child: Text(
-                      'جميع الحقوق محفوظة © عقار بلص 2025',
+                      'جميع الحقوق محفوظة © عقار بلس 2025',
                       style: TextStyle(color: Colors.grey[400], fontSize: 12),
                     ),
                   ),

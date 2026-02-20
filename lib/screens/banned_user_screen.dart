@@ -27,8 +27,9 @@ class BannedUserScreen extends StatelessWidget {
         'mailto:$adminEmail?subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}';
 
     try {
-      if (await canLaunchUrl(Uri.parse(mailtoLink))) {
-        await launchUrl(Uri.parse(mailtoLink));
+      final mailUri = Uri.parse(mailtoLink);
+      if (await canLaunchUrl(mailUri)) {
+        await launchUrl(mailUri, mode: LaunchMode.externalApplication);
       } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -58,13 +59,14 @@ class BannedUserScreen extends StatelessWidget {
     Future<void> _contactAdminWhatsApp(BuildContext context) async {
       final adminPhone = '963951727833'; // استبدل برقم الإدارة الفعلي
       final message = Uri.encodeComponent(
-        'السلام عليكم، أود الاستفسار حول حظر حسابي في تطبيق عقار بلص. البريد: $email',
+        'السلام عليكم، أود الاستفسار حول حظر حسابي في تطبيق عقار بلس. البريد: $email',
       );
       final whatsappUrl = 'https://wa.me/$adminPhone?text=$message';
 
       try {
-        if (await canLaunchUrl(Uri.parse(whatsappUrl))) {
-          await launchUrl(Uri.parse(whatsappUrl));
+        final waUri = Uri.parse(whatsappUrl);
+        if (await canLaunchUrl(waUri)) {
+          await launchUrl(waUri, mode: LaunchMode.externalApplication);
         } else {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

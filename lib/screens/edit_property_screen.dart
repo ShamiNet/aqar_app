@@ -74,6 +74,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
       }
 
       // 3. تجهيز البيانات للتحديث - ✅ تم إضافة الحقول الجديدة
+      // 3. تجهيز البيانات للتحديث
       final updateData = {
         'title': data['title'],
         'price': data['price'],
@@ -82,20 +83,22 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         'propertyType': data['propertyType'],
         'subscriptionPeriod': data['subscriptionPeriod'],
         'currency': data['currency'],
-        //'isFeatured': data['isFeatured'], // عادة لا يتم تعديله من هنا
+
+        // ✅ تم تفعيل هذا السطر لإرسال حالة العقار المميز للسيرفر
+        'isFeatured': data['isFeatured'],
+
         'discountPercent': data['discountPercent'],
         'area': data['area'],
-        'rooms': data['rooms'], // قد يكون bedrooms
-        'bedrooms': data['rooms'], // للتأكيد
+        'rooms': data['rooms'],
+        'bedrooms': data['rooms'],
         'bathrooms': data['bathrooms'],
         'floor': data['floor'],
-        'images': finalImageUrls, // ✅ تعديل الاسم ليطابق السيرفر
+        'images': finalImageUrls,
         'videoUrl': videoUrl,
         'address': data['address'],
         'latitude': data['latitude'],
         'longitude': data['longitude'],
-        'features': data['features'], // المميزات (مكيف، واي فاي..)
-        // ✅ الحقول الجديدة
+        'features': data['features'],
         'livingRooms': data['livingRooms'],
         'streetWidth': data['streetWidth'],
         'age': data['age'],

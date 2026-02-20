@@ -89,7 +89,7 @@ curl -X POST http://localhost:8080/message/sendText/aqar_bot \
   -H "Content-Type: application/json" \
   -d '{
     "number": "966501234567@s.whatsapp.net",
-    "text": "مرحباً من عقار بلص!"
+    "text": "مرحباً من عقار بلس!"
   }'
 ```
 

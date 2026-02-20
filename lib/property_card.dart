@@ -52,10 +52,11 @@ class PropertyCard extends StatelessWidget {
             );
           },
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        // ✅ تم تقليل الهامش العمودي قليلاً لمنع التداخل
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12), // تقليل التدaduer
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.08),
@@ -74,7 +75,7 @@ class PropertyCard extends StatelessWidget {
               children: [
                 SizedBox(
                   height:
-                      150, // ✅ تم تقليل الارتفاع من 180 إلى 150 لمنع الـ Overflow
+                      105, // ✅ تم تقليل الارتفاع إلى 135 لحل مشكلة الـ Overflow نهائياً
                   width: double.infinity,
                   child: firstImageUrl != null && firstImageUrl!.isNotEmpty
                       ? CachedNetworkImage(
@@ -151,7 +152,8 @@ class PropertyCard extends StatelessWidget {
 
             // 📝 التفاصيل
             Padding(
-              padding: const EdgeInsets.all(10.0), // تقليل الحشو الداخلي
+              // ✅ تم تقليل الـ Padding الداخلي إلى 8 لتوفير مساحة إضافية
+              padding: const EdgeInsets.all(6.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -160,7 +162,7 @@ class PropertyCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 15, // تصغير الخط قليلاً
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
@@ -188,9 +190,11 @@ class PropertyCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                  const SizedBox(height: 8),
+                  const SizedBox(
+                    height: 4,
+                  ), // ✅ تقليل المسافة لتفادي تجاوز المساحة
                   const Divider(height: 1),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4), // ✅ تقليل المسافة
                   // أيقونات الخصائص
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -47,7 +47,7 @@ def send_to_telegram(property_data, property_id):
         
         # --- صياغة الرسالة الاحترافية ---
         caption = f"""
-🌟 <b>فرصة عقارية جديدة في عقار بلص!</b> 🌟
+🌟 <b>فرصة عقارية جديدة في عقار بلس!</b> 🌟
 
 🏠 <b>{title}</b>
 
@@ -124,7 +124,7 @@ def send_to_whatsapp(property_data, property_id):
         
         # --- صياغة الرسالة ---
         message = f"""
-🌟 *فرصة عقارية جديدة في عقار بلص!* 🌟
+🌟 *فرصة عقارية جديدة في عقار بلس!* 🌟
 
 🏠 *{title}*
 

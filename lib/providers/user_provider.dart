@@ -37,20 +37,32 @@ class UserProvider with ChangeNotifier {
       // محاولة الجلب من الذاكرة المحلية أولاً (للسرعة)
       final prefs = await SharedPreferences.getInstance();
       final localData = prefs.getString('user_data');
+      final userId = prefs.getString('user_id');
 
       if (localData != null) {
         _userData = jsonDecode(localData);
+        _isLoading = false;
         notifyListeners(); // تحديث فوري للواجهة
+        debugPrint(
+          '✅ [UserProvider] Local data loaded for user: ${_userData?['username']}',
+        );
       }
 
       // ثم التحديث من السيرفر (للدقة)
-      final userId = prefs.getString('user_id');
       if (userId != null) {
-        final remoteData = await ApiService.fetchUserProfile(userId);
-        if (remoteData != null) {
-          _userData = remoteData;
-          // حفظ النسخة الجديدة محلياً
-          await prefs.setString('user_data', jsonEncode(remoteData));
+        try {
+          final remoteData = await ApiService.fetchUserProfile(userId);
+          if (remoteData != null) {
+            _userData = remoteData;
+            // حفظ النسخة الجديدة محلياً
+            await prefs.setString('user_data', jsonEncode(remoteData));
+            debugPrint(
+              '🌐 [UserProvider] Server data loaded for user: ${_userData?['username']}',
+            );
+          }
+        } catch (e) {
+          debugPrint('⚠️ [UserProvider] Failed to fetch from server: $e');
+          // الاحتفاظ بالبيانات المحلية إذا فشل السيرفر
         }
       }
     } catch (e) {
@@ -58,6 +70,29 @@ class UserProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // ✅ تحديث بيانات المستخدم فوراً (للاستخدام بعد تسجيل الدخول)
+  Future<void> refreshUserData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+
+      if (userId != null) {
+        debugPrint('🔄 [UserProvider] Refreshing user data...');
+        final remoteData = await ApiService.fetchUserProfile(userId);
+        if (remoteData != null) {
+          _userData = remoteData;
+          await prefs.setString('user_data', jsonEncode(remoteData));
+          debugPrint(
+            '✅ [UserProvider] User data refreshed: ${_userData?['username']}',
+          );
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [UserProvider] Error refreshing user data: $e');
     }
   }
 

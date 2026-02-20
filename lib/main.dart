@@ -9,6 +9,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'firebase_options.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flex_color_scheme/flex_color_scheme.dart';
@@ -18,9 +19,9 @@ import 'package:form_builder_validators/localization/l10n.dart';
 import 'package:app_links/app_links.dart';
 import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:aqar_app/screens/onboarding_screen.dart';
-import 'package:flex_color_scheme/flex_color_scheme.dart'; // ✅ هذه المكتبة رائعة
 import 'package:provider/provider.dart'; // ✅ إضافة
 import 'package:aqar_app/providers/user_provider.dart'; // ✅ إضافة
+import 'package:aqar_app/providers/chat_provider.dart'; // ✅ إضافة الـ Provider الجديد للمحادثات
 import 'package:aqar_app/screens/chat_messages_screen.dart';
 
 @pragma('vm:entry-point')
@@ -34,7 +35,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final WidgetsBinding binding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
+
   await ThemeController.initialize();
 
   debugPrint("🔵 [System] Initializing Firebase...");
@@ -48,14 +51,27 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final bool seenOnboarding = prefs.getBool('seen_onboarding') ?? false;
 
+  // ✅ التحقق من حالة تسجيل الدخول
+  final bool isLoggedIn = await ApiService.isLoggedIn();
+
+  debugPrint(
+    '🔐 [Main] seen_onboarding: $seenOnboarding, isLoggedIn: $isLoggedIn',
+  );
+
+  // إخفاء الـ splash screen بعد اكتمال التهيئة
+  FlutterNativeSplash.remove();
+
   runApp(
     // ✅ تغليف التطبيق بـ MultiProvider
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => UserProvider()..loadUserData()),
+        ChangeNotifierProvider(
+          create: (_) => ChatProvider(),
+        ), // ✅ تسجيل الـ Provider الجديد
       ],
       child: AqarApp(
-        startScreen: seenOnboarding
+        startScreen: (seenOnboarding || isLoggedIn)
             ? const AuthGate()
             : const OnboardingScreen(),
       ),
@@ -78,7 +94,7 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 👇 هذا الجزء هو الأهم لحل مشكلة لوحة التحكم
+
     ApiService.onTokenExpired = () {
       if (mounted) {
         ApiService.logout().then((_) {
@@ -95,20 +111,18 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
         });
       }
     };
-    // 👆 نهاية الجزء المضاف
+
     _initDeepLinks();
     _setupFirebaseMessaging();
-    _updateTokenOnStart(); // ✅ تحديث التوكن عبر السيرفر
-    _setUserOnline(true); // ✅ المستخدم الآن متصل
-    _checkUserBanStatus(); // ✅ فحص فوري عند فتح التطبيق مرة واحدة فقط
-    // ❌ تم إزالة _startBanCheckTimer للحفاظ على الأداء
-    // ✅ الفحص الدوري للصيانة أُضيف إلى AuthGate بدلاً من هنا
+    _updateTokenOnStart();
+    _setUserOnline(true);
+    _checkUserBanStatus();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _setUserOnline(false); // ✅ المستخدم غادر التطبيق
+    _setUserOnline(false);
     super.dispose();
   }
 
@@ -116,14 +130,13 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      _setUserOnline(true); // ✅ رجع للتطبيق
-      // هذا سيجلب أحدث البيانات من السيرفر دون الحاجة لتسجيل الخروج
+      _setUserOnline(true);
       if (mounted) {
         Provider.of<UserProvider>(context, listen: false).loadUserData();
       }
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      _setUserOnline(false); // ✅ غادر التطبيق مؤقتاً
+      _setUserOnline(false);
     }
   }
 
@@ -158,7 +171,6 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
       final userId = prefs.getString('user_id');
       if (userId == null) return;
       if (userId != null) {
-        // ✅ بدء اتصال WebSocket
         WebSocketService.connect(userId);
       }
 
@@ -295,8 +307,9 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
     String? propertyId;
     if (uri.pathSegments.contains('properties')) {
       final index = uri.pathSegments.indexOf('properties');
-      if (index + 1 < uri.pathSegments.length)
+      if (index + 1 < uri.pathSegments.length) {
         propertyId = uri.pathSegments[index + 1];
+      }
     } else if (uri.pathSegments.isNotEmpty) {
       propertyId = uri.pathSegments.last;
     }
@@ -323,7 +336,7 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
             return MaterialApp(
               navigatorKey: navigatorKey,
               debugShowCheckedModeBanner: false,
-              title: 'عقار بلص',
+              title: 'عقار بلس',
               themeMode: mode,
               locale: const Locale('ar'),
               supportedLocales: const [Locale('ar'), Locale('en')],

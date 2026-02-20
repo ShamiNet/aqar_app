@@ -1,17 +1,19 @@
-import 'package:aqar_app/screens/property_details_screen.dart';
-import 'package:aqar_app/services/api_service.dart'; // ✅ المصدر الوحيد للبيانات
+﻿import 'package:aqar_app/screens/property_details_screen.dart';
+import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/screens/map_legend_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:ui' as ui;
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
-import 'package:aqar_app/firebase_options.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert' as convert;
 
 // مفتاح API (اختياري)
 const kDirectionsKey = String.fromEnvironment(
   'GOOGLE_MAPS_DIRECTIONS_API_KEY',
-  defaultValue: 'AIzaSyAwiq4OSjCBXuMqms4e_JRJYjKMQOhrukQ',
+  defaultValue: 'AIzaSyAwLH04MSJUTEHldU740RghRCJKUnpInyI',
+  // defaultValue: 'AIzaSyAwiq4OSjCBXuMqms4e_JRJYjKMQOhrukQ',
 );
 
 class PropertiesMapScreen extends StatefulWidget {
@@ -28,7 +30,6 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   GoogleMapController? _mapController;
   MarkerId? _selectedMarkerId;
 
-  // ✅ التغيير: نستخدم قائمة Maps فقط
   List<Map<String, dynamic>> _properties = [];
   final Set<Marker> _markers = {};
   final Map<String, BitmapDescriptor> _markerIcons = {};
@@ -38,7 +39,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   void initState() {
     super.initState();
     _determinePosition();
-    _fetchProperties(); // ✅ جلب البيانات من السيرفر مرة واحدة
+    _fetchProperties();
   }
 
   Future<void> _fetchProperties() async {
@@ -130,55 +131,193 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
       return;
     }
 
-    final polylinePoints = PolylinePoints();
     List<LatLng> polyPoints = [];
 
     try {
-      final apiKey = kDirectionsKey.isNotEmpty
-          ? kDirectionsKey
-          : DefaultFirebaseOptions.currentPlatform.apiKey;
+      // المحاولة الأولى: استخدام Google Directions API وفك التشفير
+      polyPoints = await _getRouteUsingDirectionsAPI(propertyPosition);
+
+      if (polyPoints.isEmpty) {
+        debugPrint(
+          '⚠️ [Route] Directions API returned empty, trying PolylinePoints...',
+        );
+        polyPoints = await _getRouteUsingPolylinePoints(propertyPosition);
+      }
+    } catch (e) {
+      debugPrint('❌ [Route] Both methods failed: $e');
+      _showRouteError('خطأ في رسم المسار');
+    }
+
+    if (mounted) {
+      setState(() {
+        _polylines.clear();
+
+        // إذا كان لدينا نقاط، استخدمها، وإلا رسم خط مستقيم كحل بديل أخير
+        final finalPoints = polyPoints.isNotEmpty
+            ? polyPoints
+            : [
+                LatLng(
+                  _currentUserPosition!.latitude,
+                  _currentUserPosition!.longitude,
+                ),
+                propertyPosition,
+              ];
+
+        _polylines.add(
+          Polyline(
+            polylineId: const PolylineId('route'),
+            points: finalPoints,
+            color: Theme.of(
+              context,
+            ).primaryColor, // استخدم لون التطبيق الأساسي لجمالية أفضل
+            width: 5,
+            geodesic: true,
+            jointType: JointType.round, // زوايا دائرية للمسار ليظهر بشكل أنعم
+          ),
+        );
+
+        debugPrint('✅ [Route] Rendering ${finalPoints.length} points on map');
+      });
+    }
+  }
+
+  // ✅ التعديل الجذري هنا للحصول على مسار دقيق يحاكي انحناءات الشارع
+  // ✅ دالة التتبع الأولى باستخدام Directions API
+  Future<List<LatLng>> _getRouteUsingDirectionsAPI(LatLng destination) async {
+    try {
+      final String url =
+          'https://maps.googleapis.com/maps/api/directions/json'
+          '?origin=${_currentUserPosition!.latitude},${_currentUserPosition!.longitude}'
+          '&destination=${destination.latitude},${destination.longitude}'
+          '&key=$kDirectionsKey'
+          '&mode=driving';
+
+      debugPrint(
+        '\n================= 🚀 START DIRECTIONS API DEBUG 🚀 =================',
+      );
+      debugPrint(
+        '🌐 [DirectionsAPI] URL: $url',
+      ); // سيطبع الرابط مع المفتاح للتحقق منه
+
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              debugPrint('⏱️ [DirectionsAPI] انتهى وقت الطلب (Timeout)!');
+              throw Exception('Directions API timeout');
+            },
+          );
+
+      debugPrint('📡 [DirectionsAPI] HTTP Status Code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = convert.jsonDecode(response.body);
+        debugPrint('📝 [DirectionsAPI] JSON Status: ${json['status']}');
+
+        if (json['status'] == 'OK' && json['routes'].isNotEmpty) {
+          final route = json['routes'][0];
+          final encodedPolyline = route['overview_polyline']['points'];
+          PolylinePoints polylinePoints = PolylinePoints();
+          List<PointLatLng> decodedPoints = polylinePoints.decodePolyline(
+            encodedPolyline,
+          );
+          List<LatLng> polyPoints = decodedPoints
+              .map((p) => LatLng(p.latitude, p.longitude))
+              .toList();
+
+          debugPrint(
+            '✅ [DirectionsAPI] تم بنجاح! عدد النقاط: ${polyPoints.length}',
+          );
+          debugPrint(
+            '================= 🏁 END DIRECTIONS API DEBUG 🏁 =================\n',
+          );
+          return polyPoints;
+        } else {
+          debugPrint(
+            '⚠️ [DirectionsAPI] لم يتم العثور على مسار، الحالة: ${json['status']}',
+          );
+          debugPrint(
+            '🛑 [DirectionsAPI] رسالة الخطأ من جوجل: ${json['error_message']}',
+          );
+        }
+      } else {
+        debugPrint(
+          '❌ [DirectionsAPI] فشل الاتصال! كود الخطأ HTTP: ${response.statusCode}',
+        );
+        debugPrint('📦 [DirectionsAPI] محتوى الرد: ${response.body}');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('💥 [DirectionsAPI] حدث استثناء (Exception): $e');
+      debugPrint('💥 [DirectionsAPI] مسار الخطأ: $stackTrace');
+    }
+    debugPrint(
+      '================= 🏁 END DIRECTIONS API DEBUG 🏁 =================\n',
+    );
+    return [];
+  }
+
+  // ✅ دالة التتبع الثانية باستخدام PolylinePoints
+  Future<List<LatLng>> _getRouteUsingPolylinePoints(LatLng destination) async {
+    try {
+      debugPrint(
+        '\n================= 🚀 START POLYLINE POINTS DEBUG 🚀 =================',
+      );
+      final polylinePoints = PolylinePoints();
+
       final result = await polylinePoints.getRouteBetweenCoordinates(
         request: PolylineRequest(
           origin: PointLatLng(
             _currentUserPosition!.latitude,
             _currentUserPosition!.longitude,
           ),
-          destination: PointLatLng(
-            propertyPosition.latitude,
-            propertyPosition.longitude,
-          ),
+          destination: PointLatLng(destination.latitude, destination.longitude),
           mode: TravelMode.driving,
         ),
-        googleApiKey: apiKey,
+        googleApiKey: kDirectionsKey,
       );
-      polyPoints = result.points
-          .map((p) => LatLng(p.latitude, p.longitude))
-          .toList();
-    } catch (e) {
-      debugPrint('Error drawing route: $e');
-    }
 
-    if (mounted) {
-      setState(() {
-        _polylines.clear();
-        _polylines.add(
-          Polyline(
-            polylineId: const PolylineId('route'),
-            points: polyPoints.isNotEmpty
-                ? polyPoints
-                : [
-                    LatLng(
-                      _currentUserPosition!.latitude,
-                      _currentUserPosition!.longitude,
-                    ),
-                    propertyPosition,
-                  ],
-            color: Colors.blue,
-            width: 5,
-          ),
+      debugPrint('📡 [PolylinePoints] حالة الرد: ${result.status}');
+      if (result.errorMessage != null && result.errorMessage!.isNotEmpty) {
+        debugPrint(
+          '🛑 [PolylinePoints] رسالة الخطأ من جوجل: ${result.errorMessage}',
         );
-      });
+      }
+
+      if (result.points.isNotEmpty) {
+        debugPrint(
+          '✅ [PolylinePoints] تم بنجاح! عدد النقاط: ${result.points.length}',
+        );
+        debugPrint(
+          '================= 🏁 END POLYLINE POINTS DEBUG 🏁 =================\n',
+        );
+        return result.points
+            .map((p) => LatLng(p.latitude, p.longitude))
+            .toList();
+      } else {
+        debugPrint(
+          '⚠️ [PolylinePoints] القائمة فارغة، لم يتم توليد أي نقاط للمسار.',
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('💥 [PolylinePoints] حدث استثناء (Exception): $e');
+      debugPrint('💥 [PolylinePoints] مسار الخطأ: $stackTrace');
     }
+    debugPrint(
+      '================= 🏁 END POLYLINE POINTS DEBUG 🏁 =================\n',
+    );
+    return [];
+  }
+
+  void _showRouteError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   void _onMarkerTapped(MarkerId markerId, LatLng propertyPosition) {
@@ -193,7 +332,6 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
       distanceText = '${(distanceInMeters / 1000).toStringAsFixed(2)} كم';
     }
 
-    // ✅ البحث في القائمة الجديدة (Maps)
     final propertyData = _properties.firstWhere(
       (p) => (p['id'] ?? '') == markerId.value,
       orElse: () => {},
@@ -318,14 +456,12 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
     );
   }
 
-  // ✅ بناء العلامات بناءً على البيانات القادمة من السيرفر
   Future<void> _buildMarkersWithCustomIcons() async {
     _markers.clear();
     for (var data in _properties) {
       final location = data['location'];
 
       double? lat, lng;
-      // السيرفر يرسل الموقع كـ Map {_latitude, _longitude}
       if (location is Map) {
         lat = (location['_latitude'] ?? location['latitude'])?.toDouble();
         lng = (location['_longitude'] ?? location['longitude'])?.toDouble();
@@ -334,7 +470,23 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
       if (lat != null && lng != null) {
         final propertyPosition = LatLng(lat, lng);
         final markerId = MarkerId(data['id']);
-        final type = data['propertyType'];
+
+        String? type = data['propertyType'];
+        if (type == null || type.isEmpty) {
+          final title = (data['title'] ?? '').toString().toLowerCase();
+          if (title.contains('فيلا')) {
+            type = 'فيلا';
+          } else if (title.contains('بناية') || title.contains('عمارة')) {
+            type = 'بناية';
+          } else if (title.contains('ارض') || title.contains('أرض')) {
+            type = 'ارض';
+          } else if (title.contains('دكان') || title.contains('محل')) {
+            type = 'دكان';
+          } else {
+            type = 'بيت';
+          }
+        }
+
         final category = data['category'];
 
         final iconKey = '${type}_$category';
@@ -360,7 +512,6 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   }
 }
 
-// دوال مساعدة للأيقونات والألوان
 IconData getIconForPropertyType(String? type) {
   switch (type) {
     case 'بيت':

@@ -67,8 +67,8 @@ class MapLegendScreen extends StatelessWidget {
             _buildLegendItem(
               context,
               const Icon(Icons.landscape_rounded, size: 28),
-              'أرض',
-              'يمثل قطعة "أرض".',
+              'ارض',
+              'يمثل قطعة "ارض".',
             ),
             const SizedBox(height: 12),
             _buildLegendItem(

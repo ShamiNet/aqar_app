@@ -107,7 +107,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final buildings = _filterBy((p) => p['propertyType'] == 'بناية');
     final shops = _filterBy((p) => p['propertyType'] == 'دكان');
     final discounted = _filterBy((p) => _parseInt(p['discountPercent']) > 0);
-
+    // ✅ استخراج العقارات الأكثر مشاهدة
+    final mostViewedList = List<Map<String, dynamic>>.from(_allProperties);
+    mostViewedList.sort((a, b) {
+      final viewsA = (a['views'] ?? 0) as num;
+      final viewsB = (b['views'] ?? 0) as num;
+      return viewsB.compareTo(viewsA);
+    });
+    // نأخذ أعلى 10 عقارات مشاهدة (بشرط أن يكون لها مشاهدات أكبر من 0)
+    final topViewed = mostViewedList
+        .where((p) => (p['views'] ?? 0) > 0)
+        .take(10)
+        .toList();
     return Container(
       decoration: BoxDecoration(
         gradient: isDark
@@ -190,6 +201,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 filterType: 'hasDiscount',
                 filterValue: true,
               ),
+              // ✅ قسم العقارات الأكثر مشاهدة
+              if (topViewed.isNotEmpty)
+                HorizontalPropertiesSection(
+                  title: 'الأكثر مشاهدة 🔥',
+                  properties: topViewed,
+                  filterType: 'views', // لا تهم هنا لأننا نرسل القائمة جاهزة
+                  filterValue: 'high',
+                ),
 
               const SizedBox(height: 55),
             ],
@@ -265,13 +284,13 @@ class _FeaturedPropertiesCarousel extends StatelessWidget {
             );
           },
           options: CarouselOptions(
-            height: 280,
+            height: 240,
             autoPlay: true,
             autoPlayInterval: const Duration(seconds: 2),
             autoPlayAnimationDuration: const Duration(milliseconds: 1200),
             autoPlayCurve: Curves.fastOutSlowIn,
             enlargeCenterPage: true,
-            viewportFraction: 0.85,
+            viewportFraction: 0.88,
             aspectRatio: 16 / 9,
           ),
         ),

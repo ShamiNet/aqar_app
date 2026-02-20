@@ -2,7 +2,7 @@
 
 # =============================================================
 # سكريبت إعداد وتشغيل Evolution API للواتساب
-# تطبيق عقار بلص - نظام النشر التلقائي
+# تطبيق عقار بلس - نظام النشر التلقائي
 # =============================================================
 
 # الألوان
@@ -239,7 +239,7 @@ test_send_message() {
     
     print_info "جاري إرسال رسالة إلى: $number"
     
-    message="🤖 رسالة اختبار من عقار بلص\n⏰ $(date '+%Y-%m-%d %H:%M:%S')\n✅ Evolution API يعمل بنجاح!"
+    message="🤖 رسالة اختبار من عقار بلس\n⏰ $(date '+%Y-%m-%d %H:%M:%S')\n✅ Evolution API يعمل بنجاح!"
     
     response=$(curl -s -X POST "$API_URL/message/sendText/$INSTANCE_NAME" \
         -H "apikey: $API_KEY" \
@@ -330,7 +330,7 @@ show_menu() {
 clear
 print_header "🤖 Evolution API - أداة الإعداد السريع"
 echo ""
-echo "تطبيق عقار بلص - نظام النشر التلقائي"
+echo "تطبيق عقار بلس - نظام النشر التلقائي"
 echo "Instance: $INSTANCE_NAME"
 echo "API URL: $API_URL"
 echo ""

@@ -1,672 +1,395 @@
-import 'package:aqar_app/screens/auth_gate.dart';
-import 'package:aqar_app/screens/edit_profile_screen.dart';
-import 'package:aqar_app/screens/favorites_screen.dart'; // تم إضافة استيراد شاشة المفضلة
-import 'package:aqar_app/screens/my_properties_screen.dart';
-import 'package:aqar_app/screens/privacy_policy_screen.dart';
-import 'package:aqar_app/screens/ratings_screen.dart';
-import 'package:aqar_app/services/api_service.dart';
-import 'package:aqar_app/widgets/verified_badge.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:aqar_app/providers/user_provider.dart';
+import 'package:aqar_app/services/api_service.dart';
+import 'package:aqar_app/screens/login_screen.dart';
+import 'package:aqar_app/screens/admin_dashboard_screen.dart';
+import 'package:aqar_app/screens/my_properties_screen.dart';
+import 'package:aqar_app/screens/favorites_screen.dart';
+import 'package:aqar_app/screens/edit_profile_screen.dart';
+import 'package:aqar_app/screens/my_archived_properties_screen.dart';
 
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+class ProfileScreen extends StatelessWidget {
+  /// userData: بيانات مستخدم آخر (اختياري)
+  /// عندما يكون موجوداً، سيتم عرض ملفه الشخصي فقط
+  final Map<String, dynamic>? otherUserData;
 
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
+  const ProfileScreen({super.key, this.otherUserData});
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  Map<String, dynamic>? _userData;
-  bool _isLoading = true;
-  int _favoritesCount = 0; // متغير لتخزين عدد المفضلة
-  int _propertiesCount = 0; // متغير لتخزين عدد العقارات
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchUserData();
-  }
-
-  Future<void> _fetchUserData() async {
+  // ✅ فتح الرابط
+  Future<void> _launchURL(String url) async {
+    final uri = Uri.parse(url);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id');
-      final localEmail = prefs.getString('user_email');
-
-      if (userId != null) {
-        // جلب بيانات المستخدم
-        final data = await ApiService.fetchUserProfile(userId);
-
-        // ✅ طباعة البيانات للتحقق
-        debugPrint('👤 [Profile] User data: $data');
-        debugPrint(
-          '📅 [Profile] createdAt: ${data?['createdAt']} (type: ${data?['createdAt'].runtimeType})',
-        );
-
-        // جلب قائمة المفضلة لحساب عددها بدقة
-        final favorites = await ApiService.fetchFavorites(userId);
-
-        // جلب عقارات المستخدم لحساب عددها
-        final myProperties = await ApiService.fetchMyProperties(userId);
-
-        if (data != null &&
-            (data['email'] == null || data['email'].toString().isEmpty)) {
-          if (localEmail != null) data['email'] = localEmail;
-        }
-
-        if (mounted) {
-          setState(() {
-            _userData = data;
-            _favoritesCount = favorites.length; // تحديث عدد المفضلة
-            _propertiesCount = myProperties.length; // تحديث عدد العقارات
-            _isLoading = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _isLoading = false);
-      }
+      // نحاول فتح الرابط في التطبيق الخارجي (مثل تلغرام) مباشرة بدون فحص مسبق
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
-      debugPrint('❌ Error fetching profile: $e');
-      if (mounted) setState(() => _isLoading = false);
+      debugPrint('Error launching URL: $e');
+      // خطة بديلة: الفتح في المتصفح الداخلي للتطبيق
+      launchUrl(uri, mode: LaunchMode.platformDefault);
     }
   }
 
-  Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
+  // ✅ إجراء مكالمة هاتفية
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final uri = Uri(scheme: 'tel', path: phoneNumber);
+    try {
+      // إجبار فتح تطبيق الاتصال
+      await launchUrl(uri);
+    } catch (e) {
+      debugPrint('Error launching Phone Call: $e');
+    }
+  }
+
+  // ✅ تنسيق التاريخ بالعربية
+  String _formatDate(dynamic date) {
+    if (date == null) return 'غير محدد';
+
+    try {
+      DateTime dateTime;
+
+      if (date.runtimeType.toString().contains('Timestamp')) {
+        dateTime = date.toDate();
+      } else if (date is DateTime) {
+        dateTime = date;
+      } else if (date is String) {
+        dateTime = DateTime.parse(date);
+      } else if (date is int) {
+        if (date.toString().length > 10) {
+          dateTime = DateTime.fromMillisecondsSinceEpoch(date);
+        } else {
+          dateTime = DateTime.fromMillisecondsSinceEpoch(date * 1000);
+        }
+      } else if (date is double) {
+        dateTime = DateTime.fromMillisecondsSinceEpoch((date * 1000).toInt());
+      } else {
+        return 'غير محدد';
+      }
+
+      final year = dateTime.year;
+      final month = _getArabicMonth(dateTime.month);
+      final day = dateTime.day;
+
+      return '$day $month $year';
+    } catch (e) {
+      debugPrint('❌ Error formatting date: $e');
+      return 'غير محدد';
+    }
+  }
+
+  String _getArabicMonth(int month) {
+    const months = [
+      'يناير',
+      'فبراير',
+      'مارس',
+      'أبريل',
+      'مايو',
+      'يونيو',
+      'يوليو',
+      'أغسطس',
+      'سبتمبر',
+      'أكتوبر',
+      'نوفمبر',
+      'ديسمبر',
+    ];
+    return months[month - 1];
+  }
+
+  void _showAboutApp(BuildContext context) {
+    showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('تسجيل الخروج'),
-        content: const Text('هل أنت متأكد من رغبتك في المغادرة؟'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 10),
+            const Text(
+              'حول التطبيق',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.real_estate_agent, size: 60, color: Colors.blue),
+            const SizedBox(height: 10),
+            const Text(
+              'عقار بلص',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const Text('الإصدار 1.0.0', style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 20),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.telegram, color: Colors.blue, size: 30),
+              title: const Text('قناة التطبيق'),
+              subtitle: const Text('انضم لمعرفة الجديد'),
+              onTap: () => _launchURL('https://t.me/+yj3zSKtT_mYyZmU0'),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.code,
+                color: Colors.deepPurple,
+                size: 30,
+              ),
+              title: const Text('مراسلة المطور'),
+              subtitle: const Text(
+                '@DevDrond',
+                textDirection: TextDirection.ltr,
+              ),
+              onTap: () => _launchURL('https://t.me/DevDrond'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.phone, color: Colors.green, size: 30),
+              title: const Text('الاتصال المباشر'),
+              subtitle: const Text(
+                '+963991260012',
+                textDirection: TextDirection.ltr,
+              ),
+              onTap: () => _makePhoneCall('+963991260012'),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('خروج'),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إغلاق'),
           ),
         ],
       ),
     );
-
-    if (confirmed == true) {
-      await ApiService.logout();
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (ctx) => const AuthGate()),
-          (route) => false,
-        );
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+    // إذا كنا نعرض ملف مستخدم آخر
+    if (otherUserData != null) {
+      return _buildOtherUserProfile(context, otherUserData!);
     }
 
-    if (_userData == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 60, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('تعذر تحميل بيانات الملف الشخصي'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _fetchUserData,
-              child: const Text('إعادة المحاولة'),
-            ),
-          ],
-        ),
+    // و إلا نعرض ملف المستخدم الحالي
+    final userProvider = Provider.of<UserProvider>(context);
+    final user = userProvider.userData;
+    final isAdmin = userProvider.isAdmin;
+
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: Text('يرجى تسجيل الدخول لعرض الملف الشخصي')),
       );
     }
 
-    // استخراج البيانات
-    final String username = _userData!['username'] ?? 'مستخدم';
-    final String email = _userData!['email'] ?? 'البريد غير متوفر';
-    final String? phone = _userData!['phoneNumber'];
-    final String? bio = _userData!['bio']; // جلب النبذة
-    final String? profileImage = _userData!['profileImageUrl'];
-    final bool isVerified = _userData!['isVerified'] ?? false;
+    return _buildCurrentUserProfile(context, user, isAdmin);
+  }
 
-    // تحويل الدور حسب الطلب
-    final String rawRole = _userData!['role'] ?? 'user';
-    final String roleDisplay = _translateRole(rawRole);
-
-    final int reputation =
-        (_userData!['reputationScore'] as num?)?.toInt() ?? 0;
-
-    // استخدام العداد المُحدّث من الحالة
-    final int propertiesCount = _propertiesCount;
-
-    final String createdAt = _formatDate(
-      _userData!['createdAt'] ??
-          _userData!['registeredAt'] ??
-          _userData!['joinedAt'],
-    );
-
-    final theme = Theme.of(context);
-    final primaryColor = theme.colorScheme.primary;
-
+  // بناء ملف المستخدم الحالي (مع زر التعديل والقوائم)
+  Widget _buildCurrentUserProfile(
+    BuildContext context,
+    Map<String, dynamic> user,
+    bool isAdmin,
+  ) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // الهيدر والصورة
-            Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
+      appBar: AppBar(title: const Text('الملف الشخصي'), centerTitle: true),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Center(
+            child: Column(
               children: [
-                Container(
-                  height: 180,
-                  decoration: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(30),
-                      bottomRight: Radius.circular(30),
-                    ),
-                  ),
+                CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: user['profileImageUrl'] != null
+                      ? NetworkImage(user['profileImageUrl'])
+                      : null,
+                  child: user['profileImageUrl'] == null
+                      ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                      : null,
                 ),
-                Positioned(
-                  top: 50,
-                  child: Text(
-                    'الملف الشخصي',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: -50,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: theme.scaffoldBackgroundColor,
-                        width: 4,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: profileImage != null
-                          ? CachedNetworkImageProvider(profileImage)
-                          : null,
-                      child: profileImage == null
-                          ? Icon(
-                              Icons.person,
-                              size: 50,
-                              color: Colors.grey[400],
-                            )
-                          : null,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 60),
-
-            // الاسم والتوثيق
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+                const SizedBox(height: 16),
                 Text(
-                  username,
-                  style: theme.textTheme.headlineSmall?.copyWith(
+                  user['username'] ?? 'مستخدم',
+                  style: const TextStyle(
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                if (isVerified) ...[
-                  const SizedBox(width: 6),
-                  const VerifiedBadge(size: 20),
-                ],
+                Text(
+                  user['email'] ?? '',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (ctx) => EditProfileScreen(userData: user),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.edit),
+                  label: const Text('تعديل الحساب'),
+                  style: ElevatedButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 4),
-
-            // عرض نوع العضوية
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              decoration: BoxDecoration(
-                color: _getRoleColor(rawRole).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: _getRoleColor(rawRole).withOpacity(0.3),
-                ),
-              ),
-              child: Text(
-                roleDisplay,
-                style: TextStyle(
-                  color: _getRoleColor(rawRole),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-
-            // عرض النبذة (Bio) إذا وجدت
-            if (bio != null && bio.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  bio,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 24),
-
-            // شريط الإحصائيات (عقاراتي، المفضلة، السمعة، تاريخ الاشتراك)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // 1. عقاراتي
-                  Expanded(
-                    child: _buildStatItem(
-                      context,
-                      label: 'عقاراتي',
-                      value: propertiesCount.toString(),
-                      icon: Icons.home_work_outlined,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MyPropertiesScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _buildStatDivider(),
-
-                  // 2. المفضلة (تمت الإضافة)
-                  Expanded(
-                    child: _buildStatItem(
-                      context,
-                      label: 'المفضلة',
-                      value: _favoritesCount.toString(),
-                      icon: Icons.favorite_border_rounded,
-                      color: Colors.redAccent,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const FavoritesScreen(),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _buildStatDivider(),
-
-                  // 3. السمعة
-                  Expanded(
-                    child: _buildStatItem(
-                      context,
-                      label: 'السمعة',
-                      value: reputation.toString(),
-                      icon: Icons.star_rate_rounded,
-                      color: Colors.amber,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RatingsScreen(
-                            targetUserId: _userData!['id'],
-                            targetUserName: username,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  _buildStatDivider(),
-
-                  // 4. تاريخ الاشتراك
-                  Expanded(
-                    child: _buildStatItem(
-                      context,
-                      label: 'انضممت',
-                      value: createdAt,
-                      icon: Icons.date_range_rounded,
-                      fontSize: 11, // تصغير الخط قليلاً ليناسب المساحة
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Divider(thickness: 1, indent: 20, endIndent: 20),
-            const SizedBox(height: 16),
-
-            // المعلومات
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  _buildInfoTile(
-                    context,
-                    icon: Icons.email_outlined,
-                    title: 'البريد الإلكتروني',
-                    value: email,
-                  ),
-                  if (phone != null && phone.isNotEmpty)
-                    _buildInfoTile(
-                      context,
-                      icon: Icons.phone_android,
-                      title: 'رقم الهاتف',
-                      value: phone,
-                    ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // الإعدادات
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'الإعدادات',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.edit_note_rounded,
-                    title: 'تعديل الملف والنبذة',
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              EditProfileScreen(userData: _userData!),
-                        ),
-                      );
-                      if (result == true) {
-                        _fetchUserData(); // تحديث الصفحة بعد العودة
-                      }
-                    },
-                  ),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.lock_outline,
-                    title: 'تغيير كلمة المرور',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'يرجى التواصل مع الدعم لتغيير كلمة المرور حالياً',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.privacy_tip_outlined,
-                    title: 'سياسة الخصوصية',
-                    onTap: () async {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PrivacyPolicyScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildSettingsTile(
-                    context,
-                    icon: Icons.logout,
-                    title: 'تسجيل الخروج',
-                    isDestructive: true,
-                    onTap: _logout,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Helper Widgets
-  Widget _buildStatItem(
-    BuildContext context, {
-    required String label,
-    required String value,
-    required IconData icon,
-    Color? color,
-    VoidCallback? onTap,
-    double fontSize = 13,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 2.0),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color: color ?? Theme.of(context).colorScheme.primary,
-              size: 26,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
+          ),
+          const SizedBox(height: 32),
+          if (isAdmin) ...[
+            const Text(
+              'إدارة التطبيق',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                fontSize: fontSize + 1,
+                fontSize: 16,
+                color: Colors.red,
               ),
-              textAlign: TextAlign.center,
             ),
-            Text(
-              label,
-              style: TextStyle(color: Colors.grey[600], fontSize: fontSize - 2),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 10),
+            ListTile(
+              leading: const Icon(
+                Icons.admin_panel_settings,
+                color: Colors.red,
+              ),
+              title: const Text('لوحة تحكم الإدارة'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => const AdminDashboardScreen(),
+                ),
+              ),
             ),
+            const Divider(),
           ],
-        ),
+          const Text(
+            'عقاراتي ونشاطي',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 10),
+          ListTile(
+            leading: const Icon(Icons.real_estate_agent, color: Colors.blue),
+            title: const Text('إعلاناتي'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (ctx) => const MyPropertiesScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.favorite, color: Colors.redAccent),
+            title: const Text('المفضلة'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (ctx) => const FavoritesScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.archive, color: Colors.orange),
+            title: const Text('الأرشيف'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (ctx) => const MyArchivedPropertiesScreen(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'الإعدادات والدعم',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 10),
+          ListTile(
+            leading: const Icon(Icons.info_outline, color: Colors.purple),
+            title: const Text('حول التطبيق والمطور'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => _showAboutApp(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('تسجيل الخروج'),
+            onTap: () async {
+              await ApiService.logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (ctx) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatDivider() =>
-      Container(height: 30, width: 1, color: Colors.grey[300]);
-
-  Widget _buildInfoTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: Colors.grey.withOpacity(0.1)),
-      ),
-      child: Row(
+  // بناء ملف مستخدم آخر (للقراءة فقط)
+  Widget _buildOtherUserProfile(
+    BuildContext context,
+    Map<String, dynamic> user,
+  ) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('الملف الشخصي'), centerTitle: true),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: Theme.of(context).colorScheme.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
+          Center(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: user['profileImageUrl'] != null
+                      ? NetworkImage(user['profileImageUrl'])
+                      : null,
+                  child: user['profileImageUrl'] == null
+                      ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                      : null,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 16),
                 Text(
-                  value,
+                  user['username'] ?? 'مستخدم',
                   style: const TextStyle(
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
                   ),
+                ),
+                Text(
+                  user['email'] ?? '',
+                  style: const TextStyle(color: Colors.grey),
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 32),
+          const Text(
+            'معلومات الحساب',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 10),
+          if ((user['phone'] ?? '').isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.phone, color: Colors.blue),
+              title: const Text('رقم الهاتف'),
+              subtitle: Text(user['phone'] ?? ''),
+            ),
+          if ((user['createdAt'] ?? '').toString().isNotEmpty)
+            ListTile(
+              leading: const Icon(Icons.calendar_today, color: Colors.blue),
+              title: const Text('تاريخ الانضمام'),
+              subtitle: Text(_formatDate(user['createdAt'])),
+            ),
         ],
       ),
     );
-  }
-
-  Widget _buildSettingsTile(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    bool isDestructive = false,
-  }) {
-    final color = isDestructive
-        ? Colors.red
-        : Theme.of(context).iconTheme.color;
-    return ListTile(
-      onTap: onTap,
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: isDestructive
-              ? Colors.red.withOpacity(0.1)
-              : Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: color, size: 22),
-      ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: isDestructive ? Colors.red : null,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      trailing: Icon(
-        Icons.arrow_forward_ios_rounded,
-        size: 16,
-        color: Colors.grey[400],
-      ),
-    );
-  }
-
-  // دالة ترجمة الأدوار
-  String _translateRole(String role) {
-    switch (role.toLowerCase()) {
-      case 'owner':
-      case 'broker':
-      case 'agency':
-        return 'صاحب مكتب عقاري';
-      case 'honorary':
-      case 'vip':
-        return 'عضو شرف';
-      case 'user':
-      default:
-        return 'عضو عادي';
-    }
-  }
-
-  // لون مميز لكل دور
-  Color _getRoleColor(String role) {
-    switch (role.toLowerCase()) {
-      case 'owner':
-      case 'broker':
-        return Colors.blue.shade800;
-      case 'honorary':
-      case 'vip':
-        return Colors.amber.shade800; // ذهبي لعضو الشرف
-      default:
-        return Colors.grey.shade700;
-    }
-  }
-
-  String _formatDate(dynamic dateValue) {
-    if (dateValue == null) return 'غير محدد';
-
-    try {
-      DateTime date;
-
-      // ✅ معالجة String
-      if (dateValue is String) {
-        date = DateTime.parse(dateValue);
-      }
-      // ✅ معالجة Int (timestamp بالميلي ثواني)
-      else if (dateValue is int) {
-        date = DateTime.fromMillisecondsSinceEpoch(dateValue);
-      }
-      // ✅ معالجة Firestore Map {_seconds: ..., _nanoseconds: ...}
-      else if (dateValue is Map && dateValue.containsKey('_seconds')) {
-        date = DateTime.fromMillisecondsSinceEpoch(
-          (dateValue['_seconds'] as int) * 1000,
-        );
-      }
-      // ✅ معالجة DateTime مباشرة
-      else if (dateValue is DateTime) {
-        date = dateValue;
-      } else {
-        return dateValue.toString();
-      }
-
-      return DateFormat('d MMM yyyy', 'ar').format(date);
-    } catch (e) {
-      debugPrint('❌ خطأ في تنسيق التاريخ: $e');
-      return 'غير محدد';
-    }
   }
 }

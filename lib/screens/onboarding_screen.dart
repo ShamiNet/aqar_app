@@ -17,7 +17,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // قائمة الميزات التي نريد شرحها بناءً على تحليلنا للتطبيق
   final List<Map<String, dynamic>> _pages = [
     {
-      'title': 'مرحباً بك في عقار بلص',
+      'title': 'مرحباً بك في عقار بلس',
       'desc': 'المنصة العقارية الأذكى للبيع والشراء والإيجار.',
       'icon': Icons.real_estate_agent_rounded,
       'color': Colors.blue,

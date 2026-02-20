@@ -1,0 +1,25 @@
+الترتيب,المجال,الأهمية,المدة المتوقعة,الصعوبة,الخطوات الرئيسية
+1,تفعيل HTTPS,🔴 حرج جداً,يوم - يومين,سهلة,"1. الحصول على شهادة SSL
+2. تكوين السيرفر
+3. اختبار على جميع المنصات"
+2,إخفاء API Keys,🔴 حرج جداً,يوم واحد,سهلة,"1. إنشاء ملفات تكوين آمنة
+2. نقل المفاتيح من الكود
+3. تحديث جميع المراجع"
+3,تطبيق Caching,🔴 حرج جداً,3-5 أيام,متوسطة,"1. Redis Server Setup
+2. Backend Caching Logic
+3. Frontend Local Cache"
+4,Pagination و Lazy Loading,🔴 حرج جداً,5-7 أيام,متوسطة,"1. Backend API Redesign
+2. Frontend UI Implementation
+3. Comprehensive Testing"
+5,Unit Tests,🟡 مهم,أسبوع واحد,متوسطة,"1. Setup Testing Framework
+2. Write Core Tests
+3. CI/CD Integration"
+6,Refactoring الكود,🟡 مهم,أسبوعين,صعبة,"1. Code Analysis
+2. Breaking Down Functions
+3. Full Testing Suite"
+7,Offline Support,🟢 متوسط,أسبوعين,صعبة,"1. SQLite Integration
+2. Sync Logic Implementation
+3. Conflict Resolution"
+8,Image Compression,🟢 متوسط,3 أيام,سهلة,"1. Backend Compression
+2. Frontend Optimization
+3. CDN Integration"

@@ -1218,8 +1218,10 @@ class _ReportsAndArchiveTabState extends State<_ReportsAndArchiveTab> {
                     ),
                   ),
                   subtitle: Text(
-                    report['details'] ?? '',
+                    report['description'] ?? report['details'] ?? '',
                     style: TextStyle(color: widget.textSecondary),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   trailing: const Icon(
                     Icons.warning_amber_rounded,

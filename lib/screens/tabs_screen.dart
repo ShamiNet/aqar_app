@@ -7,7 +7,8 @@ import 'package:aqar_app/screens/my_properties_screen.dart';
 import 'package:aqar_app/screens/properties_map_screen.dart';
 import 'package:aqar_app/screens/search_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
-import 'package:aqar_app/widgets/verified_badge.dart'; // تأكد من استيراد الودجت
+import 'package:aqar_app/services/websocket_service.dart';
+import 'package:aqar_app/widgets/verified_badge.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:aqar_app/config/theme_controller.dart';
@@ -20,6 +21,8 @@ import 'package:aqar_app/screens/auth_gate.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:aqar_app/providers/chat_provider.dart';
+import 'package:badges/badges.dart' as badges;
 
 class TabsScreen extends StatefulWidget {
   const TabsScreen({super.key});
@@ -41,7 +44,7 @@ class _TabsScreenState extends State<TabsScreen> {
   ];
 
   final List<String> _titles = [
-    'عقار بلص',
+    'عقار بلس',
     'الخريطة العقارية',
     'عقاراتي',
     'المحادثات',
@@ -55,6 +58,48 @@ class _TabsScreenState extends State<TabsScreen> {
     super.initState();
     _loadUserData();
     _saveUserFCMToken();
+
+    // ✅ 1. تحميل الرسائل الغير مقروءة فور فتح التطبيق
+    _loadInitialUnreadChats();
+
+    // ✅ 2. الاستماع لأي رسالة جديدة تأتي عبر الـ Socket
+    WebSocketService.addListener(_onGlobalWebSocketData);
+  }
+
+  @override
+  void dispose() {
+    // ✅ إيقاف الاستماع عند الخروج من الشاشة
+    WebSocketService.removeListener(_onGlobalWebSocketData);
+    super.dispose();
+  }
+
+  // ✅ دالة لمعالجة الرسائل القادمة في الوقت الفعلي
+  void _onGlobalWebSocketData(dynamic data) {
+    if (data['type'] == 'chats_update' || data['type'] == 'new_message') {
+      _loadInitialUnreadChats(); // تحديث النقطة الحمراء
+    }
+  }
+
+  // ✅ دالة جلب عدد المحادثات غير المقروءة في الخلفية
+  Future<void> _loadInitialUnreadChats() async {
+    final isLoggedIn = await ApiService.isLoggedIn();
+    if (!isLoggedIn) return;
+
+    try {
+      final chats = await ApiService.fetchMyChats();
+      int totalUnread = 0;
+      for (var chat in chats) {
+        totalUnread += (chat['unreadCount'] ?? 0) as int;
+      }
+      if (mounted) {
+        Provider.of<ChatProvider>(
+          context,
+          listen: false,
+        ).setUnreadChatsCount(totalUnread);
+      }
+    } catch (e) {
+      debugPrint('Error loading unread chats globally: $e');
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -80,6 +125,12 @@ class _TabsScreenState extends State<TabsScreen> {
     setState(() {
       _selectedIndex = index;
     });
+
+    // إذا قام المستخدم بفتح شاشة المحادثات، نقوم بتحديث العداد فوراً
+    if (index == 3) {
+      _loadInitialUnreadChats();
+    }
+
     FirebaseAnalytics.instance.logScreenView(
       screenName: _titles[index],
       screenClass: _pages[index].runtimeType.toString(),
@@ -145,7 +196,6 @@ class _TabsScreenState extends State<TabsScreen> {
     );
 
     if (shouldSignOut == true) {
-      // ✅ استخدام البروفايدر لتسجيل الخروج
       await Provider.of<UserProvider>(context, listen: false).logout();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
@@ -190,7 +240,7 @@ class _TabsScreenState extends State<TabsScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'عقار بلص',
+                  'عقار بلس',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).primaryColor,
@@ -205,7 +255,7 @@ class _TabsScreenState extends State<TabsScreen> {
                 ),
                 const SizedBox(height: 32),
                 const Text(
-                  'مرحباً بك في "عقار بلص"، التطبيق الذي يعيد تعريف تجربة البيع والشراء والاستئجار. نحن نجمع بين أحدث التقنيات وسهولة الاستخدام لنقدم لك سوقاً عقارياً متكاملاً بين يديك.',
+                  'مرحباً بك في "عقار بلس"، التطبيق الذي يعيد تعريف تجربة البيع والشراء والاستئجار. نحن نجمع بين أحدث التقنيات وسهولة الاستخدام لنقدم لك سوقاً عقارياً متكاملاً بين يديك.',
                   textAlign: TextAlign.center,
                   style: TextStyle(height: 1.6, fontSize: 15),
                 ),
@@ -453,23 +503,46 @@ class _TabsScreenState extends State<TabsScreen> {
         backgroundColor: Colors.transparent,
         animationCurve: Curves.easeInOut,
         animationDuration: const Duration(milliseconds: 400),
-        items: const <Widget>[
-          Icon(Icons.home_outlined, size: 30),
-          Icon(Icons.map_outlined, size: 30),
-          Icon(Icons.business_outlined, size: 30),
-          Icon(Icons.chat_bubble_outline, size: 30),
-          Icon(Icons.person_outline, size: 30),
+        items: <Widget>[
+          const Icon(Icons.home_outlined, size: 30),
+          const Icon(Icons.map_outlined, size: 30),
+          const Icon(Icons.business_outlined, size: 30),
+          // ✅ شارة محادثات محسّنة مع عدد الرسائل
+          Consumer<ChatProvider>(
+            builder: (context, chatProvider, child) {
+              return badges.Badge(
+                position: badges.BadgePosition.topEnd(top: -8, end: -8),
+                showBadge: chatProvider.unreadChatsCount > 0,
+                badgeContent: Text(
+                  chatProvider.unreadChatsCount > 99
+                      ? '99+'
+                      : chatProvider.unreadChatsCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                badgeStyle: badges.BadgeStyle(
+                  badgeColor: Colors.red,
+                  padding: const EdgeInsets.all(5),
+                  borderRadius: BorderRadius.circular(12),
+                  elevation: 2,
+                ),
+                child: const Icon(Icons.chat_bubble_outline, size: 30),
+              );
+            },
+          ),
+          const Icon(Icons.person_outline, size: 30),
         ],
       ),
     );
   }
 
   Widget _buildAppDrawer(BuildContext context) {
-    // ✅ 1. استخدام Provider للوصول لبيانات المستخدم
     final userProvider = Provider.of<UserProvider>(context);
     final userData = userProvider.userData ?? {};
 
-    // ✅ 2. استخراج البيانات من الـ Provider مباشرة
     String username = userProvider.username;
     String email = userProvider.email.isNotEmpty
         ? userProvider.email
@@ -477,10 +550,8 @@ class _TabsScreenState extends State<TabsScreen> {
     String? profileImage = userProvider.profileImage;
     bool isVerified = userProvider.isVerified;
 
-    // ✅ 3. التحقق من الصلاحيات أصبح نظيفاً جداً بفضل الـ Provider
     bool isAdmin = userProvider.isAdmin;
 
-    // جلب بيانات التقييم
     double reputationScore = (userData['reputationScore'] ?? 0.0).toDouble();
     int reputationCount = userData['reputationCount'] ?? 0;
 
@@ -544,11 +615,9 @@ class _TabsScreenState extends State<TabsScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    // عرض شارة التوثيق
                     if (isVerified)
                       const VerifiedBadge(size: 20, iconColor: Colors.white),
 
-                    // عرض نجمة للأدمن غير الموثق (حالة نادرة)
                     if (isAdmin && !isVerified) ...[
                       const SizedBox(width: 4),
                       const Icon(Icons.star, color: Colors.amber, size: 20),
@@ -643,7 +712,6 @@ class _TabsScreenState extends State<TabsScreen> {
                     _onItemTapped(4);
                   },
                 ),
-                // ✅ عرض خيار لوحة التحكم بناءً على الـ Provider
                 if (isAdmin)
                   _buildDrawerItem(
                     context,
@@ -682,7 +750,7 @@ class _TabsScreenState extends State<TabsScreen> {
                   color: Colors.red,
                   onTap: () {
                     Navigator.pop(context);
-                    _signOut(); // هذه الدالة يجب أن تُحدث لتستخدم userProvider.logout()
+                    _signOut();
                   },
                 ),
                 const SizedBox(height: 16),
@@ -705,10 +773,7 @@ class _TabsScreenState extends State<TabsScreen> {
     final iconColor = color ?? Theme.of(context).colorScheme.primary;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 4,
-      ), // تباعد أفضل
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(12),
@@ -717,16 +782,13 @@ class _TabsScreenState extends State<TabsScreen> {
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              // إضافة لون خفيف عند التركيز أو التحويم (اختياري، هنا نعتمد على inkwell)
-              borderRadius: BorderRadius.circular(12),
-            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1), // خلفية خفيفة للأيقونة
+                    color: iconColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: iconColor, size: 22),
@@ -737,7 +799,7 @@ class _TabsScreenState extends State<TabsScreen> {
                     title,
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w600, // خط أسمك قليلاً
+                      fontWeight: FontWeight.w600,
                       color: itemColor,
                     ),
                   ),

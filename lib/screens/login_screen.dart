@@ -2,6 +2,8 @@ import 'package:aqar_app/screens/tabs_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/services/websocket_service.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:aqar_app/providers/user_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,8 +25,17 @@ class _LoginScreenState extends State<LoginScreen> {
       if (await ApiService.isLoggedIn()) {
         final currentUser = await ApiService.getCurrentUser();
         if (currentUser != null) {
+          // ✅ تحديث بيانات المستخدم في UserProvider فوراً
+          if (mounted) {
+            await context.read<UserProvider>().refreshUserData();
+          }
+
           // ربط الويب سوكيت فوراً لاستقبال الرسائل
           WebSocketService.connect(currentUser['id'] ?? '');
+
+          debugPrint(
+            '✅ [LoginScreen] User logged in successfully: ${currentUser['username']}',
+          );
         }
 
         if (mounted) {
@@ -45,6 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
+      debugPrint('❌ [LoginScreen] Login error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

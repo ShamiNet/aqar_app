@@ -4,6 +4,8 @@ import 'package:aqar_app/services/websocket_service.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart' as intl;
+import 'package:provider/provider.dart';
+import 'package:aqar_app/providers/chat_provider.dart';
 
 class ChatMessagesScreen extends StatefulWidget {
   final String chatId;
@@ -47,9 +49,36 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
     _myId = prefs.getString('user_id');
     await _loadMessages();
 
+    // ✅ تحديد المحادثة كمقروءة عند فتحها
+    await ApiService.markChatAsRead(widget.chatId);
+
+    // ✅ تحديث عداد المحادثات غير المقروءة
+    if (mounted) {
+      _updateGlobalUnreadCount();
+    }
+
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       _loadMessages();
     });
+  }
+
+  // ✅ دالة لتحديث عداد المحادثات غير المقروءة عالمياً
+  Future<void> _updateGlobalUnreadCount() async {
+    try {
+      final chats = await ApiService.fetchMyChats();
+      int totalUnread = 0;
+      for (var chat in chats) {
+        totalUnread += (chat['unreadCount'] ?? 0) as int;
+      }
+      if (mounted) {
+        Provider.of<ChatProvider>(
+          context,
+          listen: false,
+        ).setUnreadChatsCount(totalUnread);
+      }
+    } catch (e) {
+      debugPrint('Error updating global unread count: $e');
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -128,6 +157,8 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
     _scrollController.dispose();
     // ✅ تنظيف الذاكرة
     WebSocketService.removeListener(_onNewMessage);
+    // ✅ تحديث العداد عند الخروج من الشاشة
+    _updateGlobalUnreadCount();
     super.dispose();
   }
 

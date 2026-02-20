@@ -2,10 +2,12 @@
 import 'package:aqar_app/screens/chat_messages_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/services/websocket_service.dart';
+import 'package:aqar_app/providers/chat_provider.dart'; // ✅
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart'; // ✅
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
@@ -112,6 +114,18 @@ class _ChatsScreenState extends State<ChatsScreen>
     debugPrint(' [ChatsScreen] Current user ID: $_currentUserId');
   }
 
+  // ✅ دالة تحديث عدد المحادثات غير المقروءة
+  void _updateUnreadCount() {
+    int totalUnread = 0;
+    for (var chat in _chats) {
+      totalUnread += (chat['unreadCount'] ?? 0) as int;
+    }
+    Provider.of<ChatProvider>(
+      context,
+      listen: false,
+    ).setUnreadChatsCount(totalUnread);
+  }
+
   Future<void> _loadChats() async {
     if (_chats.isEmpty) {
       debugPrint('📥 [ChatsScreen] Fetching chats from server...');
@@ -130,6 +144,8 @@ class _ChatsScreenState extends State<ChatsScreen>
           _isLoading = false;
           _hasError = false;
         });
+
+        _updateUnreadCount(); // ✅ تحديث الشارة
         _animationController.forward();
       }
     } catch (e) {
@@ -154,6 +170,7 @@ class _ChatsScreenState extends State<ChatsScreen>
           _chats = chats;
           _filterChats();
         });
+        _updateUnreadCount(); // ✅ تحديث الشارة عند الاستلام بالخلفية
       }
     } catch (e) {
       debugPrint('⚠️ [ChatsScreen] Background update error: $e');
@@ -549,7 +566,6 @@ class _ChatsScreenState extends State<ChatsScreen>
 
         return Column(
           children: [
-            // شريط البحث دائماً في الأعلى
             _buildSearchBar(),
             Expanded(
               child: RefreshIndicator(
@@ -559,7 +575,6 @@ class _ChatsScreenState extends State<ChatsScreen>
                     : _hasError
                     ? _buildErrorState()
                     : _filteredChats.isEmpty
-                    // هنا التعديل: نتحقق من حقل البحث بدلاً من المتغير
                     ? _searchController.text.isNotEmpty
                           ? Center(
                               child: Column(

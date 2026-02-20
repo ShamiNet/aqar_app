@@ -8,6 +8,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+// ✅ استيراد مزودات الحالة (Providers)
+import 'package:provider/provider.dart';
+import 'package:aqar_app/providers/user_provider.dart';
 
 class PropertyForm extends StatefulWidget {
   final GlobalKey<FormBuilderState> formKey;
@@ -53,12 +56,10 @@ class _PropertyFormState extends State<PropertyForm> {
     // 1. تهيئة الموقع
     _initializeLocation();
 
-    // ✅ 2. تحميل الصور بشكل صحيح عند بدء الشاشة (التعديل الأساسي)
-    // نتحقق من المصدرين المحتملين للصور (images من السيرفر الجديد أو imageUrls)
+    // 2. تحميل الصور بشكل صحيح عند بدء الشاشة
     final existingImages =
         widget.initialData['images'] ?? widget.initialData['imageUrls'];
     if (existingImages != null && existingImages is List) {
-      // تصفية القيم الفارغة وتحويل الكل إلى نصوص
       _images.addAll(
         existingImages
             .where((e) => e != null)
@@ -99,7 +100,6 @@ class _PropertyFormState extends State<PropertyForm> {
       }
     } else if (widget.initialData['latitude'] != null &&
         widget.initialData['longitude'] != null) {
-      // دعم إضافي في حال كانت الإحداثيات مفصولة
       final double lat = double.parse(
         widget.initialData['latitude'].toString(),
       );
@@ -131,7 +131,6 @@ class _PropertyFormState extends State<PropertyForm> {
       }
     }
 
-    // توحيد مسميات الغرف إذا كانت مختلفة
     if (processed['rooms'] == null && processed['bedrooms'] != null) {
       processed['rooms'] = processed['bedrooms'].toString();
     }
@@ -218,6 +217,12 @@ class _PropertyFormState extends State<PropertyForm> {
         widget.formKey.currentState!.value,
       );
 
+      // ✅ الحفاظ على ميزة "عرض مميز" للمستخدم العادي عند التعديل
+      // إذا لم يكن الحقل موجوداً في بيانات الفورم، نأخذ القيمة القديمة أو نعطيها false
+      if (!data.containsKey('isFeatured')) {
+        data['isFeatured'] = widget.initialData['isFeatured'] ?? false;
+      }
+
       data.addAll({
         'location': _selectedLocation,
         'latitude': _selectedLocation!.latitude,
@@ -290,7 +295,8 @@ class _PropertyFormState extends State<PropertyForm> {
 
   @override
   Widget build(BuildContext context) {
-    // تم حذف الكود الذي كان هنا ويسبب المشكلة (إعادة تعيين الصور)
+    // ✅ جلب حالة المستخدم لمعرفة ما إذا كان يمتلك صلاحية أدمن
+    final isAdmin = Provider.of<UserProvider>(context, listen: false).isAdmin;
 
     return FormBuilder(
       key: widget.formKey,
@@ -401,12 +407,20 @@ class _PropertyFormState extends State<PropertyForm> {
           ),
           const SizedBox(height: 16),
 
-          // --- الحقول الإضافية الجديدة ---
-          FormBuilderSwitch(
-            name: 'isFeatured',
-            title: const Text('عرض مميز'),
-            initialValue: false,
-          ),
+          // ✅ إظهار زر التميز فقط في حال كان المستخدم أدمن
+          if (isAdmin)
+            FormBuilderSwitch(
+              name: 'isFeatured',
+              title: const Text(
+                '⭐ عرض مميز (صلاحية إدارة)',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
+              initialValue: false,
+            ),
+
           FormBuilderSwitch(
             name: 'isFurnished',
             title: const Text('مؤثث'),
@@ -439,7 +453,6 @@ class _PropertyFormState extends State<PropertyForm> {
           ),
           const SizedBox(height: 16),
 
-          // --------------------------------
           FormBuilderTextField(
             name: 'discountPercent',
             decoration: InputDecoration(
