@@ -11,6 +11,7 @@ import 'package:aqar_app/services/websocket_service.dart';
 import 'package:aqar_app/widgets/verified_badge.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:aqar_app/config/theme_controller.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:curved_navigation_bar/curved_navigation_bar.dart';
@@ -18,6 +19,7 @@ import 'package:aqar_app/screens/chats_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:aqar_app/screens/admin_dashboard_screen.dart';
 import 'package:aqar_app/screens/auth_gate.dart';
+import 'package:aqar_app/screens/about_app_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -335,6 +337,24 @@ class _TabsScreenState extends State<TabsScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _openAboutPage(BuildContext context) async {
+    if (kIsWeb) {
+      final aboutUri = Uri.base.resolve('about.html');
+      final launched = await launchUrl(aboutUri);
+      if (!launched && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر فتح صفحة حول التطبيق.')),
+        );
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AboutAppScreen()));
   }
 
   Widget _buildFeatureSection(
@@ -735,7 +755,7 @@ class _TabsScreenState extends State<TabsScreen> {
                   title: 'حول التطبيق',
                   onTap: () {
                     Navigator.pop(context);
-                    _showAboutApp(context);
+                    _openAboutPage(context);
                   },
                 ),
 

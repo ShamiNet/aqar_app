@@ -869,13 +869,32 @@ class _AppControlTab extends StatefulWidget {
 class _AppControlTabState extends State<_AppControlTab> {
   final _versionController = TextEditingController();
   final _msgController = TextEditingController();
+  final _announcementController = TextEditingController();
+  final _announcementUrlController = TextEditingController();
   bool _maintenance = false;
+  bool _announcementEnabled = false;
   bool _loading = true;
+  bool _announcementViewsLoading = false;
+  String? _announcementId;
+  List<Map<String, dynamic>> _announcementViews = [];
+
+  String _generateAnnouncementId() {
+    return 'ann_${DateTime.now().millisecondsSinceEpoch}';
+  }
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _versionController.dispose();
+    _msgController.dispose();
+    _announcementController.dispose();
+    _announcementUrlController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -886,9 +905,16 @@ class _AppControlTabState extends State<_AppControlTab> {
           _versionController.text = settings['min_version'] ?? '1.0.0';
           _maintenance = settings['maintenance_mode'] ?? false;
           _msgController.text = settings['maintenance_message'] ?? '';
+          _announcementEnabled = settings['announcement_enabled'] == true;
+          _announcementController.text =
+              settings['announcement_text']?.toString() ?? '';
+          _announcementUrlController.text =
+              settings['announcement_url']?.toString() ?? '';
+          _announcementId = settings['announcement_id']?.toString();
           _loading = false;
         });
       }
+      await _loadAnnouncementViews();
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
@@ -907,13 +933,50 @@ class _AppControlTabState extends State<_AppControlTab> {
     await _loadSettings();
   }
 
+  Future<void> _loadAnnouncementViews() async {
+    final announcementId = _announcementId;
+    if (announcementId == null || announcementId.isEmpty) {
+      if (mounted) {
+        setState(() => _announcementViews = []);
+      }
+      return;
+    }
+
+    setState(() => _announcementViewsLoading = true);
+    try {
+      final views = await ApiService.fetchAnnouncementViews(announcementId);
+      if (mounted) {
+        setState(() {
+          _announcementViews = views;
+          _announcementViewsLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _announcementViewsLoading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('خطأ في تحميل المشاهدات: $e')));
+      }
+    }
+  }
+
   Future<void> _save() async {
     setState(() => _loading = true);
     try {
+      final announcementText = _announcementController.text.trim();
+      if (_announcementEnabled && announcementText.isNotEmpty) {
+        _announcementId ??= _generateAnnouncementId();
+      }
+
       await ApiService.updateAppSettings({
         'min_version': _versionController.text,
         'maintenance_mode': _maintenance,
         'maintenance_message': _msgController.text,
+        'announcement_enabled': _announcementEnabled,
+        'announcement_text': announcementText,
+        'announcement_url': _announcementUrlController.text,
+        if (_announcementId != null) 'announcement_id': _announcementId,
       });
       if (mounted) {
         setState(() => _loading = false);
@@ -1043,6 +1106,133 @@ class _AppControlTabState extends State<_AppControlTab> {
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 30),
+        _buildSectionHeader('الشريط الإخباري'),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: widget.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'تفعيل الشريط',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: widget.textPrimary,
+                  ),
+                ),
+                subtitle: Text(
+                  _announcementEnabled ? 'ظاهر للمستخدمين' : 'مخفي حالياً',
+                  style: TextStyle(
+                    color: _announcementEnabled
+                        ? Colors.greenAccent
+                        : Colors.red,
+                  ),
+                ),
+                value: _announcementEnabled,
+                activeColor: Colors.greenAccent,
+                onChanged: (v) => setState(() => _announcementEnabled = v),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _announcementController,
+                style: TextStyle(color: widget.textPrimary),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'نص الشريط الإخباري',
+                  prefixIcon: Icon(
+                    Icons.campaign_outlined,
+                    color: widget.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _announcementUrlController,
+                style: TextStyle(color: widget.textPrimary),
+                decoration: inputDecoration.copyWith(
+                  labelText: 'رابط اختياري',
+                  hintText: 'https://example.com',
+                  prefixIcon: Icon(Icons.link, color: widget.textSecondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildSectionHeader('مشاهدات الشريط'),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.blueAccent),
+              onPressed: _loadAnnouncementViews,
+              tooltip: 'تحديث المشاهدات',
+            ),
+          ],
+        ),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: widget.surfaceColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: _announcementViewsLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _announcementViews.isEmpty
+              ? Text(
+                  'لا توجد مشاهدات حتى الآن',
+                  style: TextStyle(color: widget.textSecondary),
+                )
+              : Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.visibility,
+                          color: widget.textSecondary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'الإجمالي: ${_announcementViews.length}',
+                          style: TextStyle(
+                            color: widget.textPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ..._announcementViews.map((view) {
+                      final username = view['username'] ?? 'مجهول';
+                      final email = view['email'] ?? '';
+                      return ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          Icons.person_outline,
+                          color: widget.textSecondary,
+                        ),
+                        title: Text(
+                          username,
+                          style: TextStyle(color: widget.textPrimary),
+                        ),
+                        subtitle: email.toString().isEmpty
+                            ? null
+                            : Text(
+                                email,
+                                style: TextStyle(color: widget.textSecondary),
+                              ),
+                      );
+                    }).toList(),
+                  ],
+                ),
         ),
         const SizedBox(height: 30),
         ElevatedButton(

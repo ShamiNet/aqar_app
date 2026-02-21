@@ -45,6 +45,7 @@ class PropertyCard extends StatelessWidget {
     final area = property['area']?.toString() ?? '-';
     final category = property['category']?.toString() ?? 'بيع';
     final isRent = category.contains('إيجار');
+    final badgeStyle = _getCategoryBadgeStyle(context, category, isRent);
 
     return GestureDetector(
       onTap:
@@ -125,24 +126,14 @@ class PropertyCard extends StatelessWidget {
                   Positioned(
                     top: 10,
                     right: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isRent
-                            ? Colors.purple.withOpacity(0.9)
-                            : Colors.blue.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        category,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
+                    child: DecoratedBox(
+                      decoration: badgeStyle.decoration,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
                         ),
+                        child: Text(category, style: badgeStyle.textStyle),
                       ),
                     ),
                   ),
@@ -266,6 +257,45 @@ class PropertyCard extends StatelessWidget {
     );
   }
 
+  _CategoryBadgeStyle _getCategoryBadgeStyle(
+    BuildContext context,
+    String category,
+    bool isRent,
+  ) {
+    final baseColor = isRent
+        ? const Color(0xFF6A3CBC)
+        : const Color(0xFF1C6FDB);
+    final highlightColor = isRent
+        ? const Color(0xFFB46BFF)
+        : const Color(0xFF4FD0FF);
+    final surface = Theme.of(context).colorScheme.surface;
+
+    return _CategoryBadgeStyle(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [highlightColor, baseColor],
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: surface.withOpacity(0.25), width: 0.8),
+        boxShadow: [
+          BoxShadow(
+            color: baseColor.withOpacity(0.35),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      textStyle: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+        letterSpacing: 0.2,
+      ),
+    );
+  }
+
   // صورة بديلة
   Widget _buildPlaceholder() {
     return Container(
@@ -289,4 +319,14 @@ class PropertyCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CategoryBadgeStyle {
+  final BoxDecoration decoration;
+  final TextStyle textStyle;
+
+  const _CategoryBadgeStyle({
+    required this.decoration,
+    required this.textStyle,
+  });
 }

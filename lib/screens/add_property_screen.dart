@@ -3,6 +3,8 @@ import 'dart:math'; // 1. استيراد المكتبة العشوائية
 import 'package:aqar_app/screens/map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:aqar_app/controllers/add_property_controller.dart';
+import 'package:aqar_app/providers/user_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -14,6 +16,7 @@ class AddPropertyScreen extends StatefulWidget {
 }
 
 class _AddPropertyScreenState extends State<AddPropertyScreen> {
+  static const Color _lightThemeTextColor = Color(0xFF0D2B5B);
   late final AddPropertyController _controller;
 
   @override
@@ -145,297 +148,348 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isLightTheme = colorScheme.brightness == Brightness.light;
+    final isAdmin = Provider.of<UserProvider>(context).isAdmin;
+    final lightTextColor = _lightThemeTextColor;
+    final successColor = isLightTheme ? lightTextColor : colorScheme.primary;
+    final defaultTextColor = isLightTheme
+        ? lightTextColor
+        : colorScheme.onSurface;
+    final mutedTextColor = isLightTheme
+        ? lightTextColor.withOpacity(0.7)
+        : colorScheme.onSurfaceVariant;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('إضافة عقار جديد'),
         // ✅ 2. إضافة الزر هنا في الـ AppBar
         actions: [
-          IconButton(
-            icon: const Icon(
-              Icons.bug_report_outlined,
-              color: Colors.redAccent,
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(
+                Icons.bug_report_outlined,
+                color: Colors.redAccent,
+              ),
+              tooltip: 'تعبئة بيانات وهمية',
+              onPressed: _showDevBottomSheet,
             ),
-            tooltip: 'تعبئة بيانات وهمية',
-            onPressed: _showDevBottomSheet,
-          ),
         ],
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildMediaSection(colorScheme),
-                const SizedBox(height: 20),
+      body: _buildThemedBody(
+        isLightTheme: isLightTheme,
+        lightTextColor: lightTextColor,
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildMediaSection(colorScheme),
+                  const SizedBox(height: 20),
 
-                _buildTextField(
-                  'عنوان الإعلان *',
-                  _controller.titleController,
-                  icon: Icons.title,
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        'السعر (ر.س) *',
-                        _controller.priceController,
-                        isNumber: true,
-                        icon: Icons.attach_money,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildTextField(
-                        'المساحة (م²) *',
-                        _controller.areaController,
-                        isNumber: true,
-                        icon: Icons.square_foot,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _controller.selectedType,
-                        decoration: InputDecoration(
-                          labelText: 'نوع العقار',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        items: ['بيت', 'فيلا', 'بناية', 'ارض', 'دكان']
-                            .map(
-                              (e) => DropdownMenuItem(value: e, child: Text(e)),
-                            )
-                            .toList(),
-                        onChanged: _controller.setType,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _controller.selectedCategory,
-                        decoration: InputDecoration(
-                          labelText: 'الفئة',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        items: ['بيع', 'إيجار', 'استثمار']
-                            .map(
-                              (e) => DropdownMenuItem(value: e, child: Text(e)),
-                            )
-                            .toList(),
-                        onChanged: _controller.setCategory,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-                _buildTextField(
-                  'العنوان بالتفصيل *',
-                  _controller.addressController,
-                  icon: Icons.location_on,
-                ),
-
-                const SizedBox(height: 10),
-
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(12),
+                  _buildTextField(
+                    'عنوان الإعلان *',
+                    _controller.titleController,
+                    icon: Icons.title,
                   ),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.map_rounded,
-                      color: _controller.latitude != null
-                          ? Colors.green
-                          : Colors.grey,
-                    ),
-                    title: Text(
-                      _controller.latitude != null
-                          ? 'تم تحديد الموقع بنجاح ✅'
-                          : 'تحديد الموقع على الخريطة',
-                      style: TextStyle(
-                        color: _controller.latitude != null
-                            ? Colors.green
-                            : Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    subtitle: _controller.latitude != null
-                        ? Text(
-                            '${_controller.latitude}, ${_controller.longitude}',
-                          )
-                        : const Text('اضغط لفتح الخريطة وتثبيت الدبوس'),
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (ctx) => MapScreen(
-                            initialLat: _controller.latitude,
-                            initialLong: _controller.longitude,
-                          ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          'السعر (\$) *',
+                          _controller.priceController,
+                          isNumber: true,
+                          icon: Icons.attach_money,
                         ),
-                      );
-
-                      if (result != null && result is LatLng) {
-                        _controller.setLocation(
-                          result.latitude,
-                          result.longitude,
-                        );
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _buildTextField(
-                  'الوصف',
-                  _controller.descriptionController,
-                  maxLines: 3,
-                  icon: Icons.description,
-                ),
-
-                const SizedBox(height: 20),
-                const Text(
-                  'التفاصيل الإضافية',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 10),
-
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _buildSmallNumberField(
-                      'غرف النوم',
-                      _controller.bedroomsController,
-                    ),
-                    _buildSmallNumberField(
-                      'دورات المياه',
-                      _controller.bathroomsController,
-                    ),
-                    _buildSmallNumberField(
-                      'الصالات',
-                      _controller.livingRoomsController,
-                    ),
-                    _buildSmallNumberField(
-                      'عرض الشارع',
-                      _controller.streetWidthController,
-                    ),
-                    _buildSmallNumberField(
-                      'عمر العقار',
-                      _controller.ageController,
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-                const Divider(),
-
-                Wrap(
-                  spacing: 10,
-                  children: [
-                    _buildCheckbox(
-                      'مؤثثة',
-                      _controller.isFurnished,
-                      _controller.toggleFurnished,
-                    ),
-                    _buildCheckbox(
-                      'مطبخ',
-                      _controller.hasKitchen,
-                      _controller.toggleKitchen,
-                    ),
-                    _buildCheckbox(
-                      'ملحق',
-                      _controller.hasAnnex,
-                      _controller.toggleAnnex,
-                    ),
-                    _buildCheckbox(
-                      'مدخل سيارة',
-                      _controller.hasCarEntrance,
-                      _controller.toggleCarEntrance,
-                    ),
-                    _buildCheckbox(
-                      'مصعد',
-                      _controller.hasElevator,
-                      _controller.toggleElevator,
-                    ),
-                    _buildCheckbox(
-                      'مسبح',
-                      _controller.hasPool,
-                      _controller.togglePool,
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 30),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _controller.isLoading
-                        ? null
-                        : () async {
-                            final success = await _controller.submitProperty(
-                              context,
-                            );
-                            if (success && mounted) {
-                              Navigator.pop(context, 'تمت إضافة العقار بنجاح!');
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                    child: _controller.isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            'نشر الإعلان الآن',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildTextField(
+                          'المساحة (م²) *',
+                          _controller.areaController,
+                          isNumber: true,
+                          icon: Icons.square_foot,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _controller.selectedType,
+                          decoration: InputDecoration(
+                            labelText: 'نوع العقار',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
+                          items: ['بيت', 'فيلا', 'بناية', 'ارض', 'دكان']
+                              .map(
+                                (e) =>
+                                    DropdownMenuItem(value: e, child: Text(e)),
+                              )
+                              .toList(),
+                          onChanged: _controller.setType,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _controller.selectedCategory,
+                          decoration: InputDecoration(
+                            labelText: 'الفئة',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          items: ['بيع', 'إيجار', 'استثمار']
+                              .map(
+                                (e) =>
+                                    DropdownMenuItem(value: e, child: Text(e)),
+                              )
+                              .toList(),
+                          onChanged: _controller.setCategory,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 40),
-              ],
-            ),
-          ),
 
-          if (_controller.isLoading)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(color: Colors.white),
-                    SizedBox(height: 20),
-                    Text(
-                      'جاري رفع الصور والبيانات...',
-                      style: TextStyle(color: Colors.white, fontSize: 16),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    'العنوان بالتفصيل *',
+                    _controller.addressController,
+                    icon: Icons.location_on,
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ],
-                ),
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.map_rounded,
+                        color: _controller.latitude != null
+                            ? Colors.green
+                            : Colors.grey,
+                      ),
+                      title: Text(
+                        _controller.latitude != null
+                            ? 'تم تحديد الموقع بنجاح ✅'
+                            : 'تحديد الموقع على الخريطة',
+                        style: TextStyle(
+                          color: _controller.latitude != null
+                              ? successColor
+                              : defaultTextColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: _controller.latitude != null
+                          ? Text(
+                              '${_controller.latitude}, ${_controller.longitude}',
+                            )
+                          : Text(
+                              'اضغط لفتح الخريطة وتثبيت الدبوس',
+                              style: TextStyle(color: mutedTextColor),
+                            ),
+                      onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (ctx) => MapScreen(
+                              initialLat: _controller.latitude,
+                              initialLong: _controller.longitude,
+                            ),
+                          ),
+                        );
+
+                        if (result != null && result is LatLng) {
+                          _controller.setLocation(
+                            result.latitude,
+                            result.longitude,
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildTextField(
+                    'الوصف',
+                    _controller.descriptionController,
+                    maxLines: 3,
+                    icon: Icons.description,
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Text(
+                    'التفاصيل الإضافية',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 10),
+
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _buildSmallNumberField(
+                        'غرف النوم',
+                        _controller.bedroomsController,
+                      ),
+                      _buildSmallNumberField(
+                        'دورات المياه',
+                        _controller.bathroomsController,
+                      ),
+                      _buildSmallNumberField(
+                        'الصالات',
+                        _controller.livingRoomsController,
+                      ),
+                      _buildSmallNumberField(
+                        'عرض الشارع',
+                        _controller.streetWidthController,
+                      ),
+                      _buildSmallNumberField(
+                        'عمر العقار',
+                        _controller.ageController,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(),
+
+                  Wrap(
+                    spacing: 10,
+                    children: [
+                      _buildCheckbox(
+                        'مؤثثة',
+                        _controller.isFurnished,
+                        _controller.toggleFurnished,
+                      ),
+                      _buildCheckbox(
+                        'مطبخ',
+                        _controller.hasKitchen,
+                        _controller.toggleKitchen,
+                      ),
+                      _buildCheckbox(
+                        'ملحق',
+                        _controller.hasAnnex,
+                        _controller.toggleAnnex,
+                      ),
+                      _buildCheckbox(
+                        'مدخل سيارة',
+                        _controller.hasCarEntrance,
+                        _controller.toggleCarEntrance,
+                      ),
+                      _buildCheckbox(
+                        'مصعد',
+                        _controller.hasElevator,
+                        _controller.toggleElevator,
+                      ),
+                      _buildCheckbox(
+                        'مسبح',
+                        _controller.hasPool,
+                        _controller.togglePool,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _controller.isLoading
+                          ? null
+                          : () async {
+                              final success = await _controller.submitProperty(
+                                context,
+                              );
+                              if (success && mounted) {
+                                Navigator.pop(
+                                  context,
+                                  'تمت إضافة العقار بنجاح!',
+                                );
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _controller.isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'نشر الإعلان الآن',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                ],
               ),
             ),
-        ],
+
+            if (_controller.isLoading)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Colors.white),
+                      SizedBox(height: 20),
+                      Text(
+                        'جاري رفع الصور والبيانات...',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThemedBody({
+    required bool isLightTheme,
+    required Color lightTextColor,
+    required Widget child,
+  }) {
+    if (!isLightTheme) return child;
+
+    final baseTheme = Theme.of(context);
+    final themedData = baseTheme.copyWith(
+      textTheme: baseTheme.textTheme.apply(
+        bodyColor: lightTextColor,
+        displayColor: lightTextColor,
+      ),
+      inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
+        labelStyle: TextStyle(color: lightTextColor.withOpacity(0.85)),
+        hintStyle: TextStyle(color: lightTextColor.withOpacity(0.7)),
+      ),
+    );
+
+    return Theme(
+      data: themedData,
+      child: DefaultTextStyle(
+        style: TextStyle(color: lightTextColor),
+        child: child,
       ),
     );
   }
@@ -564,12 +618,44 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     int maxLines = 1,
     IconData? icon,
   }) {
+    final hasRequiredMark = label.contains('*');
+    final cleanLabel = label.replaceAll('*', '').trim();
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLightTheme = colorScheme.brightness == Brightness.light;
+    final lightTextColor = _lightThemeTextColor;
+    final baseLabelStyle =
+        Theme.of(context).inputDecorationTheme.labelStyle ??
+        TextStyle(
+          color: isLightTheme
+              ? lightTextColor.withOpacity(0.9)
+              : colorScheme.onSurface.withOpacity(0.8),
+        );
+    final requiredLabelStyle = baseLabelStyle.copyWith(
+      color: isLightTheme
+          ? lightTextColor.withOpacity(0.95)
+          : baseLabelStyle.color,
+    );
+
     return TextField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
       maxLines: maxLines,
       decoration: InputDecoration(
-        labelText: label,
+        label: hasRequiredMark
+            ? RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(text: cleanLabel, style: requiredLabelStyle),
+                    const TextSpan(
+                      text: ' *',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ),
+              )
+            : null,
+        //---------
+        labelText: hasRequiredMark ? null : label,
         prefixIcon: icon != null ? Icon(icon, size: 20) : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         contentPadding: const EdgeInsets.symmetric(
@@ -584,6 +670,10 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     String label,
     TextEditingController controller,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLightTheme = colorScheme.brightness == Brightness.light;
+    final lightTextColor = _lightThemeTextColor;
+
     return SizedBox(
       width: 100,
       child: TextField(
@@ -592,6 +682,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         textAlign: TextAlign.center,
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: TextStyle(
+            color: isLightTheme
+                ? lightTextColor.withOpacity(0.9)
+                : colorScheme.onSurface.withOpacity(0.8),
+          ),
           contentPadding: const EdgeInsets.symmetric(vertical: 8),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         ),
@@ -600,12 +695,21 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   }
 
   Widget _buildCheckbox(String label, bool value, Function(bool?) onChanged) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isLightTheme = colorScheme.brightness == Brightness.light;
+    final lightTextColor = _lightThemeTextColor;
+
     return FilterChip(
-      label: Text(label),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isLightTheme ? lightTextColor : colorScheme.onSurface,
+        ),
+      ),
       selected: value,
       onSelected: onChanged,
-      selectedColor: Theme.of(context).colorScheme.primaryContainer,
-      checkmarkColor: Theme.of(context).colorScheme.primary,
+      selectedColor: colorScheme.primaryContainer,
+      checkmarkColor: colorScheme.primary,
     );
   }
 }

@@ -35,6 +35,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
+            <!-- Custom scheme للروابط الداخلية -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -42,12 +43,31 @@
                 <data android:scheme="aqarapp" />
             </intent-filter>
 
+            <!-- Deep Links لدومين n4yo.com -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="n4yo.com" />
+                <data android:scheme="https" android:host="n4yo.com" />
+                <data android:scheme="http" android:host="n4yo.com" />
+            </intent-filter>
+
+            <!-- Deep Links لدومين s313.store -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="s313.store" />
+                <data android:scheme="http" android:host="s313.store" />
+            </intent-filter>
+
+            <!-- Deep Links لدومين www.n4yo.com -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.n4yo.com" />
+                <data android:scheme="http" android:host="www.n4yo.com" />
             </intent-filter>
         </activity>
 

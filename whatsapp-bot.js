@@ -10,7 +10,7 @@ const TELEGRAM_BOT_TOKEN = "8047447151:AAGFT88l2BskNm0Z4T-ehHNVBxox9g34L40";
 const TELEGRAM_CHANNEL = "@aqarShami";
 const WHATSAPP_NUMBER = "966XXXXXXXXX@s.whatsapp.net"; // غيّر هذا لرقمك
 const FIREBASE_CREDENTIALS = './serviceAccountKey.json';
-const APP_DOMAIN = "https://n4yo.com";
+const APP_DOMAIN = "https://s313.store";
 // =============================================
 
 // تهيئة Firebase

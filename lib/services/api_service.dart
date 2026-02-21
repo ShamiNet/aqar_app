@@ -1000,6 +1000,19 @@ class ApiService {
     return {};
   }
 
+  static Future<List<Map<String, dynamic>>> fetchAnnouncementViews(
+    String announcementId, {
+    int limit = 50,
+  }) async {
+    final response = await _sendRequest(
+      'GET',
+      '/admin/announcement-views?announcementId=$announcementId&limit=$limit',
+    );
+    if (response.statusCode == 200)
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    return [];
+  }
+
   static Future<void> updateAppSettings(Map<String, dynamic> settings) async {
     final response = await _sendRequest(
       'POST',
@@ -1007,6 +1020,23 @@ class ApiService {
       body: settings,
     );
     if (response.statusCode != 200) throw Exception('فشل تحديث الإعدادات');
+  }
+
+  static Future<bool> recordAnnouncementView(String announcementId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString(AppConstants.prefUserId);
+      if (userId == null) return false;
+
+      final response = await _sendRequest(
+        'POST',
+        '/users/$userId/announcement-view',
+        body: {'announcementId': announcementId},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
   }
 
   // =========================================================================

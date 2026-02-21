@@ -43,7 +43,7 @@ def send_to_telegram(property_data, property_id):
         address = property_data.get('address', 'موقع مميز')
         
         # رابط العقار (الدومين الحقيقي)
-        deep_link = f"https://n4yo.com/property/{property_id}"
+        deep_link = f"https://s313.store/property/{property_id}"
         
         # --- صياغة الرسالة الاحترافية ---
         caption = f"""
@@ -120,7 +120,7 @@ def send_to_whatsapp(property_data, property_id):
         address = property_data.get('address', 'موقع مميز')
         
         # رابط العقار
-        deep_link = f"https://n4yo.com/property/{property_id}"
+        deep_link = f"https://s313.store/property/{property_id}"
         
         # --- صياغة الرسالة ---
         message = f"""

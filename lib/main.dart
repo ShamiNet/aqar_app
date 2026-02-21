@@ -408,17 +408,27 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
 
   void _handleLink(Uri uri) {
     try {
+      debugPrint('🔗 [Deep Link] Received: ${uri.toString()}');
       String? propertyId;
-      if (uri.pathSegments.contains('properties')) {
+
+      // دعم كلا الصيغتين: /property/ و /properties/
+      if (uri.pathSegments.contains('property')) {
+        final index = uri.pathSegments.indexOf('property');
+        if (index + 1 < uri.pathSegments.length) {
+          propertyId = uri.pathSegments[index + 1];
+        }
+      } else if (uri.pathSegments.contains('properties')) {
         final index = uri.pathSegments.indexOf('properties');
         if (index + 1 < uri.pathSegments.length) {
           propertyId = uri.pathSegments[index + 1];
         }
       } else if (uri.pathSegments.isNotEmpty) {
+        // كاحتياط: خذ آخر جزء من المسار
         propertyId = uri.pathSegments.last;
       }
 
-      if (propertyId != null) {
+      if (propertyId != null && propertyId.isNotEmpty) {
+        debugPrint('✅ [Deep Link] Opening property: $propertyId');
         Future.delayed(const Duration(milliseconds: 500), () {
           navigatorKey.currentState?.push(
             MaterialPageRoute(
@@ -426,6 +436,8 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
             ),
           );
         });
+      } else {
+        debugPrint('⚠️ [Deep Link] No property ID found in URL');
       }
     } catch (e) {
       debugPrint('⚠️ [Handle Link Error]: $e');

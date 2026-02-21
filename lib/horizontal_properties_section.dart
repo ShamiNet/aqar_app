@@ -25,6 +25,11 @@ class HorizontalPropertiesSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleGradient = isDark
+        ? const LinearGradient(colors: [Color(0xFF7EC9FF), Color(0xFF4A79FF)])
+        : const LinearGradient(colors: [Color(0xFF0D2B5B), Color(0xFF2B7BFF)]);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -33,15 +38,7 @@ class HorizontalPropertiesSection extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? null
-                      : Colors.white,
-                ),
-              ),
+              _SectionTitlePill(title: title, gradient: titleGradient),
               TextButton(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -88,6 +85,41 @@ class HorizontalPropertiesSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+}
+
+class _SectionTitlePill extends StatelessWidget {
+  final String title;
+  final Gradient gradient;
+
+  const _SectionTitlePill({required this.title, required this.gradient});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 16,
+          ),
+        ),
+      ),
     );
   }
 }

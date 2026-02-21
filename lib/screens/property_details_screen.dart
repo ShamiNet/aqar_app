@@ -4,6 +4,7 @@ import 'package:aqar_app/screens/edit_property_screen.dart';
 import 'package:aqar_app/screens/edit_history_screen.dart';
 import 'package:aqar_app/screens/report_property_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
+import 'package:aqar_app/config/app_constants.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -203,6 +204,69 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     }
   }
 
+  // حوار التأكيد
+  Future<bool> _showConfirmDialog(String title, String message) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('إلغاء'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('تأكيد', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  // حذف العقار (للمشرفين فقط)
+  Future<void> _deleteProperty() async {
+    final confirm = await _showConfirmDialog(
+      'حذف العقار',
+      'تحذير: سيتم حذف العقار نهائياً. هل أنت متأكد؟',
+    );
+    if (!confirm) return;
+
+    // عرض مؤشر التحميل
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final success = await ApiService.deletePropertyAdmin(widget.propertyId);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // إغلاق مؤشر التحميل
+
+      if (success) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم حذف العقار بنجاح')));
+        Navigator.of(context).pop(); // العودة للشاشة السابقة
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('فشل حذف العقار')));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // إغلاق مؤشر التحميل
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('خطأ: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading)
@@ -325,7 +389,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     size: 28,
                   ),
                   onPressed: () => Share.share(
-                    'شاهد هذا العقار المميز: $title \n بسعر $price $currency',
+                    'شاهد هذا العقار المميز 🏡\n\n📍 $title\n💰 $price $currency\n\n🔗 للمزيد من التفاصيل:\n${AppConstants.appUrl}/property/${widget.propertyId}',
                   ),
                 ),
               ),
@@ -393,6 +457,31 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                         ),
                       );
                     },
+                  ),
+                ),
+              // زر حذف العقار (للمشرف فقط)
+              if (_isAdmin)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: iconBgColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.delete_forever,
+                      color: isDark ? Colors.red[300] : Colors.red[700],
+                      size: 28,
+                    ),
+                    tooltip: 'حذف العقار',
+                    onPressed: _deleteProperty,
                   ),
                 ),
             ],

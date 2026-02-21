@@ -34,7 +34,7 @@ class _FilteredPropertiesScreenState extends State<FilteredPropertiesScreen> {
     final allProperties = await ApiService.fetchProperties();
 
     // 2. تصفية البيانات محلياً
-    return allProperties.where((doc) {
+    final filtered = allProperties.where((doc) {
       switch (widget.filterType) {
         case 'hasDiscount':
           return (doc['discountPercent'] ?? 0) > 0;
@@ -44,10 +44,53 @@ class _FilteredPropertiesScreenState extends State<FilteredPropertiesScreen> {
           return doc['category'] == widget.filterValue;
         case 'propertyType':
           return doc['propertyType'] == widget.filterValue;
+        case 'newest':
+          return true;
         default:
           return true;
       }
     }).toList();
+
+    if (widget.filterType == 'newest') {
+      filtered.sort(
+        (a, b) => _getPropertyCreatedAt(b).compareTo(_getPropertyCreatedAt(a)),
+      );
+    }
+
+    return filtered;
+  }
+
+  DateTime _getPropertyCreatedAt(Map<String, dynamic> property) {
+    final raw =
+        property['createdAt'] ??
+        property['created_at'] ??
+        property['timestamp'] ??
+        property['publishedAt'];
+    return _parsePropertyDate(raw) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  DateTime? _parsePropertyDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    if (value is int) {
+      if (value.toString().length > 10) {
+        return DateTime.fromMillisecondsSinceEpoch(value);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+    }
+    if (value is double) {
+      return DateTime.fromMillisecondsSinceEpoch((value * 1000).toInt());
+    }
+    if (value is Map) {
+      if (value.containsKey('_seconds')) {
+        return DateTime.fromMillisecondsSinceEpoch(value['_seconds'] * 1000);
+      }
+      if (value.containsKey('seconds')) {
+        return DateTime.fromMillisecondsSinceEpoch(value['seconds'] * 1000);
+      }
+    }
+    return null;
   }
 
   @override

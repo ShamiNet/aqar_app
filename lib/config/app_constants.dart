@@ -4,8 +4,13 @@ class AppConstants {
   // ==========================================
   // 🌐 إعدادات الخادم والشبكة (API & Network)
   // ==========================================
-  // يمكنك تغيير هذا الرابط من هنا فقط وسيتغير في كل التطبيق
-  static const String baseUrl = 'http://72.60.80.201:3001/api';
+  // ✅ تم تحويل الرابط إلى HTTPS الآمن
+  static const String baseUrl = 'https://s313.store/api';
+
+  // ✅ دومين Deep Links (للمشاركة وفتح الروابط)
+  static const String appDomain = 's313.store';
+  static const String appUrl = 'https://$appDomain';
+
   static const String currentAppVersion = '1.0.0';
 
   // ==========================================

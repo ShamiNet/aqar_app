@@ -5,6 +5,9 @@ import 'package:aqar_app/screens/property_details_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:aqar_app/config/app_constants.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,10 +31,19 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _shops = [];
   List<Map<String, dynamic>> _discounted = [];
   List<Map<String, dynamic>> _topViewed = [];
+  List<Map<String, dynamic>> _newProperties = [];
+  String _announcementText = '';
+  String _announcementUrl = '';
+  String? _announcementId;
+  bool _announcementEnabled = false;
+  bool _announcementViewRecorded = false;
 
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      debugPrint('USER_ID: ${prefs.getString(AppConstants.prefUserId)}');
+    });
     _fetchData();
   }
 
@@ -39,14 +51,25 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchData() async {
     try {
       final properties = await ApiService.fetchProperties(limit: 150);
+      final settings = await ApiService.fetchAppSettings();
+      final nextAnnouncementId = settings['announcement_id']?.toString();
       if (mounted) {
+        final previousAnnouncementId = _announcementId;
         _categorizeProperties(
           properties,
         ); // تصنيف البيانات فور وصولها مرة واحدة
         setState(() {
+          _announcementText = (settings['announcement_text'] ?? '').toString();
+          _announcementUrl = (settings['announcement_url'] ?? '').toString();
+          _announcementEnabled = settings['announcement_enabled'] == true;
+          _announcementId = nextAnnouncementId;
+          if (previousAnnouncementId != nextAnnouncementId) {
+            _announcementViewRecorded = false;
+          }
           _isLoading = false;
           _errorMessage = null;
         });
+        _recordAnnouncementViewIfNeeded();
       }
     } catch (e) {
       if (mounted) {
@@ -84,12 +107,51 @@ class _HomeScreenState extends State<HomeScreen> {
         .where((p) => (p['views'] ?? 0) > 0)
         .take(10)
         .toList();
+
+    final newestList = List<Map<String, dynamic>>.from(allProperties);
+    newestList.sort(
+      (a, b) => _getPropertyCreatedAt(b).compareTo(_getPropertyCreatedAt(a)),
+    );
+    _newProperties = newestList.take(10).toList();
   }
 
   int _parseInt(dynamic value) {
     if (value == null) return 0;
     if (value is int) return value;
     return int.tryParse(value.toString()) ?? 0;
+  }
+
+  DateTime _getPropertyCreatedAt(Map<String, dynamic> property) {
+    final raw =
+        property['createdAt'] ??
+        property['created_at'] ??
+        property['timestamp'] ??
+        property['publishedAt'];
+    return _parsePropertyDate(raw) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  DateTime? _parsePropertyDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    if (value is int) {
+      if (value.toString().length > 10) {
+        return DateTime.fromMillisecondsSinceEpoch(value);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+    }
+    if (value is double) {
+      return DateTime.fromMillisecondsSinceEpoch((value * 1000).toInt());
+    }
+    if (value is Map) {
+      if (value.containsKey('_seconds')) {
+        return DateTime.fromMillisecondsSinceEpoch(value['_seconds'] * 1000);
+      }
+      if (value.containsKey('seconds')) {
+        return DateTime.fromMillisecondsSinceEpoch(value['seconds'] * 1000);
+      }
+    }
+    return null;
   }
 
   // ✅ 4. دالة مساعدة لبناء الأقسام (تمنع تكرار الكود وتجعل الـ build قصيراً)
@@ -139,6 +201,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _recordAnnouncementViewIfNeeded() async {
+    if (_announcementViewRecorded) return;
+    if (!_announcementEnabled || _announcementText.trim().isEmpty) return;
+    final announcementId = _announcementId;
+    if (announcementId == null || announcementId.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'announcement_viewed_$announcementId';
+    if (prefs.getBool(key) == true) {
+      _announcementViewRecorded = true;
+      return;
+    }
+
+    final success = await ApiService.recordAnnouncementView(announcementId);
+    if (success) {
+      await prefs.setBool(key, true);
+      _announcementViewRecorded = true;
+    }
+  }
+
   // ✅ 6. دالة الـ build أصبحت مجرد "خريطة" للعرض بدلاً من مكان لحساب البيانات!
   @override
   Widget build(BuildContext context) {
@@ -168,8 +250,18 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_announcementEnabled && _announcementText.trim().isNotEmpty)
+                _AnnouncementMarquee(
+                  text: _announcementText.trim(),
+                  url: _announcementUrl.trim().isEmpty
+                      ? null
+                      : _announcementUrl.trim(),
+                ),
               if (_featuredProperties.isNotEmpty)
                 _FeaturedPropertiesCarousel(properties: _featuredProperties),
+
+              if (_newProperties.isNotEmpty)
+                _NewPropertiesCarousel(properties: _newProperties),
 
               _buildSection('عقارات للبيع', _saleProperties, 'category', 'بيع'),
               _buildSection(
@@ -178,6 +270,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 'category',
                 'إيجار',
               ),
+              if (_rentProperties.isNotEmpty)
+                _RentPropertiesCarousel(properties: _rentProperties),
               _buildSection('الأكثر مشاهدة 🔥', _topViewed, 'views', 'high'),
               _buildSection('بيوت', _houses, 'propertyType', 'بيت'),
               _buildSection('فلل', _villas, 'propertyType', 'فيلا'),
@@ -213,15 +307,7 @@ class _FeaturedPropertiesCarousel extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'عقارات مميزة',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? null
-                      : Colors.white,
-                ),
-              ),
+              _FeaturedTitlePill(title: 'عقارات مميزة'),
               TextButton(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -273,6 +359,340 @@ class _FeaturedPropertiesCarousel extends StatelessWidget {
         ),
         const SizedBox(height: 10),
       ],
+    );
+  }
+}
+
+class _RentPropertiesCarousel extends StatelessWidget {
+  final List<Map<String, dynamic>> properties;
+
+  const _RentPropertiesCarousel({required this.properties});
+
+  @override
+  Widget build(BuildContext context) {
+    if (properties.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _FeaturedTitlePill(title: 'عقارات للإيجار'),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => const FilteredPropertiesScreen(
+                        filterTitle: 'عقارات للإيجار',
+                        filterType: 'category',
+                        filterValue: 'إيجار',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('عرض الكل'),
+              ),
+            ],
+          ),
+        ),
+        CarouselSlider.builder(
+          itemCount: properties.length,
+          itemBuilder: (context, index, realIndex) {
+            final doc = properties[index];
+            final propertyId = doc['id'] ?? 'unknown';
+
+            return SizedBox(
+              width: MediaQuery.of(context).size.width,
+              child: PropertyCard(
+                property: doc,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) =>
+                          PropertyDetailsScreen(propertyId: propertyId),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+          options: CarouselOptions(
+            height: 240,
+            autoPlay: true,
+            autoPlayInterval: const Duration(seconds: 3),
+            autoPlayAnimationDuration: const Duration(milliseconds: 1200),
+            autoPlayCurve: Curves.fastOutSlowIn,
+            enlargeCenterPage: true,
+            viewportFraction: 0.88,
+            aspectRatio: 16 / 9,
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+}
+
+class _NewPropertiesCarousel extends StatelessWidget {
+  final List<Map<String, dynamic>> properties;
+
+  const _NewPropertiesCarousel({required this.properties});
+
+  @override
+  Widget build(BuildContext context) {
+    if (properties.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _FeaturedTitlePill(title: 'عقارات جديدة'),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) => const FilteredPropertiesScreen(
+                        filterTitle: 'عقارات جديدة',
+                        filterType: 'newest',
+                        filterValue: null,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('عرض الكل'),
+              ),
+            ],
+          ),
+        ),
+        CarouselSlider.builder(
+          itemCount: properties.length,
+          itemBuilder: (context, index, realIndex) {
+            final doc = properties[index];
+            final propertyId = doc['id'] ?? 'unknown';
+
+            return SizedBox(
+              width: MediaQuery.of(context).size.width,
+              child: PropertyCard(
+                property: doc,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (ctx) =>
+                          PropertyDetailsScreen(propertyId: propertyId),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+          options: CarouselOptions(
+            height: 240,
+            autoPlay: true,
+            autoPlayInterval: const Duration(seconds: 3),
+            autoPlayAnimationDuration: const Duration(milliseconds: 1200),
+            autoPlayCurve: Curves.fastOutSlowIn,
+            enlargeCenterPage: true,
+            viewportFraction: 0.88,
+            aspectRatio: 16 / 9,
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+}
+
+class _FeaturedTitlePill extends StatelessWidget {
+  final String title;
+
+  const _FeaturedTitlePill({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gradient = isDark
+        ? const LinearGradient(colors: [Color(0xFF7EC9FF), Color(0xFF4A79FF)])
+        : const LinearGradient(colors: [Color(0xFF0D2B5B), Color(0xFF2B7BFF)]);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementMarquee extends StatefulWidget {
+  final String text;
+  final String? url;
+
+  const _AnnouncementMarquee({required this.text, this.url});
+
+  @override
+  State<_AnnouncementMarquee> createState() => _AnnouncementMarqueeState();
+}
+
+class _AnnouncementMarqueeState extends State<_AnnouncementMarquee>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  double _textWidth = 0;
+  double _containerWidth = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12),
+    )..repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnnouncementMarquee oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _measureText();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _measureText() {
+    final textStyle = _textStyle(context);
+    final textPainter = TextPainter(
+      text: TextSpan(text: widget.text, style: textStyle),
+      textDirection: TextDirection.rtl,
+      maxLines: 1,
+    )..layout();
+    _textWidth = textPainter.width;
+
+    final pixelsPerSecond = 70.0;
+    final distance = _containerWidth + _textWidth;
+    final seconds = (distance / pixelsPerSecond).clamp(8.0, 20.0);
+    _controller.duration = Duration(milliseconds: (seconds * 1000).round());
+  }
+
+  TextStyle _textStyle(BuildContext context) {
+    return const TextStyle(
+      color: Colors.white,
+      fontWeight: FontWeight.w700,
+      fontSize: 14,
+    );
+  }
+
+  Future<void> _handleTap() async {
+    final url = widget.url;
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const gradient = LinearGradient(
+      colors: [
+        Color.fromARGB(255, 205, 184, 0),
+        Color.fromARGB(255, 205, 123, 0),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: GestureDetector(
+        onTap: _handleTap,
+        child: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                _containerWidth = constraints.maxWidth;
+                _measureText();
+                final start = _containerWidth;
+                final end = -_textWidth;
+                final animation = Tween<double>(begin: start, end: end).animate(
+                  CurvedAnimation(parent: _controller, curve: Curves.linear),
+                );
+
+                return Stack(
+                  alignment: Alignment.centerLeft,
+                  children: [
+                    Positioned(
+                      right: 12,
+                      child: Icon(
+                        Icons.campaign,
+                        color: Colors.white.withOpacity(0.95),
+                        size: 20,
+                      ),
+                    ),
+                    AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, child) {
+                        return Transform.translate(
+                          offset: Offset(animation.value, 0),
+                          child: child,
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 40, right: 12),
+                        child: Text(
+                          widget.text,
+                          maxLines: 1,
+                          overflow: TextOverflow.visible,
+                          style: _textStyle(context),
+                          textDirection: TextDirection.rtl,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

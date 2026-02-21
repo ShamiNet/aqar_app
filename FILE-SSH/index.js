@@ -19,6 +19,7 @@ const dealRoutes = require('./routes/deals');
 const reportsRoutes = require('./routes/reports');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(bodyParser.json());
 

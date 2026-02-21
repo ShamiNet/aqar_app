@@ -2,9 +2,11 @@
 import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/screens/map_legend_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart'
+    hide ClusterManager, Cluster;
 import 'dart:ui' as ui;
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert' as convert;
@@ -15,6 +17,24 @@ const kDirectionsKey = String.fromEnvironment(
   defaultValue: 'AIzaSyAwLH04MSJUTEHldU740RghRCJKUnpInyI',
   // defaultValue: 'AIzaSyAwiq4OSjCBXuMqms4e_JRJYjKMQOhrukQ',
 );
+
+// ✅ تعريف الكلاس الخاص بنقاط التجميع
+class MapPlace with ClusterItem {
+  final String id;
+  final String title;
+  final LatLng pos;
+  final Map<String, dynamic> data;
+
+  MapPlace({
+    required this.id,
+    required this.title,
+    required this.pos,
+    required this.data,
+  });
+
+  @override
+  LatLng get location => pos;
+}
 
 class PropertiesMapScreen extends StatefulWidget {
   const PropertiesMapScreen({super.key});
@@ -28,34 +48,177 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   Position? _currentUserPosition;
   final Set<Polyline> _polylines = {};
   GoogleMapController? _mapController;
-  MarkerId? _selectedMarkerId;
 
-  List<Map<String, dynamic>> _properties = [];
-  final Set<Marker> _markers = {};
+  // ✅ مدير التجميع
+  late ClusterManager<MapPlace> _clusterManager;
+
+  List<MapPlace> _items = [];
+  Set<Marker> _markers = {};
   final Map<String, BitmapDescriptor> _markerIcons = {};
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _initClusterManager();
     _determinePosition();
     _fetchProperties();
+  }
+
+  // ✅ تهيئة مدير التجميع
+  void _initClusterManager() {
+    _clusterManager = ClusterManager<MapPlace>(
+      _items,
+      _updateMarkers,
+      markerBuilder: _markerBuilder,
+    );
+  }
+
+  // ✅ تحديث الدبابيس على الخريطة
+  void _updateMarkers(Set<Marker> markers) {
+    setState(() {
+      _markers = markers;
+    });
   }
 
   Future<void> _fetchProperties() async {
     try {
       final properties = await ApiService.fetchProperties();
       if (mounted) {
+        List<MapPlace> newItems = [];
+        for (var p in properties) {
+          final loc = p['location'];
+          if (loc is Map) {
+            double? lat = (loc['_latitude'] ?? loc['latitude'])?.toDouble();
+            double? lng = (loc['_longitude'] ?? loc['longitude'])?.toDouble();
+            if (lat != null && lng != null) {
+              newItems.add(
+                MapPlace(
+                  id: p['id'],
+                  title: p['title'] ?? '',
+                  pos: LatLng(lat, lng),
+                  data: p,
+                ),
+              );
+            }
+          }
+        }
         setState(() {
-          _properties = properties;
+          _items = newItems;
+          _clusterManager.setItems(_items);
           _isLoading = false;
         });
-        _buildMarkersWithCustomIcons();
       }
     } catch (e) {
       debugPrint('Error fetching properties for map: $e');
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // ✅ بناء شكل الدبوس (سواء كان عقاراً واحداً أو مجموعة)
+  Future<Marker> _markerBuilder(dynamic cluster) async {
+    final mapPlaceCluster = cluster as Cluster<MapPlace>;
+    return Marker(
+      markerId: MarkerId(mapPlaceCluster.getId()),
+      position: mapPlaceCluster.location,
+      onTap: () {
+        if (!mapPlaceCluster.isMultiple) {
+          _onPropertyTapped(mapPlaceCluster.items.first.data);
+        } else {
+          _animateToClusteredItems(mapPlaceCluster);
+        }
+      },
+      icon: mapPlaceCluster.isMultiple
+          ? await _getClusterIcon(mapPlaceCluster.count)
+          : await _getPropertyIcon(mapPlaceCluster.items.first.data),
+    );
+  }
+
+  // ✅ رسم دائرة التجميع مع الرقم
+  Future<BitmapDescriptor> _getClusterIcon(int count) async {
+    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(pictureRecorder);
+    final Paint paint = Paint()..color = Theme.of(context).primaryColor;
+    const double size = 50.0;
+
+    canvas.drawCircle(const Offset(size / 2, size / 2), size / 2, paint);
+
+    TextPainter painter = TextPainter(textDirection: TextDirection.ltr);
+    painter.text = TextSpan(
+      text: count.toString(),
+      style: TextStyle(
+        fontSize: size * 0.4,
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    painter.layout();
+    painter.paint(
+      canvas,
+      Offset((size - painter.width) / 2, (size - painter.height) / 2),
+    );
+
+    final img = await pictureRecorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(data!.buffer.asUint8List());
+  }
+
+  // ✅ أيقونة العقار الفردي
+  Future<BitmapDescriptor> _getPropertyIcon(Map<String, dynamic> data) async {
+    String? type = data['propertyType'];
+    if (type == null || type.isEmpty) {
+      final title = (data['title'] ?? '').toString().toLowerCase();
+      if (title.contains('فيلا')) {
+        type = 'فيلا';
+      } else if (title.contains('بناية') || title.contains('عمارة')) {
+        type = 'بناية';
+      } else if (title.contains('ارض') || title.contains('أرض')) {
+        type = 'ارض';
+      } else if (title.contains('دكان') || title.contains('محل')) {
+        type = 'دكان';
+      } else {
+        type = 'بيت';
+      }
+    }
+
+    final category = data['category'];
+    final iconKey = '${type}_$category';
+
+    if (!_markerIcons.containsKey(iconKey)) {
+      _markerIcons[iconKey] = await _createMarkerBitmap(
+        getIconForPropertyType(type),
+        getColorForCategory(category),
+      );
+    }
+
+    return _markerIcons[iconKey]!;
+  }
+
+  // ✅ تحريك الخريطة نحو العناصر المجمعة
+  void _animateToClusteredItems(Cluster<MapPlace> cluster) {
+    if (_mapController == null) return;
+
+    double minLat = cluster.items.first.pos.latitude;
+    double maxLat = minLat;
+    double minLng = cluster.items.first.pos.longitude;
+    double maxLng = minLng;
+
+    for (var item in cluster.items) {
+      minLat = minLat < item.pos.latitude ? minLat : item.pos.latitude;
+      maxLat = maxLat > item.pos.latitude ? maxLat : item.pos.latitude;
+      minLng = minLng < item.pos.longitude ? minLng : item.pos.longitude;
+      maxLng = maxLng > item.pos.longitude ? maxLng : item.pos.longitude;
+    }
+
+    final bounds = LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
   }
 
   Future<BitmapDescriptor> _createMarkerBitmap(
@@ -64,7 +227,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   ) async {
     final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(pictureRecorder);
-    const double size = 120.0;
+    const double size = 50.0;
     final Paint circlePaint = Paint()..color = color;
     canvas.drawCircle(const Offset(size / 2, size / 2), size / 2, circlePaint);
     TextPainter textPainter = TextPainter(textDirection: TextDirection.rtl);
@@ -86,7 +249,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
       size.toInt(),
     );
     final data = await img.toByteData(format: ui.ImageByteFormat.png);
-    return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
+    return BitmapDescriptor.bytes(data!.buffer.asUint8List());
   }
 
   Future<void> _determinePosition() async {
@@ -320,22 +483,30 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
     );
   }
 
-  void _onMarkerTapped(MarkerId markerId, LatLng propertyPosition) {
+  void _onPropertyTapped(Map<String, dynamic> propertyData) {
     String? distanceText;
     if (_currentUserPosition != null) {
-      final distanceInMeters = Geolocator.distanceBetween(
-        _currentUserPosition!.latitude,
-        _currentUserPosition!.longitude,
-        propertyPosition.latitude,
-        propertyPosition.longitude,
-      );
-      distanceText = '${(distanceInMeters / 1000).toStringAsFixed(2)} كم';
-    }
+      final lat = propertyData['location'] is Map
+          ? (propertyData['location']['_latitude'] ??
+                    propertyData['location']['latitude'])
+                ?.toDouble()
+          : null;
+      final lng = propertyData['location'] is Map
+          ? (propertyData['location']['_longitude'] ??
+                    propertyData['location']['longitude'])
+                ?.toDouble()
+          : null;
 
-    final propertyData = _properties.firstWhere(
-      (p) => (p['id'] ?? '') == markerId.value,
-      orElse: () => {},
-    );
+      if (lat != null && lng != null) {
+        final distanceInMeters = Geolocator.distanceBetween(
+          _currentUserPosition!.latitude,
+          _currentUserPosition!.longitude,
+          lat,
+          lng,
+        );
+        distanceText = '${(distanceInMeters / 1000).toStringAsFixed(2)} كم';
+      }
+    }
 
     if (propertyData.isEmpty) return;
 
@@ -344,9 +515,18 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
     final currency = propertyData['currency'] ?? '';
     final category = propertyData['category'] ?? '';
     final String priceStr = price != null ? '$price $currency' : '';
+    final propertyPosition = propertyData['location'] is Map
+        ? LatLng(
+            (propertyData['location']['_latitude'] ??
+                    propertyData['location']['latitude'])
+                .toDouble(),
+            (propertyData['location']['_longitude'] ??
+                    propertyData['location']['longitude'])
+                .toDouble(),
+          )
+        : null;
 
     setState(() {
-      _selectedMarkerId = markerId;
       _polylines.clear();
     });
 
@@ -366,7 +546,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
               title,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
             if (priceStr.isNotEmpty)
               Text(
                 'السعر: $priceStr',
@@ -377,20 +557,21 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
               ),
             if (category.isNotEmpty) Text('النوع: $category'),
             if (distanceText != null) Text('المسافة: $distanceText'),
-            const SizedBox(height: 20),
+            const SizedBox(height: 50),
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _drawRoute(propertyPosition);
-                    },
-                    icon: const Icon(Icons.directions),
-                    label: const Text('المسار'),
+                if (propertyPosition != null)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _drawRoute(propertyPosition);
+                      },
+                      icon: const Icon(Icons.directions),
+                      label: const Text('المسار'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
+                if (propertyPosition != null) const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
@@ -427,11 +608,13 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
           ),
           onMapCreated: (c) {
             _mapController = c;
+            _clusterManager.setMapId(c.mapId);
             _animateToUserLocation();
           },
+          onCameraMove: _clusterManager.onCameraMove,
+          onCameraIdle: _clusterManager.updateMap,
           onTap: (_) => setState(() {
             _polylines.clear();
-            _selectedMarkerId = null;
           }),
           markers: _markers,
           polylines: _polylines,
@@ -440,7 +623,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
         ),
         if (_isLoading) const Center(child: CircularProgressIndicator()),
         Positioned(
-          top: 16,
+          top: 56,
           left: 16,
           child: FloatingActionButton(
             heroTag: 'map_legend',
@@ -456,59 +639,10 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
     );
   }
 
-  Future<void> _buildMarkersWithCustomIcons() async {
-    _markers.clear();
-    for (var data in _properties) {
-      final location = data['location'];
-
-      double? lat, lng;
-      if (location is Map) {
-        lat = (location['_latitude'] ?? location['latitude'])?.toDouble();
-        lng = (location['_longitude'] ?? location['longitude'])?.toDouble();
-      }
-
-      if (lat != null && lng != null) {
-        final propertyPosition = LatLng(lat, lng);
-        final markerId = MarkerId(data['id']);
-
-        String? type = data['propertyType'];
-        if (type == null || type.isEmpty) {
-          final title = (data['title'] ?? '').toString().toLowerCase();
-          if (title.contains('فيلا')) {
-            type = 'فيلا';
-          } else if (title.contains('بناية') || title.contains('عمارة')) {
-            type = 'بناية';
-          } else if (title.contains('ارض') || title.contains('أرض')) {
-            type = 'ارض';
-          } else if (title.contains('دكان') || title.contains('محل')) {
-            type = 'دكان';
-          } else {
-            type = 'بيت';
-          }
-        }
-
-        final category = data['category'];
-
-        final iconKey = '${type}_$category';
-        if (!_markerIcons.containsKey(iconKey)) {
-          _markerIcons[iconKey] = await _createMarkerBitmap(
-            getIconForPropertyType(type),
-            getColorForCategory(category),
-          );
-        }
-
-        _markers.add(
-          Marker(
-            markerId: markerId,
-            position: propertyPosition,
-            icon: _markerIcons[iconKey]!,
-            infoWindow: InfoWindow(title: data['title'] ?? 'عقار'),
-            onTap: () => _onMarkerTapped(markerId, propertyPosition),
-          ),
-        );
-      }
-    }
-    if (mounted) setState(() {});
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
   }
 }
 
@@ -535,6 +669,8 @@ Color getColorForCategory(String? category) {
       return Colors.red.shade700;
     case 'إيجار':
       return Colors.blue.shade700;
+    case 'استثمار':
+      return Colors.green.shade700;
     default:
       return Colors.purple;
   }

@@ -28,7 +28,7 @@ router.get('/:id', async (req, res) => {
         // 1. تجهيز التحديث للداتابيز
         updates.createdAt = admin.firestore.FieldValue.serverTimestamp();
 
-        // 2. تحديث المتغير المحلي ليرسله السيرفر في الرد فوراً (كي لا يظهر null في التطبيق)
+        // 2. تحديث المتغير المحلي ليرسله السيرفر في الرد فوراً (كي لا يظهر null في  التطبيق)
         data.createdAt = { _seconds: Math.floor(Date.now() / 1000), _nanoseconds: 0 };
 
         needsUpdate = true;
@@ -68,7 +68,7 @@ router.get('/:id', async (req, res) => {
       isOnline: data.isOnline || false,
       lastSeen: formatTimestamp(data.lastSeen),
       createdAt: formatTimestamp(data.createdAt), // ✅ تحويل التاريخ
-      joinedAt: formatTimestamp(data.createdAt),  // ✅ احتياطي لتجنب المشاكل
+      joinedAt: formatTimestamp(data.createdAt),  // ✅ احتياطي لتجنب المشاكل       
       uid: doc.id,              // ✅ إضافة uid
       userId: doc.id            // ✅ إضافة userId
     };
@@ -132,7 +132,7 @@ router.post('/:id/reviews', verifyToken, async (req, res) => {
         const reviewerId = req.userId;
 
         if (targetUserId === reviewerId) {
-            return res.status(400).json({ error: 'You cannot review yourself' });
+            return res.status(400).json({ error: 'You cannot review yourself' });   
         }
 
         const userRef = db.collection('users').doc(targetUserId);
@@ -181,7 +181,7 @@ router.get('/:id/reviews', async (req, res) => {
             .get();
 
         const reviews = [];
-        snapshot.forEach(doc => reviews.push({ id: doc.id, ...doc.data() }));
+        snapshot.forEach(doc => reviews.push({ id: doc.id, ...doc.data() }));       
         res.json(reviews);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -231,12 +231,12 @@ router.post('/:userId/online-status', verifyToken, async (req, res) => {
         };
 
         await db.collection('users').doc(userId).update(updateData);
-        
+
         console.log(`🔄 [ONLINE-STATUS] User ${userId} status updated:`, {
           isOnline,
           timestamp: new Date().toISOString()
         });
-        
+
         res.json({ message: 'Online status updated' });
     } catch (error) {
         console.error('Error updating online status:', error);
@@ -280,11 +280,11 @@ router.post('/:id/favorites', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { propertyId } = req.body || {};
-    if (!propertyId) return res.status(400).json({ message: 'propertyId مطلوب' });
+    if (!propertyId) return res.status(400).json({ message: 'propertyId مطلوب' });  
     if (!canAccessUser(req, id))
       return res.status(403).json({ message: 'صلاحيات غير كافية' });
 
-    const propDoc = await db.collection('properties').doc(propertyId).get();
+    const propDoc = await db.collection('properties').doc(propertyId).get();        
     if (!propDoc.exists)
       return res.status(404).json({ message: 'العقار غير موجود' });
 
@@ -306,7 +306,7 @@ router.post('/:id/favorites', verifyToken, async (req, res) => {
 });
 
 // إزالة من المفضلة
-router.delete('/:id/favorites/:propertyId', verifyToken, async (req, res) => {
+router.delete('/:id/favorites/:propertyId', verifyToken, async (req, res) => {      
   try {
     const { id, propertyId } = req.params;
     if (!canAccessUser(req, id))
@@ -331,29 +331,29 @@ router.get('/:id/viewed-properties', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { limit } = req.query;
-    
+
     // ✅ التحقق من الصلاحيات (يجب أن يكون المستخدم نفسه أو أدمن)
     if (!canAccessUser(req, id))
       return res.status(403).json({ message: 'صلاحيات غير كافية' });
-    
+
     console.log(`📊 [VIEWED-PROPERTIES] Fetching for user: ${id}`);
-    
+
     // جلب قائمة العقارات المشاهدة
     let query = db
       .collection('users')
       .doc(id)
       .collection('viewedProperties')
       .orderBy('viewedAt', 'desc');
-    
+
     if (limit) {
       query = query.limit(parseInt(limit));
     } else {
       query = query.limit(20); // افتراضياً 20 عقار
     }
-    
+
     const viewedSnap = await query.get();
     const propertyIds = viewedSnap.docs.map(d => d.data().propertyId);
-    
+
     if (!propertyIds.length) return res.json([]);
 
     // جلب تفاصيل العقارات
@@ -370,6 +370,88 @@ router.get('/:id/viewed-properties', verifyToken, async (req, res) => {
   } catch (e) {
     console.error('[Viewed Properties][GET] error', e);
     return res.status(500).json({ message: 'فشل جلب العقارات المشاهدة' });
+  }
+});
+
+router.post('/:id/announcement-view', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { announcementId } = req.body || {};
+
+    if (req.userId !== id) return res.status(403).json({ error: 'Unauthorized' });  
+    if (!announcementId) return res.status(400).json({ error: 'announcementId مطلوب' });
+
+    // تأكد أن الإعلان الحالي مفعّل
+    const settingsDoc = await db.collection('settings').doc('app').get();
+    const settings = settingsDoc.exists ? settingsDoc.data() : {};
+    if (!settings.announcement_enabled || settings.announcement_id !== announcementId) {
+      return res.status(400).json({ error: 'الإعلان غير متاح' });
+    }
+
+    const docId = `${announcementId}_${id}`;
+    await db.collection('announcement_views').doc(docId).set({
+      announcementId,
+      userId: id,
+      viewedAt: new Date()
+    }, { merge: true });
+
+    return res.status(200).json({ message: 'View recorded' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ تسجيل مشاهدة الإعلان الإخباري
+router.post('/:id/announcement-view', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { announcementId } = req.body || {};
+
+    console.log('🧾 [ANNOUNCEMENT-VIEW] request', {
+      paramUserId: id,
+      tokenUserId: req.userId,
+      announcementId,
+    });
+
+    if (req.userId !== id) return res.status(403).json({ error: 'Unauthorized' });
+    if (!announcementId)
+      return res.status(400).json({ error: 'announcementId مطلوب' });
+
+    // تأكد أن الإعلان الحالي مفعّل
+    const settingsDoc = await db.collection('settings').doc('app').get();
+    const settings = settingsDoc.exists ? settingsDoc.data() : {};
+    console.log('🧾 [ANNOUNCEMENT-VIEW] settings', {
+      announcement_enabled: settings.announcement_enabled,
+      announcement_id: settings.announcement_id,
+    });
+    if (!settings.announcement_enabled || settings.announcement_id !== announcementId) {
+      console.log('⚠️ [ANNOUNCEMENT-VIEW] rejected', {
+        announcement_enabled: settings.announcement_enabled,
+        expectedId: settings.announcement_id,
+        providedId: announcementId,
+      });
+      return res.status(400).json({ error: 'الإعلان غير متاح' });
+    }
+
+    const docId = `${announcementId}_${id}`;
+    await db
+      .collection('announcement_views')
+      .doc(docId)
+      .set({
+        announcementId,
+        userId: id,
+        viewedAt: new Date(),
+      }, { merge: true });
+
+    console.log('✅ [ANNOUNCEMENT-VIEW] recorded', {
+      docId,
+      announcementId,
+      userId: id,
+    });
+    return res.status(200).json({ message: 'View recorded' });
+  } catch (error) {
+    console.error('❌ [ANNOUNCEMENT-VIEW] error', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
