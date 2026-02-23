@@ -2,11 +2,11 @@ import 'package:aqar_app/screens/auth_gate.dart';
 import 'package:aqar_app/screens/admin_chat_monitor_screen.dart';
 import 'package:aqar_app/screens/report_details_screen.dart';
 import 'package:aqar_app/screens/profile_screen.dart';
+import 'package:aqar_app/screens/announcement_management_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/widgets/verified_badge.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' as intl;
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -246,7 +246,7 @@ class _OverviewTabState extends State<_OverviewTab> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -258,7 +258,7 @@ class _OverviewTabState extends State<_OverviewTab> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: color, size: 28),
@@ -295,7 +295,7 @@ class _OverviewTabState extends State<_OverviewTab> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: color, size: 28),
@@ -349,7 +349,7 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
-  List<Map<String, dynamic>> _users = [];
+  final List<Map<String, dynamic>> _users = [];
   bool _isLoading = false;
   bool _hasMore = true;
   dynamic _lastCreatedAt; // ✅ يقبل String أو Map (Firestore timestamp)
@@ -379,7 +379,9 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
   }
 
   Future<void> _fetchUsers({bool refresh = false}) async {
-    if (_isLoading) return;
+    if (_isLoading) {
+      return;
+    }
     setState(() => _isLoading = true);
 
     if (refresh) {
@@ -410,7 +412,9 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
               '📍 Last createdAt type: ${newUsers.last['createdAt'].runtimeType}',
             );
             // إذا جاءت بيانات أقل من الحد المطلوب (20)، فهذا يعني وصلنا للنهاية
-            if (newUsers.length < 20) _hasMore = false;
+            if (newUsers.length < 20) {
+              _hasMore = false;
+            }
           }
         });
       }
@@ -422,15 +426,10 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-  }
-
-  Future<void> _refreshUsers() async {
-    _users.clear();
-    _lastCreatedAt = null;
-    _hasMore = true;
-    await _fetchUsers(refresh: true);
   }
 
   // جلب البيانات الكاملة للمستخدم وفتح البروفايل
@@ -449,7 +448,9 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
       final fullUserData = await ApiService.fetchUserProfile(userId);
 
       // إغلاق مؤشر التحميل
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
 
       if (fullUserData == null) {
         if (mounted) {
@@ -474,7 +475,9 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
       }
     } catch (e) {
       // إغلاق مؤشر التحميل إذا كان مفتوحاً
-      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -499,20 +502,29 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
     bool currentStatus,
   ) async {
     try {
-      if (action == 'verify')
+      if (action == 'verify') {
         await ApiService.toggleUserVerification(userId, !currentStatus);
-      if (action == 'ban')
+      }
+      if (action == 'ban') {
         await ApiService.toggleUserBan(userId, !currentStatus);
-      if (action == 'admin')
+      }
+      if (action == 'admin') {
         await ApiService.toggleUserAdmin(userId, !currentStatus);
+      }
 
       // تحديث الحالة محلياً بدلاً من إعادة تحميل القائمة بالكامل (لتحسين التجربة)
       setState(() {
         final index = _users.indexWhere((u) => u['id'] == userId);
         if (index != -1) {
-          if (action == 'verify') _users[index]['isVerified'] = !currentStatus;
-          if (action == 'ban') _users[index]['isBanned'] = !currentStatus;
-          if (action == 'admin') _users[index]['isAdmin'] = !currentStatus;
+          if (action == 'verify') {
+            _users[index]['isVerified'] = !currentStatus;
+          }
+          if (action == 'ban') {
+            _users[index]['isBanned'] = !currentStatus;
+          }
+          if (action == 'admin') {
+            _users[index]['isAdmin'] = !currentStatus;
+          }
         }
       });
 
@@ -624,12 +636,12 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -715,21 +727,21 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
                           _buildStatusChip(
                             'مشرف',
                             Colors.amberAccent,
-                            Colors.amber.withOpacity(0.15),
+                            Colors.amber.withValues(alpha: 0.15),
                             Icons.shield,
                           ),
                         if (isBanned)
                           _buildStatusChip(
                             'محظور',
                             Colors.redAccent,
-                            Colors.red.withOpacity(0.15),
+                            Colors.red.withValues(alpha: 0.15),
                             Icons.block,
                           ),
                         if (isVerified)
                           _buildStatusChip(
                             'موثق',
                             Colors.blueAccent,
-                            Colors.blue.withOpacity(0.15),
+                            Colors.blue.withValues(alpha: 0.15),
                             Icons.check,
                           ),
                       ],
@@ -751,10 +763,15 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
                   if (value == 'profile') {
                     _openUserProfile(userId);
                   }
-                  if (value == 'verify')
+                  if (value == 'verify') {
                     _handleAction(userId, 'verify', isVerified);
-                  if (value == 'ban') _handleAction(userId, 'ban', isBanned);
-                  if (value == 'admin') _handleAction(userId, 'admin', isAdmin);
+                  }
+                  if (value == 'ban') {
+                    _handleAction(userId, 'ban', isBanned);
+                  }
+                  if (value == 'admin') {
+                    _handleAction(userId, 'admin', isAdmin);
+                  }
                 },
                 itemBuilder: (ctx) => [
                   _buildPopupItem(
@@ -801,7 +818,7 @@ class _UsersManagementTabState extends State<_UsersManagementTab> {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: textColor.withOpacity(0.3)),
+        border: Border.all(color: textColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -869,18 +886,8 @@ class _AppControlTab extends StatefulWidget {
 class _AppControlTabState extends State<_AppControlTab> {
   final _versionController = TextEditingController();
   final _msgController = TextEditingController();
-  final _announcementController = TextEditingController();
-  final _announcementUrlController = TextEditingController();
   bool _maintenance = false;
-  bool _announcementEnabled = false;
   bool _loading = true;
-  bool _announcementViewsLoading = false;
-  String? _announcementId;
-  List<Map<String, dynamic>> _announcementViews = [];
-
-  String _generateAnnouncementId() {
-    return 'ann_${DateTime.now().millisecondsSinceEpoch}';
-  }
 
   @override
   void initState() {
@@ -892,8 +899,6 @@ class _AppControlTabState extends State<_AppControlTab> {
   void dispose() {
     _versionController.dispose();
     _msgController.dispose();
-    _announcementController.dispose();
-    _announcementUrlController.dispose();
     super.dispose();
   }
 
@@ -905,16 +910,9 @@ class _AppControlTabState extends State<_AppControlTab> {
           _versionController.text = settings['min_version'] ?? '1.0.0';
           _maintenance = settings['maintenance_mode'] ?? false;
           _msgController.text = settings['maintenance_message'] ?? '';
-          _announcementEnabled = settings['announcement_enabled'] == true;
-          _announcementController.text =
-              settings['announcement_text']?.toString() ?? '';
-          _announcementUrlController.text =
-              settings['announcement_url']?.toString() ?? '';
-          _announcementId = settings['announcement_id']?.toString();
           _loading = false;
         });
       }
-      await _loadAnnouncementViews();
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
@@ -933,50 +931,13 @@ class _AppControlTabState extends State<_AppControlTab> {
     await _loadSettings();
   }
 
-  Future<void> _loadAnnouncementViews() async {
-    final announcementId = _announcementId;
-    if (announcementId == null || announcementId.isEmpty) {
-      if (mounted) {
-        setState(() => _announcementViews = []);
-      }
-      return;
-    }
-
-    setState(() => _announcementViewsLoading = true);
-    try {
-      final views = await ApiService.fetchAnnouncementViews(announcementId);
-      if (mounted) {
-        setState(() {
-          _announcementViews = views;
-          _announcementViewsLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _announcementViewsLoading = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('خطأ في تحميل المشاهدات: $e')));
-      }
-    }
-  }
-
   Future<void> _save() async {
     setState(() => _loading = true);
     try {
-      final announcementText = _announcementController.text.trim();
-      if (_announcementEnabled && announcementText.isNotEmpty) {
-        _announcementId ??= _generateAnnouncementId();
-      }
-
       await ApiService.updateAppSettings({
         'min_version': _versionController.text,
         'maintenance_mode': _maintenance,
         'maintenance_message': _msgController.text,
-        'announcement_enabled': _announcementEnabled,
-        'announcement_text': announcementText,
-        'announcement_url': _announcementUrlController.text,
-        if (_announcementId != null) 'announcement_id': _announcementId,
       });
       if (mounted) {
         setState(() => _loading = false);
@@ -999,11 +960,13 @@ class _AppControlTabState extends State<_AppControlTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     final inputDecoration = InputDecoration(
       labelStyle: TextStyle(color: widget.textSecondary),
-      hintStyle: TextStyle(color: widget.textSecondary.withOpacity(0.5)),
+      hintStyle: TextStyle(color: widget.textSecondary.withValues(alpha: 0.5)),
       filled: true,
       fillColor: widget.inputFillColor,
       border: OutlineInputBorder(
@@ -1056,10 +1019,13 @@ class _AppControlTabState extends State<_AppControlTab> {
                   ),
                 ),
                 value: _maintenance,
-                activeColor: Colors.redAccent,
+                activeThumbColor: Colors.redAccent,
                 onChanged: (v) => setState(() => _maintenance = v),
               ),
-              Divider(height: 1, color: widget.textSecondary.withOpacity(0.2)),
+              Divider(
+                height: 1,
+                color: widget.textSecondary.withValues(alpha: 0.2),
+              ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: TextField(
@@ -1108,131 +1074,30 @@ class _AppControlTabState extends State<_AppControlTab> {
           ),
         ),
         const SizedBox(height: 30),
-        _buildSectionHeader('الشريط الإخباري'),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: widget.surfaceColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  'تفعيل الشريط',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: widget.textPrimary,
-                  ),
-                ),
-                subtitle: Text(
-                  _announcementEnabled ? 'ظاهر للمستخدمين' : 'مخفي حالياً',
-                  style: TextStyle(
-                    color: _announcementEnabled
-                        ? Colors.greenAccent
-                        : Colors.red,
-                  ),
-                ),
-                value: _announcementEnabled,
-                activeColor: Colors.greenAccent,
-                onChanged: (v) => setState(() => _announcementEnabled = v),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _announcementController,
-                style: TextStyle(color: widget.textPrimary),
-                decoration: inputDecoration.copyWith(
-                  labelText: 'نص الشريط الإخباري',
-                  prefixIcon: Icon(
-                    Icons.campaign_outlined,
-                    color: widget.textSecondary,
-                  ),
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AnnouncementManagementScreen(
+                  surfaceColor: widget.surfaceColor,
+                  textPrimary: widget.textPrimary,
+                  textSecondary: widget.textSecondary,
+                  inputFillColor: widget.inputFillColor,
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _announcementUrlController,
-                style: TextStyle(color: widget.textPrimary),
-                decoration: inputDecoration.copyWith(
-                  labelText: 'رابط اختياري',
-                  hintText: 'https://example.com',
-                  prefixIcon: Icon(Icons.link, color: widget.textSecondary),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildSectionHeader('مشاهدات الشريط'),
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: Colors.blueAccent),
-              onPressed: _loadAnnouncementViews,
-              tooltip: 'تحديث المشاهدات',
+            );
+          },
+          icon: const Icon(Icons.campaign_outlined),
+          label: const Text('إدارة الشريط الإخباري'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-          ],
-        ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: widget.surfaceColor,
-            borderRadius: BorderRadius.circular(12),
           ),
-          child: _announcementViewsLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _announcementViews.isEmpty
-              ? Text(
-                  'لا توجد مشاهدات حتى الآن',
-                  style: TextStyle(color: widget.textSecondary),
-                )
-              : Column(
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.visibility,
-                          color: widget.textSecondary,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'الإجمالي: ${_announcementViews.length}',
-                          style: TextStyle(
-                            color: widget.textPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    ..._announcementViews.map((view) {
-                      final username = view['username'] ?? 'مجهول';
-                      final email = view['email'] ?? '';
-                      return ListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          Icons.person_outline,
-                          color: widget.textSecondary,
-                        ),
-                        title: Text(
-                          username,
-                          style: TextStyle(color: widget.textPrimary),
-                        ),
-                        subtitle: email.toString().isEmpty
-                            ? null
-                            : Text(
-                                email,
-                                style: TextStyle(color: widget.textSecondary),
-                              ),
-                      );
-                    }).toList(),
-                  ],
-                ),
         ),
         const SizedBox(height: 30),
         ElevatedButton(
@@ -1311,15 +1176,17 @@ class _ChatMonitoringTabState extends State<_ChatMonitoringTab> {
       child: FutureBuilder<List<Map<String, dynamic>>>(
         future: _chatsFuture,
         builder: (ctx, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.isEmpty)
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return Center(
               child: Text(
                 'لا توجد محادثات',
                 style: TextStyle(color: widget.textSecondary),
               ),
             );
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.all(20),
@@ -1335,7 +1202,7 @@ class _ChatMonitoringTabState extends State<_ChatMonitoringTab> {
                 ),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: Colors.blueAccent.withOpacity(0.2),
+                    backgroundColor: Colors.blueAccent.withValues(alpha: 0.2),
                     child: const Icon(
                       Icons.chat_bubble,
                       color: Colors.blueAccent,
@@ -1419,8 +1286,9 @@ class _ReportsAndArchiveTabState extends State<_ReportsAndArchiveTab> {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _reportsFuture,
       builder: (ctx, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(
             child: Column(
@@ -1429,7 +1297,7 @@ class _ReportsAndArchiveTabState extends State<_ReportsAndArchiveTab> {
                 Icon(
                   Icons.check_circle_outline,
                   size: 60,
-                  color: Colors.greenAccent.withOpacity(0.5),
+                  color: Colors.greenAccent.withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 10),
                 Text(

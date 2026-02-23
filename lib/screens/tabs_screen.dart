@@ -53,8 +53,6 @@ class _TabsScreenState extends State<TabsScreen> {
     'ملفي الشخصي',
   ];
 
-  Map<String, dynamic>? _currentUserData;
-
   @override
   void initState() {
     super.initState();
@@ -115,11 +113,6 @@ class _TabsScreenState extends State<TabsScreen> {
         } catch (_) {}
       }
     }
-    if (mounted) {
-      setState(() {
-        _currentUserData = userData;
-      });
-    }
   }
 
   void _onItemTapped(int index) {
@@ -144,7 +137,10 @@ class _TabsScreenState extends State<TabsScreen> {
       context,
     ).push(MaterialPageRoute(builder: (ctx) => const AddPropertyScreen()));
 
-    if (result != null && result is String && mounted) {
+    if (!mounted) {
+      return;
+    }
+    if (result != null && result is String) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
@@ -197,6 +193,9 @@ class _TabsScreenState extends State<TabsScreen> {
       ),
     );
 
+    if (!mounted) {
+      return;
+    }
     if (shouldSignOut == true) {
       await Provider.of<UserProvider>(context, listen: false).logout();
       if (mounted) {
@@ -206,137 +205,6 @@ class _TabsScreenState extends State<TabsScreen> {
         );
       }
     }
-  }
-
-  void _showAboutApp(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        maxChildSize: 0.95,
-        minChildSize: 0.5,
-        expand: false,
-        builder: (context, scrollController) {
-          return SingleChildScrollView(
-            controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.home_work_rounded,
-                    size: 60,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'عقار بلس',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                ),
-                Text(
-                  'المنصة العقارية الأذكى في جيبك',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  'مرحباً بك في "عقار بلس"، التطبيق الذي يعيد تعريف تجربة البيع والشراء والاستئجار. نحن نجمع بين أحدث التقنيات وسهولة الاستخدام لنقدم لك سوقاً عقارياً متكاملاً بين يديك.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(height: 1.6, fontSize: 15),
-                ),
-                const SizedBox(height: 24),
-                const Divider(),
-                const SizedBox(height: 24),
-                _buildFeatureSection(
-                  context,
-                  title: 'للباحثين عن التميز 🏠',
-                  features: [
-                    '🗺️ خريطة تفاعلية: استكشف العقارات والأحياء بدقة عالية.',
-                    '🎥 جولات افتراضية: شاهد العقار بالفيديو قبل زيارته.',
-                    '🔍 بحث ذكي: فلترة متقدمة حسب السعر، المساحة، والمواصفات.',
-                    '⭐ تقييمات موثوقة: تصفح تقييمات الملاك والوسطاء لضمان المصداقية.',
-                    '💬 تواصل مباشر: محادثات فورية آمنة للتفاوض دون وسطاء.',
-                  ],
-                ),
-                const SizedBox(height: 24),
-                _buildFeatureSection(
-                  context,
-                  title: 'للملاك والمسوقين 📈',
-                  features: [
-                    '🚀 نشر فوري: أضف عقارك في خطوات بسيطة مع رفع الصور والفيديو.',
-                    '📊 لوحة تحكم: تتبع أداء إعلاناتك وعدد المشاهدات.',
-                    '🏅 شارات التوثيق: احصل على ثقة العملاء عبر توثيق حسابك.',
-                    '🤝 إدارة العروض: استقبل طلبات الشراء والإيجار وقم بإدارتها بسهولة.',
-                  ],
-                ),
-                const SizedBox(height: 30),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.withOpacity(0.1)),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'نحن هنا لمساعدتك دائماً',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildSocialButton(
-                            Icons.telegram,
-                            'قناة التطبيق',
-                            'https://t.me/+yj3zSKtT_mYyZmU0',
-                          ),
-                          const SizedBox(width: 20),
-                          _buildSocialButton(
-                            Icons.send,
-                            '@DevDrond',
-                            'https://t.me/DevDrond',
-                          ),
-                          const SizedBox(width: 20),
-                          _buildSocialButton(
-                            Icons.phone_in_talk,
-                            'اتصال',
-                            'tel:+963991260012',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'الإصدار 1.0.0',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
   }
 
   Future<void> _openAboutPage(BuildContext context) async {
@@ -355,91 +223,6 @@ class _TabsScreenState extends State<TabsScreen> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const AboutAppScreen()));
-  }
-
-  Widget _buildFeatureSection(
-    BuildContext context, {
-    required String title,
-    required List<String> features,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...features.map(
-          (feature) => Padding(
-            padding: const EdgeInsets.only(bottom: 10.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    feature,
-                    style: const TextStyle(fontSize: 14, height: 1.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSocialButton(IconData icon, String label, String url) {
-    return InkWell(
-      onTap: () async {
-        final uri = Uri.parse(url);
-        final opened = await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        );
-        if (!opened && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تعذر فتح الرابط على هذا الجهاز')),
-          );
-        }
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 5,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: Colors.grey[800], size: 24),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -510,8 +293,8 @@ class _TabsScreenState extends State<TabsScreen> {
       floatingActionButton: (_selectedIndex == 0 || _selectedIndex == 2)
           ? FloatingActionButton(
               onPressed: _navigateToAddProperty,
-              child: const Icon(Icons.add_home_work),
               tooltip: 'إضافة عقار',
+              child: const Icon(Icons.add_home_work),
             )
           : null,
       bottomNavigationBar: CurvedNavigationBar(
@@ -600,7 +383,7 @@ class _TabsScreenState extends State<TabsScreen> {
                     border: Border.all(color: Colors.white, width: 3),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 10,
                         spreadRadius: 2,
                       ),
@@ -648,7 +431,7 @@ class _TabsScreenState extends State<TabsScreen> {
                 Text(
                   email,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 14,
                   ),
                 ),
@@ -660,7 +443,7 @@ class _TabsScreenState extends State<TabsScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -808,7 +591,7 @@ class _TabsScreenState extends State<TabsScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1),
+                    color: iconColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: iconColor, size: 22),
@@ -826,7 +609,7 @@ class _TabsScreenState extends State<TabsScreen> {
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: itemColor?.withOpacity(0.4),
+                  color: itemColor?.withValues(alpha: 0.4),
                   size: 20,
                 ),
               ],

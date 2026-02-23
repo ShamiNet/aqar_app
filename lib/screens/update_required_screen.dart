@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -23,7 +25,7 @@ class UpdateRequiredScreen extends StatelessWidget {
         );
       }
     } catch (e) {
-      print('❌ [UpdateRequired] خطأ في فتح متجر التطبيقات: $e');
+      developer.log('Error opening app store: $e', name: 'UpdateRequired');
     }
   }
 
@@ -39,7 +41,7 @@ class UpdateRequiredScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.15),
+                  color: Colors.orange.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Icon(

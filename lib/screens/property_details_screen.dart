@@ -5,7 +5,6 @@ import 'package:aqar_app/screens/edit_history_screen.dart';
 import 'package:aqar_app/screens/report_property_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/config/app_constants.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -32,7 +31,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   bool _isAdmin = false;
   bool _isFavorite = false;
 
-  Set<Marker> _markers = {};
+  final Set<Marker> _markers = {};
   LatLng? _propertyLocation;
 
   @override
@@ -92,7 +91,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         }
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -139,7 +140,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 
   Future<void> _makePhoneCall(String phoneNumber) async {
     final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(launchUri)) await launchUrl(launchUri);
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    }
   }
 
   Future<void> _openWhatsApp(String phoneNumber) async {
@@ -151,7 +154,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   }
 
   Future<void> _openMapApp() async {
-    if (_propertyLocation == null) return;
+    if (_propertyLocation == null) {
+      return;
+    }
     final lat = _propertyLocation!.latitude;
     final lng = _propertyLocation!.longitude;
     final googleMapsUrl = Uri.parse(
@@ -180,7 +185,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         widget.propertyId,
         _property!['ownerId'],
       );
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ChatMessagesScreen(
@@ -197,10 +204,11 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         ),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const ChatsScreen()));
+      }
     }
   }
 
@@ -232,10 +240,14 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       'حذف العقار',
       'تحذير: سيتم حذف العقار نهائياً. هل أنت متأكد؟',
     );
-    if (!confirm) return;
+    if (!confirm) {
+      return;
+    }
 
     // عرض مؤشر التحميل
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -245,7 +257,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     try {
       final success = await ApiService.deletePropertyAdmin(widget.propertyId);
 
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       Navigator.of(context).pop(); // إغلاق مؤشر التحميل
 
       if (success) {
@@ -259,7 +273,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         ).showSnackBar(const SnackBar(content: Text('فشل حذف العقار')));
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       Navigator.of(context).pop(); // إغلاق مؤشر التحميل
       ScaffoldMessenger.of(
         context,
@@ -269,13 +285,15 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading)
+    if (_isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_property == null)
+    }
+    if (_property == null) {
       return Scaffold(
         appBar: AppBar(),
         body: const Center(child: Text('عذراً، لم يتم العثور على العقار')),
       );
+    }
 
     // ✅ متغيرات الثيم (الألوان تتغير تلقائياً حسب الوضع الفاتح أو الليلي)
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -287,8 +305,8 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     final borderColor = isDark ? Colors.grey.shade800 : Colors.grey.shade200;
     final cardBgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final iconBgColor = isDark
-        ? Colors.black.withOpacity(0.5)
-        : Colors.white.withOpacity(0.9);
+        ? Colors.black.withValues(alpha: 0.5)
+        : Colors.white.withValues(alpha: 0.9);
 
     final canEdit = _isOwner || _isAdmin;
 
@@ -312,18 +330,24 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
     final age = _property!['age'];
 
     final featuresList = <Widget>[];
-    if (_property!['isFurnished'] == true)
+    if (_property!['isFurnished'] == true) {
       featuresList.add(_buildFeatureChip(Icons.chair, 'مؤثث', isDark));
-    if (_property!['hasKitchen'] == true)
+    }
+    if (_property!['hasKitchen'] == true) {
       featuresList.add(_buildFeatureChip(Icons.kitchen, 'مطبخ', isDark));
-    if (_property!['hasAnnex'] == true)
+    }
+    if (_property!['hasAnnex'] == true) {
       featuresList.add(_buildFeatureChip(Icons.home_work, 'ملحق', isDark));
-    if (_property!['hasCarEntrance'] == true)
+    }
+    if (_property!['hasCarEntrance'] == true) {
       featuresList.add(_buildFeatureChip(Icons.garage, 'مدخل سيارة', isDark));
-    if (_property!['hasElevator'] == true)
+    }
+    if (_property!['hasElevator'] == true) {
       featuresList.add(_buildFeatureChip(Icons.elevator, 'مصعد', isDark));
-    if (_property!['hasPool'] == true)
+    }
+    if (_property!['hasPool'] == true) {
       featuresList.add(_buildFeatureChip(Icons.pool, 'مسبح', isDark));
+    }
     if (_property!['features'] is List) {
       for (var f in _property!['features']) {
         featuresList.add(
@@ -351,7 +375,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -376,7 +400,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -402,7 +426,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -434,7 +458,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -468,7 +492,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
+                        color: Colors.black.withValues(alpha: 0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -580,7 +604,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                             ),
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.orange.withOpacity(0.2)
+                                  ? Colors.orange.withValues(alpha: 0.2)
                                   : Colors.orange.shade100,
                               borderRadius: BorderRadius.circular(6),
                             ),
@@ -768,7 +792,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.3 : 0.05,
+                          ),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -816,7 +842,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                             style: IconButton.styleFrom(
                               backgroundColor: Theme.of(
                                 context,
-                              ).primaryColor.withOpacity(0.1),
+                              ).primaryColor.withValues(alpha: 0.1),
                             ),
                           ),
                           if (sellerPhone != null)
@@ -825,7 +851,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                               icon: const Icon(Icons.phone),
                               color: Colors.green,
                               style: IconButton.styleFrom(
-                                backgroundColor: Colors.green.withOpacity(0.1),
+                                backgroundColor: Colors.green.withValues(
+                                  alpha: 0.1,
+                                ),
                               ),
                             ),
                         ],
@@ -848,7 +876,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                 ).scaffoldBackgroundColor, // يعتمد على الثيم الأساسي للشاشة
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, -4),
                   ),

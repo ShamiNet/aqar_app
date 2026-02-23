@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:extended_image/extended_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
@@ -8,10 +10,10 @@ class PropertyImageGallery extends StatefulWidget {
   final String propertyTitle;
 
   const PropertyImageGallery({
-    Key? key,
+    super.key,
     required this.imageUrls,
     this.propertyTitle = 'صور العقار',
-  }) : super(key: key);
+  });
 
   @override
   State<PropertyImageGallery> createState() => _PropertyImageGalleryState();
@@ -22,8 +24,11 @@ class _PropertyImageGalleryState extends State<PropertyImageGallery> {
 
   @override
   Widget build(BuildContext context) {
-    print('🎬 [DEBUG] PropertyImageGallery بناء الـ Widget');
-    print('📊 [DEBUG] عدد الصور: ${widget.imageUrls.length}');
+    developer.log('PropertyImageGallery build', name: 'PropertyImageGallery');
+    developer.log(
+      'Images count: ${widget.imageUrls.length}',
+      name: 'PropertyImageGallery',
+    );
 
     if (widget.imageUrls.isEmpty) {
       return Container(
@@ -57,7 +62,10 @@ class _PropertyImageGalleryState extends State<PropertyImageGallery> {
             viewportFraction: 1.0,
             enableInfiniteScroll: false,
             onPageChanged: (index, reason) {
-              print('🔄 [DEBUG] تغيير الصفحة إلى: ${index + 1}');
+              developer.log(
+                'Page changed to: ${index + 1}',
+                name: 'PropertyImageGallery',
+              );
               setState(() {
                 _currentIndex = index;
               });
@@ -66,9 +74,13 @@ class _PropertyImageGalleryState extends State<PropertyImageGallery> {
           items: widget.imageUrls.map((imageUrl) {
             return GestureDetector(
               onTap: () {
-                print('🖼️ [DEBUG] تم النقر على الصورة: $imageUrl');
-                print(
-                  '📸 [DEBUG] رقم الصورة الحالية: ${widget.imageUrls.indexOf(imageUrl) + 1} من ${widget.imageUrls.length}',
+                developer.log(
+                  'Image tapped: $imageUrl',
+                  name: 'PropertyImageGallery',
+                );
+                developer.log(
+                  'Current image index: ${widget.imageUrls.indexOf(imageUrl) + 1} of ${widget.imageUrls.length}',
+                  name: 'PropertyImageGallery',
                 );
                 _showFullScreenGallery(imageUrl);
               },
@@ -77,7 +89,7 @@ class _PropertyImageGalleryState extends State<PropertyImageGallery> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -159,7 +171,10 @@ class _PropertyImageGalleryState extends State<PropertyImageGallery> {
               // زر فتح المعرض كاملاً
               GestureDetector(
                 onTap: () {
-                  print('📐 [DEBUG] فتح المعرض بملء الشاشة');
+                  developer.log(
+                    'Open full screen gallery',
+                    name: 'PropertyImageGallery',
+                  );
                   _showFullScreenGallery(widget.imageUrls[_currentIndex]);
                 },
                 child: Container(
@@ -185,17 +200,26 @@ class _PropertyImageGalleryState extends State<PropertyImageGallery> {
 
   // عرض الصور بملء الشاشة
   void _showFullScreenGallery(String initialImage) {
-    print('🎬 [DEBUG] بدء فتح معرض الصور بملء الشاشة');
-    print('📷 [DEBUG] الصورة المختارة: $initialImage');
+    developer.log('Opening full screen gallery', name: 'PropertyImageGallery');
+    developer.log(
+      'Selected image: $initialImage',
+      name: 'PropertyImageGallery',
+    );
     int initialIdx = widget.imageUrls.indexOf(initialImage);
-    print('📊 [DEBUG] الفهرس الأولي: $initialIdx');
-    print('✅ [DEBUG] إجمالي الصور: ${widget.imageUrls.length}');
+    developer.log('Initial index: $initialIdx', name: 'PropertyImageGallery');
+    developer.log(
+      'Total images: ${widget.imageUrls.length}',
+      name: 'PropertyImageGallery',
+    );
 
     Navigator.of(context)
         .push(
           MaterialPageRoute(
             builder: (context) {
-              print('🔧 [DEBUG] بناء صفحة المعرض الجديدة...');
+              developer.log(
+                'Building full screen gallery page',
+                name: 'PropertyImageGallery',
+              );
               return _FullScreenGallery(
                 imageUrls: widget.imageUrls,
                 initialIndex: initialIdx,
@@ -204,7 +228,10 @@ class _PropertyImageGalleryState extends State<PropertyImageGallery> {
           ),
         )
         .then((value) {
-          print('👈 [DEBUG] تم الرجوع من معرض الصور بملء الشاشة');
+          developer.log(
+            'Returned from full screen gallery',
+            name: 'PropertyImageGallery',
+          );
         });
   }
 
@@ -265,9 +292,15 @@ class _FullScreenGalleryState extends State<_FullScreenGallery>
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
-    print('🚀 [DEBUG] تم تهيئة _FullScreenGallery');
-    print('📍 [DEBUG] الفهرس الأولي: ${widget.initialIndex}');
-    print('📚 [DEBUG] عدد الصور في المعرض: ${widget.imageUrls.length}');
+    developer.log('FullScreenGallery initialized', name: '_FullScreenGallery');
+    developer.log(
+      'Initial index: ${widget.initialIndex}',
+      name: '_FullScreenGallery',
+    );
+    developer.log(
+      'Gallery images count: ${widget.imageUrls.length}',
+      name: '_FullScreenGallery',
+    );
   }
 
   @override
@@ -297,15 +330,19 @@ class _FullScreenGalleryState extends State<_FullScreenGallery>
           PageView.builder(
             controller: _pageController,
             onPageChanged: (index) {
-              print('🔄 [DEBUG] تم التنقل إلى الصورة رقم: ${index + 1}');
+              developer.log(
+                'Navigated to image: ${index + 1}',
+                name: '_FullScreenGallery',
+              );
               setState(() {
                 _currentIndex = index;
               });
             },
             itemCount: widget.imageUrls.length,
             itemBuilder: (context, index) {
-              print(
-                '🖼️ [DEBUG] بناء صورة رقم: ${index + 1} - ${widget.imageUrls[index]}',
+              developer.log(
+                'Building image: ${index + 1} - ${widget.imageUrls[index]}',
+                name: '_FullScreenGallery',
               );
               return PhotoView(
                 imageProvider: NetworkImage(widget.imageUrls[index]),

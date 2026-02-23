@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:math'; // 1. استيراد المكتبة العشوائية
 import 'package:aqar_app/screens/map_screen.dart';
 import 'package:flutter/material.dart';
@@ -77,16 +76,22 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       25,
     ][random.nextInt(3)].toString();
     _controller.ageController.text = random.nextInt(10).toString();
+    _controller.floorController.text = type != 'ارض'
+        ? (1 + random.nextInt(6)).toString()
+        : '';
 
     // تعبئة القوائم
     _controller.setCategory(category);
     _controller.setType(type);
+    _controller.setCurrency(
+      random.nextBool() ? '\$' : 'ل.س',
+    ); // اختيار عشوائي للعملة
 
     // تحديد موقع وهمي (في الرياض)
     _controller.setLocation(24.7136, 46.6753);
 
     // تفعيل بعض الميزات عشوائياً
-    if (category != 'استثمار') {
+    if (type != 'ارض') {
       if (random.nextBool()) _controller.toggleKitchen(true);
       if (random.nextBool()) _controller.toggleCarEntrance(true);
       if (random.nextBool()) _controller.toggleElevator(true);
@@ -136,14 +141,30 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     return ElevatedButton(
       onPressed: () => _fillDummyData(label),
       style: ElevatedButton.styleFrom(
-        backgroundColor: color.withOpacity(0.2),
+        backgroundColor: color.withValues(alpha: 0.2),
         foregroundColor: color,
         elevation: 0,
       ),
       child: Text(label),
     );
   }
-  // ---------------------------------------------------------------------------
+
+  // ✅ التحقق من شرط جعل المساحة إلزامية
+  bool _isAreaRequired() {
+    // المساحة ضرورية في الحالات التالية:
+    // 1. البيع (category = 'بيع')
+    // 2. إيجار دكان (category = 'إيجار' && type = 'دكان')
+    // 3. الأرض (type = 'ارض')
+
+    final category = _controller.selectedCategory;
+    final type = _controller.selectedType;
+
+    if (category == 'بيع') return true;
+    if (category == 'إيجار' && type == 'دكان') return true;
+    if (type == 'ارض') return true;
+
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +177,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ? lightTextColor
         : colorScheme.onSurface;
     final mutedTextColor = isLightTheme
-        ? lightTextColor.withOpacity(0.7)
+        ? lightTextColor.withValues(alpha: 0.7)
         : colorScheme.onSurfaceVariant;
 
     return Scaffold(
@@ -194,35 +215,13 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                     icon: Icons.title,
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildTextField(
-                          'السعر (\$) *',
-                          _controller.priceController,
-                          isNumber: true,
-                          icon: Icons.attach_money,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _buildTextField(
-                          'المساحة (م²) *',
-                          _controller.areaController,
-                          isNumber: true,
-                          icon: Icons.square_foot,
-                        ),
-                      ),
-                    ],
-                  ),
 
-                  const SizedBox(height: 16),
-
+                  // نوع العقار والفئة
                   Row(
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _controller.selectedType,
+                          initialValue: _controller.selectedType,
                           decoration: InputDecoration(
                             labelText: 'نوع العقار',
                             border: OutlineInputBorder(
@@ -241,7 +240,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _controller.selectedCategory,
+                          initialValue: _controller.selectedCategory,
                           decoration: InputDecoration(
                             labelText: 'الفئة',
                             border: OutlineInputBorder(
@@ -261,6 +260,84 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   ),
 
                   const SizedBox(height: 16),
+
+                  // السعر والعملة والمساحة (المساحة تظهر حسب الشروط)
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _buildTextField(
+                          'السعر *',
+                          _controller.priceController,
+                          isNumber: true,
+                          icon: Icons.attach_money,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _controller.selectedCurrency,
+                          decoration: InputDecoration(
+                            labelText: 'العملة',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          items: ['\$', 'ل.س']
+                              .map(
+                                (e) =>
+                                    DropdownMenuItem(value: e, child: Text(e)),
+                              )
+                              .toList(),
+                          onChanged: _controller.setCurrency,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // المساحة ضرورية فقط في: بيع، أو إيجار دكان، أو ارض
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          _isAreaRequired() ? 'المساحة (م²) *' : 'المساحة (م²)',
+                          _controller.areaController,
+                          isNumber: true,
+                          icon: Icons.square_foot,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // الطابق يظهر فقط إذا لم تكن أرض أو دكان
+                  if (_controller.selectedType != 'ارض' &&
+                      _controller.selectedType != 'دكان')
+                    _buildTextField(
+                      _controller.selectedType == 'بناية'
+                          ? 'عدد الطوابق *'
+                          : 'رقم الطابق *',
+                      _controller.floorController,
+                      isNumber: true,
+                      icon: Icons.apartment,
+                    ),
+
+                  // الطابق اختياري للدكان
+                  if (_controller.selectedType == 'دكان')
+                    _buildTextField(
+                      'رقم الطابق',
+                      _controller.floorController,
+                      isNumber: true,
+                      icon: Icons.apartment,
+                    ),
+
+                  if (_controller.selectedType != 'ارض' &&
+                      _controller.selectedType != 'دكان')
+                    const SizedBox(height: 10),
+
                   _buildTextField(
                     'العنوان بالتفصيل *',
                     _controller.addressController,
@@ -413,7 +490,10 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                               final success = await _controller.submitProperty(
                                 context,
                               );
-                              if (success && mounted) {
+                              if (!context.mounted) {
+                                return;
+                              }
+                              if (success) {
                                 Navigator.pop(
                                   context,
                                   'تمت إضافة العقار بنجاح!',
@@ -480,8 +560,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         displayColor: lightTextColor,
       ),
       inputDecorationTheme: baseTheme.inputDecorationTheme.copyWith(
-        labelStyle: TextStyle(color: lightTextColor.withOpacity(0.85)),
-        hintStyle: TextStyle(color: lightTextColor.withOpacity(0.7)),
+        labelStyle: TextStyle(color: lightTextColor.withValues(alpha: 0.85)),
+        hintStyle: TextStyle(color: lightTextColor.withValues(alpha: 0.7)),
       ),
     );
 
@@ -507,7 +587,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceVariant,
+                    color: colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: colorScheme.outline,
@@ -531,7 +611,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceVariant,
+                    color: colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: colorScheme.outline),
                   ),
@@ -627,12 +707,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         Theme.of(context).inputDecorationTheme.labelStyle ??
         TextStyle(
           color: isLightTheme
-              ? lightTextColor.withOpacity(0.9)
-              : colorScheme.onSurface.withOpacity(0.8),
+              ? lightTextColor.withValues(alpha: 0.9)
+              : colorScheme.onSurface.withValues(alpha: 0.8),
         );
     final requiredLabelStyle = baseLabelStyle.copyWith(
       color: isLightTheme
-          ? lightTextColor.withOpacity(0.95)
+          ? lightTextColor.withValues(alpha: 0.95)
           : baseLabelStyle.color,
     );
 
@@ -684,8 +764,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           labelText: label,
           labelStyle: TextStyle(
             color: isLightTheme
-                ? lightTextColor.withOpacity(0.9)
-                : colorScheme.onSurface.withOpacity(0.8),
+                ? lightTextColor.withValues(alpha: 0.9)
+                : colorScheme.onSurface.withValues(alpha: 0.8),
           ),
           contentPadding: const EdgeInsets.symmetric(vertical: 8),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

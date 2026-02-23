@@ -17,10 +17,12 @@ class AddPropertyController extends ChangeNotifier {
   final livingRoomsController = TextEditingController();
   final streetWidthController = TextEditingController();
   final ageController = TextEditingController();
+  final floorController = TextEditingController();
 
   // 🎛️ المتغيرات (State)
   String selectedType = 'بيت';
   String selectedCategory = 'بيع';
+  String selectedCurrency = '\$'; // الدولار بشكل افتراضي
   bool isFurnished = false;
   bool hasKitchen = false;
   bool hasAnnex = false;
@@ -58,6 +60,7 @@ class AddPropertyController extends ChangeNotifier {
     livingRoomsController.dispose();
     streetWidthController.dispose();
     ageController.dispose();
+    floorController.dispose();
     videoPlayerController?.dispose();
     super.dispose();
   }
@@ -160,6 +163,8 @@ class AddPropertyController extends ChangeNotifier {
         livingRooms: livingRoomsController.text,
         streetWidth: streetWidthController.text,
         age: ageController.text,
+        floor: floorController.text,
+        currency: selectedCurrency,
         isFurnished: isFurnished,
         hasKitchen: hasKitchen,
         hasAnnex: hasAnnex,
@@ -196,11 +201,24 @@ class AddPropertyController extends ChangeNotifier {
     }
   }
 
+  // ✅ التحقق من شرط جعل المساحة إلزامية
+  bool _isAreaRequired() {
+    // المساحة ضرورية في الحالات التالية:
+    // 1. البيع (category = 'بيع')
+    // 2. إيجار دكان (category = 'إيجار' && type = 'دكان')
+    // 3. الأرض (type = 'ارض')
+
+    if (selectedCategory == 'بيع') return true;
+    if (selectedCategory == 'إيجار' && selectedType == 'دكان') return true;
+    if (selectedType == 'ارض') return true;
+
+    return false;
+  }
+
   // ✅ التحقق من المدخلات
   bool _validateInputs(BuildContext context) {
     if (titleController.text.isEmpty ||
         priceController.text.isEmpty ||
-        areaController.text.isEmpty ||
         addressController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -210,6 +228,18 @@ class AddPropertyController extends ChangeNotifier {
       );
       return false;
     }
+
+    // التحقق من المساحة فقط إذا كانت مطلوبة
+    if (_isAreaRequired() && areaController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى تعبئة المساحة'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return false;
+    }
+
     if (selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -232,6 +262,13 @@ class AddPropertyController extends ChangeNotifier {
   void setCategory(String? val) {
     if (val != null) {
       selectedCategory = val;
+      notifyListeners();
+    }
+  }
+
+  void setCurrency(String? val) {
+    if (val != null) {
+      selectedCurrency = val;
       notifyListeners();
     }
   }
@@ -279,9 +316,11 @@ class AddPropertyController extends ChangeNotifier {
     livingRoomsController.clear();
     streetWidthController.clear();
     ageController.clear();
+    floorController.clear();
 
     selectedType = 'بيت';
     selectedCategory = 'بيع';
+    selectedCurrency = '\$';
     isFurnished = false;
     hasKitchen = false;
     hasAnnex = false;

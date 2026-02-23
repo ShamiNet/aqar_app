@@ -56,7 +56,7 @@ class BannedUserScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // فتح WhatsApp للتواصل مع الإدارة
-    Future<void> _contactAdminWhatsApp(BuildContext context) async {
+    Future<void> contactAdminWhatsApp(BuildContext context) async {
       final adminPhone = '963951727833'; // استبدل برقم الإدارة الفعلي
       final message = Uri.encodeComponent(
         'السلام عليكم، أود الاستفسار حول حظر حسابي في تطبيق عقار بلس. البريد: $email',
@@ -220,7 +220,7 @@ class BannedUserScreen extends StatelessWidget {
 
                       // زر الاعتراض على الحظر
                       OutlinedButton.icon(
-                        onPressed: () => _contactAdminWhatsApp(context),
+                        onPressed: () => contactAdminWhatsApp(context),
                         icon: const Icon(Icons.chat),
                         label: const Text(
                           'التواصل عبر WhatsApp',

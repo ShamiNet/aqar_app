@@ -58,7 +58,9 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       }
     } else {
       debugPrint('❌ [ReportDetailsScreen] No propertyId found');
-      setState(() => _isLoadingProperty = false);
+      if (mounted) {
+        setState(() => _isLoadingProperty = false);
+      }
     }
   }
 
@@ -72,9 +74,12 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
 
     setState(() => _isProcessing = true);
     final success = await ApiService.deleteReport(widget.report['id']);
+    if (!mounted) {
+      return;
+    }
     setState(() => _isProcessing = false);
 
-    if (success && mounted) {
+    if (success) {
       Navigator.pop(context, true); // العودة وتحديث القائمة
       ScaffoldMessenger.of(
         context,
@@ -100,9 +105,12 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       await ApiService.updateReportStatus(widget.report['id'], 'resolved');
     }
 
+    if (!mounted) {
+      return;
+    }
     setState(() => _isProcessing = false);
 
-    if (success && mounted) {
+    if (success) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تم حذف العقار بنجاح')));
@@ -123,6 +131,9 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
 
     setState(() => _isProcessing = true);
     await ApiService.toggleUserBan(reporterId, true);
+    if (!mounted) {
+      return;
+    }
     setState(() => _isProcessing = false);
 
     if (mounted) {
@@ -150,23 +161,22 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       // جلب بيانات المستخدم
       final userData = await ApiService.fetchUserProfile(reporterId);
 
+      if (!mounted) {
+        return;
+      }
       if (userData == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('فشل في تحميل بيانات المستخدم')),
-          );
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('فشل في تحميل بيانات المستخدم')),
+        );
         return;
       }
 
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProfileScreen(otherUserData: userData),
-          ),
-        );
-      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ProfileScreen(otherUserData: userData),
+        ),
+      );
     } catch (e) {
       debugPrint('❌ Error opening profile: $e');
       if (mounted) {
@@ -247,7 +257,10 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: isResolved
-                            ? [successColor, successColor.withOpacity(0.7)]
+                            ? [
+                                successColor,
+                                successColor.withValues(alpha: 0.7),
+                              ]
                             : [warningColor, dangerColor],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -256,7 +269,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                       boxShadow: [
                         BoxShadow(
                           color: (isResolved ? successColor : dangerColor)
-                              .withOpacity(0.3),
+                              .withValues(alpha: 0.3),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -269,7 +282,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
@@ -299,7 +312,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                                 Text(
                                   'تاريخ البلاغ: $reportDate',
                                   style: TextStyle(
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                     fontSize: 13,
                                   ),
                                 ),
@@ -328,7 +341,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                   Card(
                     color: cardBg,
                     elevation: 1,
-                    shadowColor: Colors.black.withOpacity(0.05),
+                    shadowColor: Colors.black.withValues(alpha: 0.05),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(color: borderColor, width: 1),
@@ -374,7 +387,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                   Card(
                     color: cardBg,
                     elevation: 1,
-                    shadowColor: Colors.black.withOpacity(0.05),
+                    shadowColor: Colors.black.withValues(alpha: 0.05),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(color: borderColor, width: 1),
@@ -384,7 +397,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                       onTap: _openReporterProfile,
                       leading: CircleAvatar(
                         radius: 28,
-                        backgroundColor: primaryColor.withOpacity(0.1),
+                        backgroundColor: primaryColor.withValues(alpha: 0.1),
                         backgroundImage: report['reporterImage'] != null
                             ? NetworkImage(report['reporterImage'])
                             : null,
@@ -455,7 +468,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                     Card(
                       color: cardBg,
                       elevation: 1,
-                      shadowColor: Colors.black.withOpacity(0.05),
+                      shadowColor: Colors.black.withValues(alpha: 0.05),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                         side: BorderSide(color: borderColor, width: 1),
@@ -533,6 +546,9 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                               report['id'],
                               'resolved',
                             );
+                            if (!context.mounted) {
+                              return;
+                            }
                             setState(() => _isProcessing = false);
                             Navigator.pop(context, true);
                           },

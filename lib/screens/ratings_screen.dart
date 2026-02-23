@@ -2,7 +2,6 @@ import 'package:aqar_app/services/api_service.dart'; // ✅
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart'; // تأكد من وجود المكتبة
-import 'package:intl/intl.dart' as intl;
 
 class RatingsScreen extends StatefulWidget {
   final String targetUserId;

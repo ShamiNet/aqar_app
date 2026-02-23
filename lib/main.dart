@@ -27,7 +27,6 @@ import 'package:aqar_app/screens/chat_messages_screen.dart';
 
 // ✅ استيراد مكتبات معالجة الأخطاء المتقدمة
 import 'dart:ui';
-import 'dart:async';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -160,16 +159,22 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
     ApiService.onTokenExpired = () {
       if (mounted) {
         ApiService.logout().then((_) {
-          navigatorKey.currentState?.pushAndRemoveUntil(
-            MaterialPageRoute(builder: (ctx) => const AuthGate()),
-            (route) => false,
-          );
-          ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
-            const SnackBar(
-              content: Text('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى'),
-              backgroundColor: Colors.orange,
-            ),
-          );
+          if (mounted) {
+            navigatorKey.currentState?.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (ctx) => const AuthGate()),
+              (route) => false,
+            );
+            if (navigatorKey.currentContext != null) {
+              ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى',
+                  ),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+          }
         });
       }
     };
@@ -281,15 +286,15 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
           );
 
           try {
-            ScaffoldMessenger.of(
-              navigatorKey.currentState!.context,
-            ).showSnackBar(
-              const SnackBar(
-                content: Text('تم حظر حسابك من قبل الإدارة'),
-                backgroundColor: Colors.red,
-                duration: Duration(seconds: 5),
-              ),
-            );
+            if (navigatorKey.currentContext != null && mounted) {
+              ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+                const SnackBar(
+                  content: Text('تم حظر حسابك من قبل الإدارة'),
+                  backgroundColor: Colors.red,
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            }
           } catch (e) {
             debugPrint('⚠️ [BanCheck] Error showing notification: $e');
           }
@@ -325,8 +330,9 @@ class _AqarAppState extends State<AqarApp> with WidgetsBindingObserver {
   void _setupFirebaseMessaging() {
     try {
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        if (message.notification != null && navigatorKey.currentState != null) {
-          ScaffoldMessenger.of(navigatorKey.currentState!.context).showSnackBar(
+        if (message.notification != null &&
+            navigatorKey.currentContext != null) {
+          ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
             SnackBar(
               content: Text(message.notification!.title ?? "إشعار جديد"),
               backgroundColor: Colors.blue,

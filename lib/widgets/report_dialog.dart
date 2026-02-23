@@ -90,7 +90,7 @@ class _ReportDialogState extends State<ReportDialog> {
                 labelText: 'السبب',
                 border: OutlineInputBorder(),
               ),
-              value: _selectedReason,
+              initialValue: _selectedReason,
               items: _reasons
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                   .toList(),

@@ -150,25 +150,32 @@ class _PropertyFormState extends State<PropertyForm> {
     if (widget.formKey.currentState != null) {
       final Map<String, dynamic> draftData = {};
       for (final key in widget.formKey.currentState!.fields.keys) {
-        final draftValue = prefs.get('${_draftPrefix}$key');
+        final draftValue = prefs.get('$_draftPrefix$key');
         if (draftValue != null) {
           draftData[key] = draftValue.toString();
           final fieldState = widget.formKey.currentState!.fields[key];
           if (fieldState?.value is bool) {
-            if (draftValue is bool)
+            if (draftValue is bool) {
               draftData[key] = draftValue;
-            else if (draftValue == 'true')
+            } else if (draftValue == 'true') {
               draftData[key] = true;
-            else
+            } else {
               draftData[key] = false;
+            }
           }
         }
       }
       widget.formKey.currentState!.patchValue(draftData);
     }
     setState(() {
-      final lat = prefs.getDouble('${_draftPrefix}lat');
-      final lng = prefs.getDouble('${_draftPrefix}lng');
+      final lat = prefs.getDouble(
+        '$_draftPrefix'
+        'lat',
+      );
+      final lng = prefs.getDouble(
+        '$_draftPrefix'
+        'lng',
+      );
       if (lat != null && lng != null) {
         _selectedLocation = LatLng(lat, lng);
         _getAddressFromLatLng(_selectedLocation!);
@@ -183,16 +190,24 @@ class _PropertyFormState extends State<PropertyForm> {
     for (final key in widget.formKey.currentState!.fields.keys) {
       final value = widget.formKey.currentState!.fields[key]?.value;
       if (value is bool) {
-        await prefs.setBool('${_draftPrefix}$key', value);
+        await prefs.setBool('$_draftPrefix$key', value);
       } else if (value != null) {
-        await prefs.setString('${_draftPrefix}$key', value.toString());
+        await prefs.setString('$_draftPrefix$key', value.toString());
       } else {
-        await prefs.remove('${_draftPrefix}$key');
+        await prefs.remove('$_draftPrefix$key');
       }
     }
     if (_selectedLocation != null) {
-      await prefs.setDouble('${_draftPrefix}lat', _selectedLocation!.latitude);
-      await prefs.setDouble('${_draftPrefix}lng', _selectedLocation!.longitude);
+      await prefs.setDouble(
+        '$_draftPrefix'
+        'lat',
+        _selectedLocation!.latitude,
+      );
+      await prefs.setDouble(
+        '$_draftPrefix'
+        'lng',
+        _selectedLocation!.longitude,
+      );
     }
   }
 

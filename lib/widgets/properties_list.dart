@@ -39,8 +39,9 @@ class _PropertiesListState extends State<PropertiesList> {
     // ✅ إذا وصلنا لقبل نهاية القائمة بـ 200 بكسل، نطلب الصفحة التالية بذكاء
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      if (!widget.hasMore || _isLoadingMore || widget.onLoadMore == null)
+      if (!widget.hasMore || _isLoadingMore || widget.onLoadMore == null) {
         return;
+      }
 
       setState(() => _isLoadingMore = true);
       widget.onLoadMore!().then((_) {

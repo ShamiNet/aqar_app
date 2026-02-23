@@ -36,19 +36,21 @@ class _MyArchivedPropertiesScreenState
   Future<void> _restoreProperty(String docId) async {
     await ApiService.restoreProperty(docId);
     _loadArchive(); // تحديث القائمة
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تمت الاستعادة.')));
+    }
   }
 
   Future<void> _permanentlyDelete(String docId) async {
     await ApiService.deleteArchivedProperty(docId);
     _loadArchive();
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تم الحذف نهائياً.')));
+    }
   }
 
   @override

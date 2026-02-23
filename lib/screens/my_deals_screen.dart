@@ -31,20 +31,23 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_favoritesFuture == null)
+    if (_favoritesFuture == null) {
       return const Scaffold(
         body: Center(child: Text('سجل الدخول لترى المفضلة')),
       );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('المفضلة')),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _favoritesFuture,
         builder: (ctx, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.isEmpty)
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('المفضلة فارغة.'));
+          }
 
           return ListView.builder(
             itemCount: snapshot.data!.length,

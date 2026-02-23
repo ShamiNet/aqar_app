@@ -341,4 +341,95 @@ router.get('/announcement-views', verifyToken, checkAdmin, async (req, res) => {
   }
 });
 
+// ✅ حذف جميع مشاهدات إعلان معين (يجب أن يأتي أولاً - أكثر تحديداً)
+router.delete('/announcement-views/bulk/all', verifyToken, checkAdmin, async (req, res) => {
+  try {
+    const { announcementId } = req.query;
+
+    if (!announcementId) {
+      return res.status(400).json({ error: 'announcementId مطلوب' });
+    }
+
+    // جلب جميع المشاهدات لهذا الإعلان
+    const snap = await db.collection('announcement_views')
+      .where('announcementId', '==', announcementId)
+      .get();
+
+    const batch = db.batch();
+    let deletedCount = 0;
+
+    snap.docs.forEach(doc => {
+      batch.delete(doc.ref);
+      deletedCount++;
+    });
+
+    await batch.commit();
+
+    console.log(`✅ [DELETE-ALL-VIEWS] تم حذف ${deletedCount} مشاهدة للإعلان: ${announcementId}`);
+    res.status(200).json({ 
+      message: `تم حذف ${deletedCount} مشاهدة بنجاح`,
+      deletedCount 
+    });
+  } catch (error) {
+    console.error('❌ Error deleting all views:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ حذف مشاهدات مستخدم معين من إعلان معين (يأتي ثانياً)
+router.delete('/announcement-views/user/:userId', verifyToken, checkAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { announcementId } = req.query;
+
+    if (!userId || !announcementId) {
+      return res.status(400).json({ error: 'userId و announcementId مطلوبان' });
+    }
+
+    // جلب المشاهدات المطابقة
+    const snap = await db.collection('announcement_views')
+      .where('announcementId', '==', announcementId)
+      .where('userId', '==', userId)
+      .get();
+
+    const batch = db.batch();
+    let deletedCount = 0;
+
+    snap.docs.forEach(doc => {
+      batch.delete(doc.ref);
+      deletedCount++;
+    });
+
+    await batch.commit();
+
+    console.log(`✅ [DELETE-USER-VIEWS] تم حذف ${deletedCount} مشاهدة للمستخدم ${userId} من الإعلان ${announcementId}`);
+    res.status(200).json({ 
+      message: `تم حذف مشاهدات المستخدم بنجاح`,
+      deletedCount 
+    });
+  } catch (error) {
+    console.error('❌ Error deleting user views:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ حذف مشاهدة واحدة لمستخدم معين من الإعلان (يأتي أخيراً - الأقل تحديداً)
+router.delete('/announcement-views/:viewId', verifyToken, checkAdmin, async (req, res) => {
+  try {
+    const { viewId } = req.params;
+
+    if (!viewId) {
+      return res.status(400).json({ error: 'viewId مطلوب' });
+    }
+
+    await db.collection('announcement_views').doc(viewId).delete();
+
+    console.log(`✅ [DELETE-VIEW] تم حذف المشاهدة: ${viewId}`);
+    res.status(200).json({ message: 'تم حذف المشاهدة بنجاح' });
+  } catch (error) {
+    console.error('❌ Error deleting view:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

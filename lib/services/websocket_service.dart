@@ -76,14 +76,16 @@ class WebSocketService {
           // نجح الاتصال - إعادة تعيين العداد
           if (_reconnectAttempts > 0) {
             debugPrint(
-              '✅ [مقابس الويب] تم الاتصال بنجاح بعد ${_reconnectAttempts} محاولة',
+              '✅ [مقابس الويب] تم الاتصال بنجاح بعد $_reconnectAttempts محاولة',
             );
             _reconnectAttempts = 0;
           }
 
           try {
             final data = jsonDecode(message);
-            for (var listener in _listeners) listener(data);
+            for (var listener in _listeners) {
+              listener(data);
+            }
           } catch (e) {
             debugPrint('⚠️ [مقابس الويب] خطأ في فك التشفير: $e');
           }
@@ -213,11 +215,6 @@ class WebSocketService {
     return exponentialDelay > _maxReconnectDelay
         ? _maxReconnectDelay
         : exponentialDelay;
-  }
-
-  // 🔄 إعادة الاتصال التلقائي (للتوافق مع الكود القديم)
-  static void _reconnect() {
-    _scheduleReconnect();
   }
 
   // 🔄 إعادة تعيين حالة الاتصال يدوياً (للاستخدام عند استعادة الاتصال بالإنترنت)

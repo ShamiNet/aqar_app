@@ -108,7 +108,7 @@ class AboutAppScreen extends StatelessWidget {
             top: -120,
             right: -80,
             child: _GlowBlob(
-              color: colorScheme.primary.withOpacity(0.15),
+              color: colorScheme.primary.withValues(alpha: 0.15),
               size: 240,
               drift: 18,
             ),
@@ -117,7 +117,7 @@ class AboutAppScreen extends StatelessWidget {
             bottom: -140,
             left: -90,
             child: _GlowBlob(
-              color: colorScheme.secondary.withOpacity(0.18),
+              color: colorScheme.secondary.withValues(alpha: 0.18),
               size: 260,
               drift: 20,
               duration: Duration(seconds: 8),
@@ -209,8 +209,8 @@ class AboutAppScreen extends StatelessWidget {
                         .map(
                           (label) => Chip(
                             label: Text(label),
-                            backgroundColor: colorScheme.primary.withOpacity(
-                              0.1,
+                            backgroundColor: colorScheme.primary.withValues(
+                              alpha: 0.1,
                             ),
                             labelStyle: TextStyle(color: colorScheme.primary),
                           ),
@@ -230,7 +230,7 @@ class AboutAppScreen extends StatelessWidget {
                       border: Border.all(color: colorScheme.outlineVariant),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -351,15 +351,15 @@ class _HeroCard extends StatelessWidget {
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
           colors: [
-            colorScheme.primary.withOpacity(0.2),
-            colorScheme.secondary.withOpacity(0.18),
+            colorScheme.primary.withValues(alpha: 0.2),
+            colorScheme.secondary.withValues(alpha: 0.18),
           ],
         ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -580,7 +580,7 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: colorScheme.surface.withOpacity(0.8),
+        color: colorScheme.surface.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
@@ -617,13 +617,16 @@ class _FeatureCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [colorScheme.surface, colorScheme.surface.withOpacity(0.8)],
+          colors: [
+            colorScheme.surface,
+            colorScheme.surface.withValues(alpha: 0.8),
+          ],
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -634,7 +637,7 @@ class _FeatureCard extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: colorScheme.primary.withOpacity(0.1),
+            backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
             child: Icon(item.icon, color: colorScheme.primary, size: 20),
           ),
           const SizedBox(height: 10),

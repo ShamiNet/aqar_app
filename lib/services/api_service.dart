@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
-import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,11 +25,19 @@ class ApiService {
     try {
       final version1 = v1.split('.').map(int.parse).toList();
       final version2 = v2.split('.').map(int.parse).toList();
-      while (version1.length < version2.length) version1.add(0);
-      while (version2.length < version1.length) version2.add(0);
+      while (version1.length < version2.length) {
+        version1.add(0);
+      }
+      while (version2.length < version1.length) {
+        version2.add(0);
+      }
       for (int i = 0; i < version1.length; i++) {
-        if (version1[i] < version2[i]) return -1;
-        if (version1[i] > version2[i]) return 1;
+        if (version1[i] < version2[i]) {
+          return -1;
+        }
+        if (version1[i] > version2[i]) {
+          return 1;
+        }
       }
       return 0;
     } catch (e) {
@@ -137,7 +144,9 @@ class ApiService {
       final GoogleSignIn googleSignIn = GoogleSignIn();
       await googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return;
+      if (googleUser == null) {
+        return;
+      }
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
@@ -161,15 +170,18 @@ class ApiService {
           expiresInSeconds: _parseExpiry(data['expiresIn']),
         );
         // ✅ استخدام المفاتيح المركزية
-        if (data['userId'] != null)
+        if (data['userId'] != null) {
           await prefs.setString(AppConstants.prefUserId, data['userId']);
-        if (data['email'] != null)
+        }
+        if (data['email'] != null) {
           await prefs.setString(AppConstants.prefUserEmail, data['email']);
-        if (data['userData'] != null)
+        }
+        if (data['userData'] != null) {
           await prefs.setString(
             AppConstants.prefUserData,
             jsonEncode(data['userData']),
           );
+        }
       } else {
         throw Exception('فشل تسجيل الدخول عبر جوجل');
       }
@@ -202,11 +214,12 @@ class ApiService {
       // ✅ استخدام المفاتيح المركزية
       await prefs.setString(AppConstants.prefUserId, data['userId']);
       await prefs.setString(AppConstants.prefUserEmail, email);
-      if (data['userData'] != null)
+      if (data['userData'] != null) {
         await prefs.setString(
           AppConstants.prefUserData,
           jsonEncode(data['userData']),
         );
+      }
     } else {
       throw Exception('فشل تسجيل الدخول');
     }
@@ -278,6 +291,8 @@ class ApiService {
     String? livingRooms,
     String? streetWidth,
     String? age,
+    String? floor,
+    String? currency,
     bool? isFurnished,
     bool? hasKitchen,
     bool? hasAnnex,
@@ -292,7 +307,9 @@ class ApiService {
       try {
         debugPrint('☁️ [API] Uploading images...');
         imageUrls = await CloudinaryConfig.uploadImages(images);
-        if (imageUrls.isEmpty && images.isNotEmpty) return false;
+        if (imageUrls.isEmpty && images.isNotEmpty) {
+          return false;
+        }
 
         if (video != null) {
           debugPrint('🎥 [API] Uploading video...');
@@ -324,6 +341,8 @@ class ApiService {
           'livingRooms': livingRooms,
           'streetWidth': streetWidth,
           'age': age,
+          'floor': floor,
+          'currency': currency,
           'isFurnished': isFurnished,
           'hasKitchen': hasKitchen,
           'hasAnnex': hasAnnex,
@@ -410,7 +429,9 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>?> fetchPropertyDetails(String id) async {
-    if (id.isEmpty) return null;
+    if (id.isEmpty) {
+      return null;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final cacheKey = '${AppConstants.cachePropertyDetailBaseKey}$id';
@@ -534,7 +555,9 @@ class ApiService {
   // 👤 المستخدمين (Users)
   // =========================================================================
   static Future<Map<String, dynamic>?> fetchUserProfile(String userId) async {
-    if (userId.isEmpty) return null;
+    if (userId.isEmpty) {
+      return null;
+    }
     debugPrint('🔍 [API] Fetching user profile for: $userId');
     final response = await _sendRequest('GET', '/users/$userId');
     if (response.statusCode == 200) {
@@ -575,7 +598,9 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> fetchUserProperties(
     String userId,
   ) async {
-    if (userId.isEmpty) return [];
+    if (userId.isEmpty) {
+      return [];
+    }
     try {
       final response = await _sendRequest('GET', '/properties?userId=$userId');
       if (response.statusCode == 200) {
@@ -628,11 +653,7 @@ class ApiService {
   static Future<bool> hasInternet() async {
     try {
       final connectivityResult = await Connectivity().checkConnectivity();
-      if (connectivityResult is List) {
-        return !connectivityResult.contains(ConnectivityResult.none);
-      } else {
-        return connectivityResult != ConnectivityResult.none;
-      }
+      return !connectivityResult.contains(ConnectivityResult.none);
     } catch (e) {
       return true; // نفترض وجود إنترنت كوضع افتراضي في حال فشل الفحص
     }
@@ -641,7 +662,9 @@ class ApiService {
   // ✅ دالة المزامنة في الخلفية (ترسل ما تم حفظه بدون إنترنت)
   static Future<void> syncPendingRequests() async {
     final pending = await LocalDbService.getPendingRequests();
-    if (pending.isEmpty) return;
+    if (pending.isEmpty) {
+      return;
+    }
 
     debugPrint(
       '🔄 [Sync] عاد الإنترنت! جاري مزامنة ${pending.length} طلبات معلقة...',
@@ -668,10 +691,13 @@ class ApiService {
   static Future<List<Map<String, dynamic>>> fetchMyChats() async {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString(AppConstants.prefUserId);
-    if (userId == null) return [];
+    if (userId == null) {
+      return [];
+    }
     final response = await _sendRequest('GET', '/chats?userId=$userId');
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
@@ -679,14 +705,17 @@ class ApiService {
     String chatId,
   ) async {
     final response = await _sendRequest('GET', '/chats/$chatId/messages');
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
   static Future<Map<String, dynamic>?> fetchChatInfo(String chatId) async {
     final response = await _sendRequest('GET', '/chats/$chatId');
-    if (response.statusCode == 200) return jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
     return null;
   }
 
@@ -707,7 +736,9 @@ class ApiService {
   static Future<void> markChatAsRead(String chatId) async {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString(AppConstants.prefUserId);
-    if (userId == null) return;
+    if (userId == null) {
+      return;
+    }
     try {
       await _sendRequest(
         'POST',
@@ -730,8 +761,9 @@ class ApiService {
         'participants': [myId, ownerId],
       },
     );
-    if (response.statusCode == 200 || response.statusCode == 201)
+    if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body)['chatId'];
+    }
     throw Exception('فشل بدء المحادثة');
   }
 
@@ -762,8 +794,9 @@ class ApiService {
       'GET',
       '/deals?userId=$userId&role=$role',
     );
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
@@ -781,8 +814,9 @@ class ApiService {
     String userId,
   ) async {
     final response = await _sendRequest('GET', '/users/$userId/reviews');
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
@@ -855,7 +889,9 @@ class ApiService {
   static Future<void> toggleFavorite(String propertyId) async {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString(AppConstants.prefUserId);
-    if (userId == null) return;
+    if (userId == null) {
+      return;
+    }
 
     // تحديد ما إذا كان مفضلاً أم لا (لنفترض أننا نضيفه الآن)
     bool isOnline = await hasInternet();
@@ -885,7 +921,9 @@ class ApiService {
   // =========================================================================
   static Future<Map<String, dynamic>> fetchAdminStats() async {
     final response = await _sendRequest('GET', '/admin/stats');
-    if (response.statusCode == 200) return jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
     return {'users': 0, 'properties': 0};
   }
 
@@ -895,11 +933,13 @@ class ApiService {
     String? searchQuery,
   }) async {
     String query = '/admin/users?limit=$limit';
-    if (searchQuery != null && searchQuery.isNotEmpty)
+    if (searchQuery != null && searchQuery.isNotEmpty) {
       query += '&search=$searchQuery';
+    }
     final response = await _sendRequest('GET', query);
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
@@ -932,8 +972,9 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> fetchAllChats() async {
     final response = await _sendRequest('GET', '/admin/chats');
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
@@ -941,7 +982,9 @@ class ApiService {
     String chatId,
   ) async {
     final response = await _sendRequest('GET', '/admin/chats/$chatId/messages');
-    if (response.statusCode == 200) return jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
     return null;
   }
 
@@ -952,8 +995,9 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> fetchReports() async {
     final response = await _sendRequest('GET', '/admin/reports');
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
@@ -968,8 +1012,9 @@ class ApiService {
   static Future<Map<String, dynamic>?> fetchReport(String reportId) async {
     try {
       final response = await _sendRequest('GET', '/reports/$reportId');
-      if (response.statusCode == 200)
+      if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
+      }
       return null;
     } catch (e) {
       return null;
@@ -996,7 +1041,9 @@ class ApiService {
 
   static Future<Map<String, dynamic>> fetchAppSettings() async {
     final response = await _sendRequest('GET', '/admin/settings/public');
-    if (response.statusCode == 200) return jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
     return {};
   }
 
@@ -1008,8 +1055,9 @@ class ApiService {
       'GET',
       '/admin/announcement-views?announcementId=$announcementId&limit=$limit',
     );
-    if (response.statusCode == 200)
+    if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    }
     return [];
   }
 
@@ -1019,14 +1067,18 @@ class ApiService {
       '/admin/settings',
       body: settings,
     );
-    if (response.statusCode != 200) throw Exception('فشل تحديث الإعدادات');
+    if (response.statusCode != 200) {
+      throw Exception('فشل تحديث الإعدادات');
+    }
   }
 
   static Future<bool> recordAnnouncementView(String announcementId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString(AppConstants.prefUserId);
-      if (userId == null) return false;
+      if (userId == null) {
+        return false;
+      }
 
       final response = await _sendRequest(
         'POST',
@@ -1055,7 +1107,9 @@ class ApiService {
   }
 
   static Future<String?> _refreshTokenThrottled() async {
-    if (_refreshFuture != null) return _refreshFuture;
+    if (_refreshFuture != null) {
+      return _refreshFuture;
+    }
     final future = _refreshToken();
     _refreshFuture = future;
     try {
@@ -1069,7 +1123,9 @@ class ApiService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final refreshToken = prefs.getString(AppConstants.prefRefreshToken);
-      if (refreshToken == null) return null;
+      if (refreshToken == null) {
+        return null;
+      }
 
       final response = await http
           .post(
@@ -1117,9 +1173,97 @@ class ApiService {
     }
   }
 
+  // =========================================================================
+  // 🗑️ حذف مشاهدات الإعلانات
+  // =========================================================================
+
+  /// حذف مشاهدة واحدة لمستخدم معين
+  static Future<bool> deleteAnnouncementView(String viewId) async {
+    try {
+      debugPrint('🗑️ [API] حذف المشاهدة: $viewId');
+      final response = await _sendRequest(
+        'DELETE',
+        '/admin/announcement-views/$viewId',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        debugPrint('✅ [API] تم حذف المشاهدة بنجاح');
+        return true;
+      }
+
+      debugPrint('⚠️ [API] فشل حذف المشاهدة: ${response.body}');
+      return false;
+    } catch (e, stackTrace) {
+      debugPrint('❌ [API] خطأ في حذف المشاهدة: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return false;
+    }
+  }
+
+  /// حذف جميع مشاهدات الإعلان
+  static Future<(bool, int)> deleteAllAnnouncementViews(
+    String announcementId,
+  ) async {
+    try {
+      debugPrint('🗑️ [API] حذف جميع مشاهدات الإعلان: $announcementId');
+      final response = await _sendRequest(
+        'DELETE',
+        '/admin/announcement-views/bulk/all?announcementId=$announcementId',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        final deletedCount = (data['deletedCount'] as int?) ?? 0;
+        debugPrint('✅ [API] تم حذف $deletedCount مشاهدة بنجاح');
+        return (true, deletedCount);
+      }
+
+      debugPrint('⚠️ [API] فشل حذف المشاهدات: ${response.body}');
+      return (false, 0);
+    } catch (e, stackTrace) {
+      debugPrint('❌ [API] خطأ في حذف جميع المشاهدات: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return (false, 0);
+    }
+  }
+
+  /// حذف مشاهدات مستخدم معين من إعلان معين
+  static Future<(bool, int)> deleteUserAnnouncementViews(
+    String userId,
+    String announcementId,
+  ) async {
+    try {
+      debugPrint(
+        '🗑️ [API] حذف مشاهدات المستخدم $userId من الإعلان: $announcementId',
+      );
+      final response = await _sendRequest(
+        'DELETE',
+        '/admin/announcement-views/user/$userId?announcementId=$announcementId',
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        final deletedCount = (data['deletedCount'] as int?) ?? 0;
+        debugPrint('✅ [API] تم حذف $deletedCount مشاهدة للمستخدم بنجاح');
+        return (true, deletedCount);
+      }
+
+      debugPrint('⚠️ [API] فشل حذف مشاهدات المستخدم: ${response.body}');
+      return (false, 0);
+    } catch (e, stackTrace) {
+      debugPrint('❌ [API] خطأ في حذف مشاهدات المستخدم: $e');
+      debugPrint('Stack trace: $stackTrace');
+      return (false, 0);
+    }
+  }
+
   static int? _parseExpiry(dynamic value) {
-    if (value is int) return value;
-    if (value is String) return int.tryParse(value);
+    if (value is int) {
+      return value;
+    }
+    if (value is String) {
+      return int.tryParse(value);
+    }
     return null;
   }
 }

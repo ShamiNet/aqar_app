@@ -527,7 +527,7 @@ class _FeaturedTitlePill extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -638,7 +638,7 @@ class _AnnouncementMarqueeState extends State<_AnnouncementMarquee>
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -663,7 +663,7 @@ class _AnnouncementMarqueeState extends State<_AnnouncementMarquee>
                       right: 12,
                       child: Icon(
                         Icons.campaign,
-                        color: Colors.white.withOpacity(0.95),
+                        color: Colors.white.withValues(alpha: 0.95),
                         size: 20,
                       ),
                     ),

@@ -24,7 +24,7 @@ class ThemeController {
 
     // استرجاع اللون المحفوظ، أو استخدام الأزرق الملكي كافتراضي
     final colorValue =
-        prefs.getInt(_seedColorKey) ?? const Color(0xFF1565C0).value;
+        prefs.getInt(_seedColorKey) ?? const Color(0xFF1565C0).toARGB32();
     seedColor.value = Color(colorValue);
   }
 
@@ -47,7 +47,7 @@ class ThemeController {
   static Future<void> setSeedColor(Color color) async {
     seedColor.value = color;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_seedColorKey, color.value);
+    await prefs.setInt(_seedColorKey, color.toARGB32());
   }
 
   static IconData iconFor(ThemeMode mode) {

@@ -42,8 +42,12 @@ class PropertyCard extends StatelessWidget {
         property['bedrooms']?.toString() ??
         property['rooms']?.toString() ??
         '-';
-    final area = property['area']?.toString() ?? '-';
     final category = property['category']?.toString() ?? 'بيع';
+    final propertyType =
+        property['propertyType']?.toString() ??
+        property['type']?.toString() ??
+        'بيت';
+    final floor = property['floor']?.toString() ?? '-';
     final isRent = category.contains('إيجار');
     final badgeStyle = _getCategoryBadgeStyle(context, category, isRent);
 
@@ -67,7 +71,7 @@ class PropertyCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               spreadRadius: 2,
               offset: const Offset(0, 4),
@@ -114,7 +118,7 @@ class PropertyCard extends StatelessWidget {
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
                           colors: [
-                            Colors.black.withOpacity(0.7),
+                            Colors.black.withValues(alpha: 0.7),
                             Colors.transparent,
                           ],
                         ),
@@ -214,12 +218,17 @@ class PropertyCard extends StatelessWidget {
                     child: Divider(height: 1, thickness: 0.5),
                   ),
 
-                  // الخصائص السفلية (الغرف والمساحة)
+                  // الخصائص السفلية (الغرف والطابق)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _buildFeatureIcon(Icons.king_bed_rounded, '$rooms غرف'),
-                      _buildFeatureIcon(Icons.square_foot_rounded, '$area م²'),
+                      // عرض الطابق فقط إذا لم تكن الأرض
+                      if (propertyType != 'ارض')
+                        _buildFeatureIcon(
+                          Icons.apartment_rounded,
+                          'الطابق $floor',
+                        ),
                     ],
                   ),
                 ],
@@ -278,10 +287,10 @@ class PropertyCard extends StatelessWidget {
           colors: [highlightColor, baseColor],
         ),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: surface.withOpacity(0.25), width: 0.8),
+        border: Border.all(color: surface.withValues(alpha: 0.25), width: 0.8),
         boxShadow: [
           BoxShadow(
-            color: baseColor.withOpacity(0.35),
+            color: baseColor.withValues(alpha: 0.35),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

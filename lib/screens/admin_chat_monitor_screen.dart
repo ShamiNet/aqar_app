@@ -46,15 +46,9 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
     });
 
     try {
-      print('📥 [API] Fetching messages for chat: ${widget.chatId}');
-
       // ✅ استخدام fetchAdminChatMessages التي ترجع Map كامل
       final Map<String, dynamic>? data =
           await ApiService.fetchAdminChatMessages(widget.chatId);
-
-      print('📊 [Chat Monitor] Data received from server:');
-      print('Participants: ${data?['participants']}');
-      print('Messages count: ${(data?['messages'] as List?)?.length ?? 0}');
 
       if (mounted) {
         setState(() {
@@ -69,7 +63,6 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
         });
       }
     } catch (e) {
-      print('❌ [Chat Monitor] Error loading messages: $e');
       if (mounted) {
         setState(() {
           _error = 'فشل تحميل الرسائل: $e';
@@ -128,13 +121,6 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
   @override
   Widget build(BuildContext context) {
     // ✅ الحصول على المشاركين من السيرفر أولاً، ثم من widget.chatData كنسخة احتياطية
-    print(
-      '👥 [Build] user1: ${_participants.isNotEmpty ? _participants[0] : null}',
-    );
-    print(
-      '👥 [Build] user2: ${_participants.length > 1 ? _participants[1] : null}',
-    );
-
     final user1 = _participants.isNotEmpty
         ? _participants[0]
         : (widget.chatData['user1'] as Map<String, dynamic>?);
@@ -177,7 +163,7 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
               color: surfaceColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withValues(alpha: 0.2),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -194,7 +180,7 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: accentOrange.withOpacity(0.15),
+                        color: accentOrange.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -207,7 +193,10 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                     Expanded(child: _buildUserInfo(user2, 'المستخدم الثاني')),
                   ],
                 ),
-                Divider(height: 24, color: textSecondary.withOpacity(0.2)),
+                Divider(
+                  height: 24,
+                  color: textSecondary.withValues(alpha: 0.2),
+                ),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -274,7 +263,7 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(4.0),
@@ -384,9 +373,9 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: accentBlue.withOpacity(0.15),
+        color: accentBlue.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: accentBlue.withOpacity(0.3)),
+        border: Border.all(color: accentBlue.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -409,14 +398,6 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
   Widget _buildMessagesList() {
     final messages = _chatDetails?['messages'] as List<dynamic>? ?? [];
 
-    print('📋 [Messages List] Messages count: ${messages.length}');
-    print(
-      '📋 [Messages List] user1: ${_participants.isNotEmpty ? _participants[0] : null}',
-    );
-    print(
-      '📋 [Messages List] user2: ${_participants.length > 1 ? _participants[1] : null}',
-    );
-
     if (messages.isEmpty) {
       return const Center(
         child: Column(
@@ -435,9 +416,6 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
       itemCount: messages.length,
       itemBuilder: (ctx, index) {
         final message = messages[index] as Map<String, dynamic>;
-        print(
-          '📨 [Message $index] ${message['senderId']} - ${message['senderName']} - ${message['text']}',
-        );
 
         final senderId = message['senderId'];
 
@@ -470,8 +448,8 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                 gradient: LinearGradient(
                   colors: isUser1
                       ? [
-                          accentBlue.withOpacity(0.2),
-                          accentBlue.withOpacity(0.1),
+                          accentBlue.withValues(alpha: 0.2),
+                          accentBlue.withValues(alpha: 0.1),
                         ]
                       : [cardColor, surfaceColor],
                   begin: Alignment.topLeft,
@@ -480,13 +458,13 @@ class _AdminChatMonitorScreenState extends State<AdminChatMonitorScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isUser1
-                      ? accentBlue.withOpacity(0.3)
-                      : Colors.white.withOpacity(0.05),
+                      ? accentBlue.withValues(alpha: 0.3)
+                      : Colors.white.withValues(alpha: 0.05),
                   width: 1.5,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),

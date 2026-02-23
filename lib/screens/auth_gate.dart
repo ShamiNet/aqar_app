@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:aqar_app/screens/login_screen.dart';
 import 'package:aqar_app/screens/tabs_screen.dart';
 import 'package:aqar_app/screens/maintenance_screen.dart';
@@ -69,22 +71,25 @@ class _AuthGateState extends State<AuthGate> {
     // ✅ التحقق من وضع الصيانة من السيرفر
     try {
       final settings = await ApiService.fetchAppSettings();
-      print('🔧 [AuthGate] جاري فحص الإعدادات: $settings');
+      developer.log('Checking settings: $settings', name: 'AuthGate');
       final oldMaintenance = _maintenanceMode;
       _maintenanceMode = settings['maintenance_mode'] == true;
       _maintenanceMessage = (settings['maintenance_message'] ?? '').toString();
-      print(
-        '🛠️ [AuthGate] Maintenance mode changed from: $oldMaintenance to: $_maintenanceMode',
+      developer.log(
+        'Maintenance mode changed from: $oldMaintenance to: $_maintenanceMode',
+        name: 'AuthGate',
       );
-      print(
-        '🛠️ [AuthGate] Raw maintenance_mode value: ${settings['maintenance_mode']}',
+      developer.log(
+        'Raw maintenance_mode value: ${settings['maintenance_mode']}',
+        name: 'AuthGate',
       );
-      print(
-        '🛠️ [AuthGate] maintenance_mode type: ${settings['maintenance_mode'].runtimeType}',
+      developer.log(
+        'maintenance_mode type: ${settings['maintenance_mode'].runtimeType}',
+        name: 'AuthGate',
       );
       debugPrint('🛠️ [AuthGate] Maintenance mode: $_maintenanceMode');
     } catch (e) {
-      print('❌ [AuthGate] Exception in settings: $e');
+      developer.log('Exception in settings: $e', name: 'AuthGate');
       debugPrint('⚠️ [AuthGate] Failed to fetch app settings: $e');
     }
 
@@ -124,10 +129,11 @@ class _AuthGateState extends State<AuthGate> {
       final updateRequired = ApiService.isUpdateRequired(minVersion);
 
       // ✅ تم الإصلاح: استخدام AppConstants لقراءة الإصدار الحالي
-      print(
-        '📱 [Version Check] Current: ${AppConstants.currentAppVersion}, Required: $minVersion',
+      developer.log(
+        'Version check - current: ${AppConstants.currentAppVersion}, required: $minVersion',
+        name: 'AuthGate',
       );
-      print('🔄 [Version Check] Update Required: $updateRequired');
+      developer.log('Update required: $updateRequired', name: 'AuthGate');
 
       debugPrint(
         '🛠️ [AuthGate-Check] وضع الصيانة الجديد: $newMaintenanceMode',
@@ -173,7 +179,7 @@ class _AuthGateState extends State<AuthGate> {
 
     // ✅ التحقق من الإصدار المطلوب أولاً
     if (_updateRequired) {
-      print('🔴 [AuthGate-Build] عرض شاشة التحديث الإجباري');
+      developer.log('Showing update required screen', name: 'AuthGate');
       return UpdateRequiredScreen(
         currentVersion: AppConstants.currentAppVersion, // ✅ تم الإصلاح
         requiredVersion: _requiredVersion,
@@ -181,11 +187,12 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     // إذا كان وضع الصيانة مفعلاً والمستخدم ليس مديراً → نعرض شاشة الصيانة
-    print(
-      '🔍 [AuthGate-Build] Maintenance check: mode=$_maintenanceMode, isAdmin=$_isAdmin',
+    developer.log(
+      'Maintenance check - mode=$_maintenanceMode, isAdmin=$_isAdmin',
+      name: 'AuthGate',
     );
     if (_maintenanceMode && !_isAdmin) {
-      print('⚠️ [AuthGate-Build] عرض شاشة الصيانة لأن المستخدم ليس مدير');
+      developer.log('Showing maintenance screen (non-admin)', name: 'AuthGate');
       debugPrint('🛠️ [AuthGate-Build] ✅ عرض شاشة الصيانة');
       return MaintenanceScreen(message: _maintenanceMessage);
     }

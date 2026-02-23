@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:aqar_app/services/api_service.dart';
 
@@ -6,10 +8,10 @@ class ReportPropertyScreen extends StatefulWidget {
   final String propertyTitle;
 
   const ReportPropertyScreen({
-    Key? key,
+    super.key,
     required this.propertyId,
     required this.propertyTitle,
-  }) : super(key: key);
+  });
 
   @override
   State<ReportPropertyScreen> createState() => _ReportPropertyScreenState();
@@ -47,12 +49,18 @@ class _ReportPropertyScreenState extends State<ReportPropertyScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      print('📤 [ReportProperty] Submitting report...');
-      print('💾 [ReportProperty] Report Data:');
-      print('   - propertyId: ${widget.propertyId}');
-      print('   - propertyTitle: ${widget.propertyTitle}');
-      print('   - reason: $_selectedReason');
-      print('   - description: ${_descriptionController.text}');
+      developer.log('Submitting report', name: 'ReportProperty');
+      developer.log('Report data:', name: 'ReportProperty');
+      developer.log('propertyId: ${widget.propertyId}', name: 'ReportProperty');
+      developer.log(
+        'propertyTitle: ${widget.propertyTitle}',
+        name: 'ReportProperty',
+      );
+      developer.log('reason: $_selectedReason', name: 'ReportProperty');
+      developer.log(
+        'description: ${_descriptionController.text}',
+        name: 'ReportProperty',
+      );
 
       await ApiService.submitReport({
         'propertyId': widget.propertyId,
@@ -63,7 +71,7 @@ class _ReportPropertyScreenState extends State<ReportPropertyScreen> {
 
       if (!mounted) return;
 
-      print('✅ [ReportProperty] Report submitted successfully');
+      developer.log('Report submitted successfully', name: 'ReportProperty');
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -75,7 +83,7 @@ class _ReportPropertyScreenState extends State<ReportPropertyScreen> {
 
       Navigator.of(context).pop();
     } catch (e) {
-      print('❌ [ReportProperty] Error: $e');
+      developer.log('Error: $e', name: 'ReportProperty');
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -136,7 +144,7 @@ class _ReportPropertyScreenState extends State<ReportPropertyScreen> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _selectedReason,
+                initialValue: _selectedReason,
                 items: _reportReasons
                     .map(
                       (reason) =>

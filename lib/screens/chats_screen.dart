@@ -3,6 +3,7 @@ import 'package:aqar_app/screens/chat_messages_screen.dart';
 import 'package:aqar_app/services/api_service.dart';
 import 'package:aqar_app/services/websocket_service.dart';
 import 'package:aqar_app/providers/chat_provider.dart'; // ✅
+import 'package:aqar_app/providers/user_provider.dart'; // ✅ للتحقق من صلاحيات المشرف
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
@@ -22,10 +23,9 @@ class _ChatsScreenState extends State<ChatsScreen>
   List<Map<String, dynamic>> _filteredChats = [];
   bool _isLoading = true;
   bool _hasError = false;
-  String _errorMessage = '';
   String? _currentUserId;
   Timer? _pollTimer;
-  bool _useWebSocket = true;
+  final bool _useWebSocket = true;
 
   final TextEditingController _searchController = TextEditingController();
   late AnimationController _animationController;
@@ -136,11 +136,14 @@ class _ChatsScreenState extends State<ChatsScreen>
         _animationController.forward();
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _isLoading = false;
-          if (_chats.isEmpty) _hasError = true;
+          if (_chats.isEmpty) {
+            _hasError = true;
+          }
         });
+      }
     }
   }
 
@@ -158,15 +161,18 @@ class _ChatsScreenState extends State<ChatsScreen>
   }
 
   String _formatChatTime(dynamic timestamp) {
-    if (timestamp == null) return '';
+    if (timestamp == null) {
+      return '';
+    }
     try {
       DateTime messageTime;
-      if (timestamp is int)
+      if (timestamp is int) {
         messageTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-      else if (timestamp is String)
+      } else if (timestamp is String) {
         messageTime = DateTime.parse(timestamp);
-      else
+      } else {
         return '';
+      }
 
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
@@ -265,6 +271,33 @@ class _ChatsScreenState extends State<ChatsScreen>
     );
   }
 
+  // 🗑️ دالة حذف المحادثة (للمشرفين فقط)
+  Future<void> _deleteChatItem(String chatId) async {
+    try {
+      final success = await ApiService.deleteChat(chatId);
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم حذف المحادثة بنجاح'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadChats();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('فشل حذف المحادثة: $e'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildChatItem(
     Map<String, dynamic> chatData,
     Color textColor,
@@ -292,7 +325,11 @@ class _ChatsScreenState extends State<ChatsScreen>
     final isOnline = chatData['isOnline'] ?? false;
     String timeString = _formatChatTime(chatData['lastMessageTime']);
 
-    return InkWell(
+    // التحقق من صلاحيات المشرف
+    final isAdmin = Provider.of<UserProvider>(context).isAdmin;
+
+    // بناء محتوى البطاقة
+    final chatItemContent = InkWell(
       onTap: () {
         Navigator.of(context)
             .push(
@@ -314,8 +351,8 @@ class _ChatsScreenState extends State<ChatsScreen>
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         color: unreadCount > 0
             ? (isDark
-                  ? Colors.blue.withOpacity(0.05)
-                  : Colors.blue.withOpacity(0.02))
+                  ? Colors.blue.withValues(alpha: 0.05)
+                  : Colors.blue.withValues(alpha: 0.02))
             : Colors.transparent,
         child: Row(
           children: [
@@ -432,6 +469,50 @@ class _ChatsScreenState extends State<ChatsScreen>
         ),
       ),
     );
+
+    // إذا كان المشرف، يمكنه السحب للحذف (من اليمين إلى اليسار)
+    if (isAdmin) {
+      return Dismissible(
+        key: Key(chatId),
+        direction: DismissDirection.endToStart,
+        background: Container(
+          color: Colors.red,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(right: 16),
+          child: const Icon(
+            Icons.delete_forever,
+            color: Colors.white,
+            size: 28,
+          ),
+        ),
+        confirmDismiss: (direction) async {
+          return await showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('تأكيد الحذف'),
+              content: const Text('هل تريد حذف هذه المحادثة بشكل نهائي؟'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('إلغاء'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('حذف'),
+                ),
+              ],
+            ),
+          );
+        },
+        onDismissed: (direction) {
+          _deleteChatItem(chatId);
+        },
+        child: chatItemContent,
+      );
+    }
+
+    return chatItemContent;
   }
 
   Widget _buildChatList(
@@ -440,7 +521,9 @@ class _ChatsScreenState extends State<ChatsScreen>
     Color cardColor,
     bool isDark,
   ) {
-    if (_filteredChats.isEmpty) return _buildEmptyState(isDark);
+    if (_filteredChats.isEmpty) {
+      return _buildEmptyState(isDark);
+    }
     return FadeTransition(
       opacity: _fadeAnimation,
       child: ListView.separated(
@@ -498,10 +581,12 @@ class _ChatsScreenState extends State<ChatsScreen>
     return FutureBuilder<bool>(
       future: ApiService.isLoggedIn(),
       builder: (ctx, authSnapshot) {
-        if (authSnapshot.connectionState == ConnectionState.waiting)
+        if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
-        if (!authSnapshot.hasData || !authSnapshot.data!)
+        }
+        if (!authSnapshot.hasData || !authSnapshot.data!) {
           return _buildLoginRequired(isDark);
+        }
 
         return Column(
           children: [

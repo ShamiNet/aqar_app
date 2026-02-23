@@ -66,22 +66,24 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
       for (var chat in chats) {
         totalUnread += (chat['unreadCount'] ?? 0) as int;
       }
-      if (mounted)
+      if (mounted) {
         Provider.of<ChatProvider>(
           context,
           listen: false,
         ).setUnreadChatsCount(totalUnread);
+      }
     } catch (_) {}
   }
 
   Future<void> _loadMessages() async {
     try {
       final msgs = await ApiService.fetchChatMessages(widget.chatId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _messages = msgs;
           _loading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -165,7 +167,7 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
           children: [
             CircleAvatar(
               backgroundColor: isDark
-                  ? primaryColor.withOpacity(0.2)
+                  ? primaryColor.withValues(alpha: 0.2)
                   : Colors.white,
               radius: 18,
               child: Text(
@@ -251,7 +253,7 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
               blurRadius: 5,
               offset: const Offset(0, 2),
             ),
@@ -292,7 +294,7 @@ class _ChatMessagesScreenState extends State<ChatMessagesScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
