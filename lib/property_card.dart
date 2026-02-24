@@ -49,6 +49,7 @@ class PropertyCard extends StatelessWidget {
         'بيت';
     final floor = property['floor']?.toString() ?? '-';
     final isRent = category.contains('إيجار');
+    final isFeatured = property['isFeatured'] == true;
     final badgeStyle = _getCategoryBadgeStyle(context, category, isRent);
 
     return GestureDetector(
@@ -141,6 +142,49 @@ class PropertyCard extends StatelessWidget {
                       ),
                     ),
                   ),
+
+                  // شارة المميز (Featured)
+                  if (isFeatured)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.95),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.amber.withValues(alpha: 0.4),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.star_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'مميز',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
                   // السعر
                   Positioned(

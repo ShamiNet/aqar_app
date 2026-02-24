@@ -21,7 +21,7 @@ class AddPropertyController extends ChangeNotifier {
 
   // 🎛️ المتغيرات (State)
   String selectedType = 'بيت';
-  String selectedCategory = 'بيع';
+  String selectedCategory = 'إيجار';
   String selectedCurrency = '\$'; // الدولار بشكل افتراضي
   bool isFurnished = false;
   bool hasKitchen = false;
@@ -240,6 +240,18 @@ class AddPropertyController extends ChangeNotifier {
       return false;
     }
 
+    if (selectedType != 'ارض' &&
+        selectedType != 'دكان' &&
+        bedroomsController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى تعبئة عدد الغرف'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return false;
+    }
+
     if (selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -319,7 +331,7 @@ class AddPropertyController extends ChangeNotifier {
     floorController.clear();
 
     selectedType = 'بيت';
-    selectedCategory = 'بيع';
+    selectedCategory = 'إيجار';
     selectedCurrency = '\$';
     isFurnished = false;
     hasKitchen = false;

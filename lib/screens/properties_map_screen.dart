@@ -10,6 +10,8 @@ import 'package:google_maps_cluster_manager_2/google_maps_cluster_manager_2.dart
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert' as convert;
+import 'package:aqar_app/providers/properties_refresh_provider.dart';
+import 'package:provider/provider.dart';
 
 // مفتاح API (اختياري)
 const kDirectionsKey = String.fromEnvironment(
@@ -48,6 +50,9 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   Position? _currentUserPosition;
   final Set<Polyline> _polylines = {};
   GoogleMapController? _mapController;
+  MapType _mapType = MapType.normal;
+  late final PropertiesRefreshProvider _refreshProvider;
+  late final VoidCallback _refreshListener;
 
   // ✅ مدير التجميع
   late ClusterManager<MapPlace> _clusterManager;
@@ -60,6 +65,14 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   @override
   void initState() {
     super.initState();
+    _refreshProvider = Provider.of<PropertiesRefreshProvider>(
+      context,
+      listen: false,
+    );
+    _refreshListener = () {
+      _fetchProperties();
+    };
+    _refreshProvider.addListener(_refreshListener);
     _initClusterManager();
     _determinePosition();
     _fetchProperties();
@@ -606,6 +619,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
             target: _initialPosition,
             zoom: 6,
           ),
+          mapType: _mapType,
           onMapCreated: (c) {
             _mapController = c;
             _clusterManager.setMapId(c.mapId);
@@ -635,6 +649,30 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
             child: const Icon(Icons.info_outline),
           ),
         ),
+        Positioned(
+          top: 56,
+          right: 16,
+          child: Material(
+            shape: const CircleBorder(),
+            color: Theme.of(context).colorScheme.surface,
+            elevation: 4,
+            child: PopupMenuButton<MapType>(
+              icon: const Icon(Icons.layers_outlined),
+              onSelected: (value) {
+                setState(() {
+                  _mapType = value;
+                });
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: MapType.normal,
+                  child: Text('الخريطة الحالية'),
+                ),
+                PopupMenuItem(value: MapType.hybrid, child: Text('هايبرد')),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -642,6 +680,7 @@ class _PropertiesMapScreenState extends State<PropertiesMapScreen> {
   @override
   void dispose() {
     _mapController?.dispose();
+    _refreshProvider.removeListener(_refreshListener);
     super.dispose();
   }
 }

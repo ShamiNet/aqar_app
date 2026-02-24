@@ -3,6 +3,8 @@ import 'package:aqar_app/widgets/properties_list.dart';
 import 'package:aqar_app/widgets/properties_list_skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:aqar_app/providers/properties_refresh_provider.dart';
+import 'package:provider/provider.dart';
 
 class MyPropertiesScreen extends StatefulWidget {
   const MyPropertiesScreen({super.key});
@@ -13,11 +15,27 @@ class MyPropertiesScreen extends StatefulWidget {
 
 class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
   Future<List<Map<String, dynamic>>>? _myPropertiesFuture;
+  late final PropertiesRefreshProvider _refreshProvider;
+  late final VoidCallback _refreshListener;
 
   @override
   void initState() {
     super.initState();
+    _refreshProvider = Provider.of<PropertiesRefreshProvider>(
+      context,
+      listen: false,
+    );
+    _refreshListener = () {
+      _loadProperties();
+    };
+    _refreshProvider.addListener(_refreshListener);
     _loadProperties();
+  }
+
+  @override
+  void dispose() {
+    _refreshProvider.removeListener(_refreshListener);
+    super.dispose();
   }
 
   Future<void> _loadProperties() async {

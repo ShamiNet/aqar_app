@@ -15,6 +15,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
   LatLng? _currentMapCenter;
+  MapType _mapType = MapType.normal;
 
   // إحداثيات افتراضية (يمكن تغييرها إلى وسط مدينتك المستهدفة)
   static const LatLng _defaultLocation = LatLng(35.9293, 36.6331); // حلب
@@ -93,7 +94,27 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('حدد موقع العقار'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('حدد موقع العقار'),
+        centerTitle: true,
+        actions: [
+          PopupMenuButton<MapType>(
+            icon: const Icon(Icons.layers_outlined),
+            onSelected: (value) {
+              setState(() {
+                _mapType = value;
+              });
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: MapType.normal,
+                child: Text('الخريطة الحالية'),
+              ),
+              PopupMenuItem(value: MapType.hybrid, child: Text('هايبرد')),
+            ],
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           GoogleMap(
@@ -101,6 +122,7 @@ class _MapScreenState extends State<MapScreen> {
               target: _currentMapCenter ?? _defaultLocation,
               zoom: 14,
             ),
+            mapType: _mapType,
             onMapCreated: (controller) {
               _mapController = controller;
             },

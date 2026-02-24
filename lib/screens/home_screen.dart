@@ -8,6 +8,8 @@ import 'package:carousel_slider/carousel_slider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:aqar_app/config/app_constants.dart';
+import 'package:aqar_app/providers/properties_refresh_provider.dart';
+import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +21,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String? _errorMessage;
+  late final PropertiesRefreshProvider _refreshProvider;
+  late final VoidCallback _refreshListener;
 
   // ✅ 1. فصلنا القوائم كمتغيرات حالة (State) لكي لا يتم حسابها مع كل إعادة رسم (يحسن الأداء جداً)
   List<Map<String, dynamic>> _featuredProperties = [];
@@ -41,10 +45,24 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _refreshProvider = Provider.of<PropertiesRefreshProvider>(
+      context,
+      listen: false,
+    );
+    _refreshListener = () {
+      _fetchData();
+    };
+    _refreshProvider.addListener(_refreshListener);
     SharedPreferences.getInstance().then((prefs) {
       debugPrint('USER_ID: ${prefs.getString(AppConstants.prefUserId)}');
     });
     _fetchData();
+  }
+
+  @override
+  void dispose() {
+    _refreshProvider.removeListener(_refreshListener);
+    super.dispose();
   }
 
   // ✅ 2. دالة مخصصة لجلب البيانات (مبدأ المسؤولية الواحدة: جلب البيانات فقط)
@@ -560,46 +578,26 @@ class _AnnouncementMarquee extends StatefulWidget {
 
 class _AnnouncementMarqueeState extends State<_AnnouncementMarquee>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  double _textWidth = 0;
-  double _containerWidth = 0;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12),
-    )..repeat();
-  }
+      duration: const Duration(milliseconds: 200),
+    )..repeat(reverse: true);
 
-  @override
-  void didUpdateWidget(covariant _AnnouncementMarquee oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.text != widget.text) {
-      _measureText();
-    }
+    _fadeAnimation = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.linear),
+    );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _animationController.dispose();
     super.dispose();
-  }
-
-  void _measureText() {
-    final textStyle = _textStyle(context);
-    final textPainter = TextPainter(
-      text: TextSpan(text: widget.text, style: textStyle),
-      textDirection: TextDirection.rtl,
-      maxLines: 1,
-    )..layout();
-    _textWidth = textPainter.width;
-
-    final pixelsPerSecond = 70.0;
-    final distance = _containerWidth + _textWidth;
-    final seconds = (distance / pixelsPerSecond).clamp(8.0, 20.0);
-    _controller.duration = Duration(milliseconds: (seconds * 1000).round());
   }
 
   TextStyle _textStyle(BuildContext context) {
@@ -631,64 +629,84 @@ class _AnnouncementMarqueeState extends State<_AnnouncementMarquee>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: GestureDetector(
         onTap: _handleTap,
-        child: Container(
-          height: 44,
-          decoration: BoxDecoration(
-            gradient: gradient,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                _containerWidth = constraints.maxWidth;
-                _measureText();
-                final start = _containerWidth;
-                final end = -_textWidth;
-                final animation = Tween<double>(begin: start, end: end).animate(
-                  CurvedAnimation(parent: _controller, curve: Curves.linear),
-                );
-
-                return Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Positioned(
-                      right: 12,
-                      child: Icon(
-                        Icons.campaign,
-                        color: Colors.white.withValues(alpha: 0.95),
-                        size: 20,
-                      ),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
                     ),
-                    AnimatedBuilder(
-                      animation: animation,
-                      builder: (context, child) {
-                        return Transform.translate(
-                          offset: Offset(animation.value, 0),
-                          child: child,
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 40, right: 12),
-                        child: Text(
-                          widget.text,
-                          maxLines: 1,
-                          overflow: TextOverflow.visible,
-                          style: _textStyle(context),
-                          textDirection: TextDirection.rtl,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.campaign,
+                          color: Colors.white.withValues(alpha: 0.95),
+                          size: 20,
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: AnimatedBuilder(
+                            animation: _fadeAnimation,
+                            builder: (context, child) {
+                              return Opacity(
+                                opacity: _fadeAnimation.value,
+                                child: child,
+                              );
+                            },
+                            child: Text(
+                              widget.text,
+                              style: _textStyle(context),
+                              textDirection: TextDirection.rtl,
+                              softWrap: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        AnimatedBuilder(
+                          animation: _fadeAnimation,
+                          builder: (context, child) {
+                            return Opacity(
+                              opacity: _fadeAnimation.value,
+                              child: child,
+                            );
+                          },
+                          child: Icon(
+                            Icons.touch_app_outlined,
+                            color: Colors.white.withValues(alpha: 0.85),
+                            size: 18,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                );
-              },
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

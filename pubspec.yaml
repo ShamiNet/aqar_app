@@ -86,10 +86,6 @@ flutter:
 
   assets:
     - assets/logo.png
-    - images/aqar_plus_b.jpg
-    - images/aqar_plus_bn.jpg
-    - images/aqar_plus_gr.jpg
-    - images/aqar_gr_log.jpg
 
 flutter_launcher_icons:
   android: "launcher_icon"

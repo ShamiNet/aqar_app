@@ -135,6 +135,8 @@ class _PropertyFormState extends State<PropertyForm> {
       processed['rooms'] = processed['bedrooms'].toString();
     }
 
+    processed['category'] ??= 'إيجار';
+
     return processed;
   }
 
@@ -504,12 +506,15 @@ class _PropertyFormState extends State<PropertyForm> {
                   child: FormBuilderTextField(
                     name: 'rooms',
                     decoration: InputDecoration(
-                      labelText: 'غرف النوم',
+                      labelText: 'عدد الغرف',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     keyboardType: TextInputType.number,
+                    validator: FormBuilderValidators.required(
+                      errorText: 'مطلوب',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),

@@ -23,6 +23,7 @@ import 'package:aqar_app/screens/onboarding_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:aqar_app/providers/user_provider.dart';
 import 'package:aqar_app/providers/chat_provider.dart';
+import 'package:aqar_app/providers/properties_refresh_provider.dart';
 import 'package:aqar_app/screens/chat_messages_screen.dart';
 
 // ✅ استيراد مكتبات معالجة الأخطاء المتقدمة
@@ -123,6 +124,7 @@ void main() async {
               create: (_) => UserProvider()..loadUserData(),
             ),
             ChangeNotifierProvider(create: (_) => ChatProvider()),
+            ChangeNotifierProvider(create: (_) => PropertiesRefreshProvider()),
           ],
           child: AqarApp(
             startScreen: (seenOnboarding || isLoggedIn)

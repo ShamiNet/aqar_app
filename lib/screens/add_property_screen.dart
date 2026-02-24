@@ -3,6 +3,7 @@ import 'package:aqar_app/screens/map_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:aqar_app/controllers/add_property_controller.dart';
 import 'package:aqar_app/providers/user_provider.dart';
+import 'package:aqar_app/providers/properties_refresh_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -338,6 +339,19 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                       _controller.selectedType != 'دكان')
                     const SizedBox(height: 10),
 
+                  if (_controller.selectedType != 'ارض' &&
+                      _controller.selectedType != 'دكان')
+                    _buildTextField(
+                      'عدد الغرف *',
+                      _controller.bedroomsController,
+                      isNumber: true,
+                      icon: Icons.king_bed_rounded,
+                    ),
+
+                  if (_controller.selectedType != 'ارض' &&
+                      _controller.selectedType != 'دكان')
+                    const SizedBox(height: 10),
+
                   _buildTextField(
                     'العنوان بالتفصيل *',
                     _controller.addressController,
@@ -417,10 +431,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                     runSpacing: 10,
                     children: [
                       _buildSmallNumberField(
-                        'غرف النوم',
-                        _controller.bedroomsController,
-                      ),
-                      _buildSmallNumberField(
                         'دورات المياه',
                         _controller.bathroomsController,
                       ),
@@ -494,6 +504,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                                 return;
                               }
                               if (success) {
+                                if (context.mounted) {
+                                  Provider.of<PropertiesRefreshProvider>(
+                                    context,
+                                    listen: false,
+                                  ).requestRefresh();
+                                }
                                 Navigator.pop(
                                   context,
                                   'تمت إضافة العقار بنجاح!',

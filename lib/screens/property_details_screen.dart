@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:aqar_app/providers/user_provider.dart';
 import 'package:aqar_app/widgets/property_image_gallery.dart';
+import 'package:video_player/video_player.dart';
 
 class PropertyDetailsScreen extends StatefulWidget {
   final String propertyId;
@@ -30,6 +31,9 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   bool _isOwner = false;
   bool _isAdmin = false;
   bool _isFavorite = false;
+
+  VideoPlayerController? _videoController;
+  bool _isVideoReady = false;
 
   final Set<Marker> _markers = {};
   LatLng? _propertyLocation;
@@ -56,6 +60,14 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       final userId = prefs.getString('user_id');
 
       final data = await ApiService.fetchPropertyDetails(widget.propertyId);
+
+      final rawVideoUrl =
+          data?['videoUrl'] ?? data?['videoURL'] ?? data?['video'];
+      if (rawVideoUrl != null && rawVideoUrl.toString().isNotEmpty) {
+        await _initializeVideo(rawVideoUrl.toString());
+      } else {
+        await _disposeVideo();
+      }
 
       if (mounted) {
         setState(() {
@@ -94,6 +106,38 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _initializeVideo(String url) async {
+    try {
+      await _disposeVideo();
+      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      _videoController = controller;
+      _isVideoReady = false;
+      await controller.initialize();
+      controller.setLooping(true);
+      if (mounted && _videoController == controller) {
+        setState(() {
+          _isVideoReady = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ [Video] Failed to initialize video: $e');
+      await _disposeVideo();
+    }
+  }
+
+  Future<void> _disposeVideo() async {
+    if (_videoController != null) {
+      await _videoController!.pause();
+      await _videoController!.dispose();
+      _videoController = null;
+    }
+    if (mounted) {
+      setState(() {
+        _isVideoReady = false;
+      });
     }
   }
 
@@ -136,6 +180,12 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
         );
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
   }
 
   Future<void> _makePhoneCall(String phoneNumber) async {
@@ -558,7 +608,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // العنوان والمشاهدات
+                  // العنوان
                   Row(
                     children: [
                       Icon(
@@ -575,6 +625,13 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+
+                  // المشاهدات ومعدل
+                  Row(
+                    children: [
                       Icon(
                         Icons.visibility_outlined,
                         size: 16,
@@ -636,6 +693,59 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+
+                  if (_videoController != null) ...[
+                    Text(
+                      'فيديو العقار',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: AspectRatio(
+                        aspectRatio: _isVideoReady
+                            ? _videoController!.value.aspectRatio
+                            : 16 / 9,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            if (_isVideoReady)
+                              VideoPlayer(_videoController!)
+                            else
+                              Container(
+                                color: Colors.black12,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                            if (_isVideoReady)
+                              IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    if (_videoController!.value.isPlaying) {
+                                      _videoController!.pause();
+                                    } else {
+                                      _videoController!.play();
+                                    }
+                                  });
+                                },
+                                icon: Icon(
+                                  _videoController!.value.isPlaying
+                                      ? Icons.pause_circle_filled
+                                      : Icons.play_circle_fill,
+                                  size: 56,
+                                  color: Colors.white,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
 
                   // مواصفات العقار (الغرف والمساحة)
                   Container(
